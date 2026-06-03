@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0d12">
+  <title>FabDraw — Stop Drawing on Napkins.</title>
+  <meta name="description" content="Turn any fabrication idea into a professional shop drawing in minutes. No CAD experience required. Built for fabricators, welders, and contractors.">
+  <meta property="og:title" content="FabDraw — Stop Drawing on Napkins.">
+  <meta property="og:description" content="The Canva for Fabricators. From idea to shop drawing in under 5 minutes.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230a0d12'/><text x='16' y='24' font-size='22' font-weight='bold' fill='%23f05c1a' font-family='sans-serif' text-anchor='middle'>F</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <style>
+/* ============================================================
+   RESET & TOKENS
+============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:          #0a0d12;
+  --bg2:         #0e1218;
+  --bg3:         #131922;
+  --accent:      #f05c1a;
+  --accent2:     #ff7a3d;
+  --accentglow:  rgba(240,92,26,.18);
+  --text:        #e8edf5;
+  --muted:       #7a8fa8;
+  --border:      rgba(255,255,255,.07);
+  --borderhover: rgba(240,92,26,.35);
+  --r:  12px;
+  --rl: 20px;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+h1,h2,h3,h4,h5 {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: .03em;
+  line-height: 1.05;
+}
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+input, button { font-family: inherit; }
+
+/* ============================================================
+   UTILITIES
+============================================================ */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.section { padding: 108px 0; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(240,92,26,.09);
+  border: 1px solid rgba(240,92,26,.25);
+  color: var(--accent);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  padding: 6px 14px; border-radius: 100px;
+}
+.badge-dot {
+  width: 6px; height: 6px;
+  background: var(--accent); border-radius: 50%;
+  animation: blink 2s ease infinite;
+}
+@keyframes blink {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.4; transform:scale(1.5); }
+}
+
+.sh { text-align: center; margin-bottom: 64px; }
+.sh .badge { margin-bottom: 18px; }
+.sh h2 { font-size: clamp(38px,5vw,64px); margin-bottom: 14px; }
+.sh p  { font-size: 17px; color: var(--muted); max-width: 540px; margin: 0 auto; }
+
+/* gradient text */
+.gt {
+  background: linear-gradient(130deg, var(--accent), var(--accent2) 60%, #ffb380);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* scroll animation base */
+.sa {
+  opacity: 0; transform: translateY(28px);
+  transition: opacity .55s ease, transform .55s ease;
+}
+.sa.vis { opacity: 1; transform: translateY(0); }
+
+/* ============================================================
+   BUTTONS
+============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; border-radius: 8px;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; border: none; transition: all .2s ease;
+}
+.btn-primary {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 0 28px rgba(240,92,26,.32);
+}
+.btn-primary:hover {
+  background: var(--accent2);
+  box-shadow: 0 0 44px rgba(240,92,26,.5);
+  transform: translateY(-2px);
+}
+.btn-ghost {
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.05);
+  transform: translateY(-2px);
+}
+.btn-lg { padding: 17px 36px; font-size: 16px; }
+.btn-outline {
+  background: transparent; color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.btn-outline:hover { background: var(--accentglow); transform: translateY(-2px); }
+
+/* ============================================================
+   NAVIGATION
+============================================================ */
+.nav {
+  position: fixed; inset: 0 0 auto 0; z-index: 900;
+  padding: 18px 0;
+  transition: all .3s ease;
+}
+.nav.scrolled {
+  background: rgba(10,13,18,.92);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 32px;
+}
+.nav-logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px; letter-spacing: .06em;
+  display: flex; align-items: center;
+}
+.nav-logo em { color: var(--accent); font-style: normal; }
+
+.nav-links {
+  display: flex; align-items: center; gap: 30px; list-style: none;
+}
+.nav-links a {
+  font-size: 14px; font-weight: 500; color: var(--muted);
+  transition: color .2s;
+}
+.nav-links a:hover { color: var(--text); }
+
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-login { font-size: 14px; font-weight: 500; color: var(--muted); transition: color .2s; }
+.nav-login:hover { color: var(--text); }
+
+/* hamburger */
+.ham {
+  display: none; flex-direction: column; gap: 5px;
+  cursor: pointer; background: none; border: none; padding: 4px;
+}
+.ham span {
+  display: block; width: 24px; height: 2px;
+  background: var(--text); border-radius: 2px;
+  transition: all .3s ease;
+}
+.ham.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.ham.open span:nth-child(2) { opacity: 0; }
+.ham.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* mobile menu overlay */
+.mob-menu {
+  display: none; position: fixed; inset: 0; z-index: 850;
+  background: rgba(10,13,18,.97);
+  backdrop-filter: blur(20px);
+  flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+}
+.mob-menu.open { display: flex; }
+.mob-menu a {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px; letter-spacing: .05em;
+  color: var(--text); transition: color .2s;
+}
+.mob-menu a:hover { color: var(--accent); }
+.mob-menu .mob-cta { margin-top: 8px; }
+
+/* ============================================================
+   HERO
+============================================================ */
+.hero {
+  min-height: 100vh;
+  display: flex; align-items: center;
+  position: relative; overflow: hidden;
+  padding: 100px 0 60px;
+}
+/* grid overlay */
+.hero::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(240,92,26,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,92,26,.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 80%);
+}
+/* ambient glow */
+.hero-glow {
+  position: absolute; pointer-events: none;
+  width: 900px; height: 600px;
+  top: 50%; left: 50%; transform: translate(-50%,-55%);
+  background: radial-gradient(ellipse, rgba(240,92,26,.10) 0%, transparent 68%);
+}
+
+.hero-inner {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 72px; align-items: center;
+  position: relative; z-index: 1;
+}
+
+/* hero content stagger */
+.hero-content > * {
+  opacity: 0; animation: hfade .65s ease forwards;
+}
+.hero-content > *:nth-child(1) { animation-delay: .05s; }
+.hero-content > *:nth-child(2) { animation-delay: .15s; }
+.hero-content > *:nth-child(3) { animation-delay: .25s; }
+.hero-content > *:nth-child(4) { animation-delay: .35s; }
+.hero-content > *:nth-child(5) { animation-delay: .45s; }
+@keyframes hfade {
+  from { opacity:0; transform:translateY(22px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.hero-title {
+  font-size: clamp(58px,8.5vw,100px);
+  line-height: .98; margin-bottom: 20px;
+}
+.hero-title .accent-line { color: var(--accent); display: block; }
+
+.hero-sub {
+  font-size: 19px; color: var(--muted);
+  line-height: 1.65; margin-bottom: 34px; max-width: 460px;
+}
+
+.hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 36px; }
+
+.hero-trust { display: flex; flex-wrap: wrap; gap: 20px; }
+.trust-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--muted);
+}
+.trust-item svg { color: var(--accent); flex-shrink: 0; }
+
+/* hero visual */
+.hero-visual {
+  opacity: 0; animation: hfade .8s ease .3s forwards;
+  position: relative;
+}
+.hero-visual::before {
+  content: ''; position: absolute; inset: -20px;
+  background: radial-gradient(ellipse, rgba(240,92,26,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.drawing-card {
+  background: var(--bg2);
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: var(--rl);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.04),
+    0 40px 80px rgba(0,0,0,.55),
+    0 0 60px rgba(240,92,26,.07);
+}
+.drawing-card-header {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.win-dot { width: 10px; height: 10px; border-radius: 50%; }
+.win-dot:nth-child(1) { background: #ff5f57; }
+.win-dot:nth-child(2) { background: #febc2e; }
+.win-dot:nth-child(3) { background: #28c840; }
+.win-filename {
+  font-size: 11px; color: var(--muted);
+  font-family: 'Courier New', monospace;
+  margin-left: 6px;
+}
+.win-toolbar {
+  margin-left: auto;
+  display: flex; gap: 6px;
+}
+.win-btn {
+  font-size: 10px; color: var(--muted);
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 8px;
+}
+.drawing-body { background: #0b0f15; padding: 20px; }
+
+/* animated shop drawing paths */
+.dp {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: drawpath 1.4s ease forwards;
+}
+.dp1 { animation-delay: .5s; }
+.dp2 { animation-delay: .7s; }
+.dp3 { animation-delay: .85s; }
+.dp4 { animation-delay: 1.0s; }
+.dp5 { animation-delay: 1.1s; }
+.dp6 { animation-delay: 1.2s; }
+.dp7 { animation-delay: 1.3s; }
+.dp8 { animation-delay: 1.4s; }
+.dp9 { animation-delay: 1.5s; }
+.dp10{ animation-delay: 1.55s;}
+.dp11{ animation-delay: 1.6s; }
+.dp12{ animation-delay: 1.65s;}
+.dp13{ animation-delay: 1.7s; }
+.dp14{ animation-delay: 1.75s;}
+@keyframes drawpath {
+  to { stroke-dashoffset: 0; }
+}
+.dt { opacity: 0; animation: fadein .4s ease forwards; }
+.dt1  { animation-delay: 1.5s; }
+.dt2  { animation-delay: 1.6s; }
+.dt3  { animation-delay: 1.7s; }
+.dt4  { animation-delay: 1.8s; }
+.dt5  { animation-delay: 1.9s; }
+.dt6  { animation-delay: 2.0s; }
+.dt7  { animation-delay: 2.1s; }
+.dt8  { animation-delay: 2.15s; }
+.dt9  { animation-delay: 2.2s; }
+.dt10 { animation-delay: 2.25s; }
+@keyframes fadein { to { opacity: 1; } }
+
+/* ============================================================
+   STATS BAR
+============================================================ */
+.stats-bar {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 28px 0;
+}
+.stats-inner {
+  display: flex; align-items: center; justify-content: space-around;
+  flex-wrap: wrap; gap: 24px;
+}
+.stat-item { text-align: center; }
+.stat-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 42px; line-height: 1;
+  color: var(--accent); margin-bottom: 4px;
+}
+.stat-label { font-size: 13px; color: var(--muted); }
+
+/* ============================================================
+   PROBLEM SECTION
+============================================================ */
+.problem { background: var(--bg); }
+.versus-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--border);
+  border-radius: var(--rl); overflow: hidden;
+}
+.versus-col { padding: 48px; }
+.versus-col.old { background: rgba(255,59,48,.04); border-right: 1px solid var(--border); }
+.versus-col.new { background: rgba(240,92,26,.04); }
+
+.versus-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 12px; letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.versus-col.old .versus-label { color: #ff6b6b; }
+.versus-col.new .versus-label { color: var(--accent); }
+
+.versus-title { font-size: 30px; margin-bottom: 32px; }
+
+.versus-list { list-style: none; display: flex; flex-direction: column; gap: 15px; }
+.versus-list li {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 15px; line-height: 1.55;
+}
+.versus-list .li-icon { flex-shrink: 0; margin-top: 3px; }
+.old .versus-list .li-icon { color: #ff6b6b; }
+.new .versus-list .li-icon { color: var(--accent); }
+
+/* ============================================================
+   HOW IT WORKS
+============================================================ */
+.how { background: var(--bg2); }
+.steps { max-width: 820px; margin: 0 auto; }
+.step {
+  display: grid; grid-template-columns: 72px 1fr;
+  gap: 28px; align-items: flex-start;
+  padding: 36px 0; border-bottom: 1px solid var(--border);
+}
+.step:last-child { border-bottom: none; }
+.step-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px; color: rgba(240,92,26,.2);
+  line-height: 1; text-align: center; padding-top: 4px;
+  transition: color .25s;
+}
+.step:hover .step-num { color: rgba(240,92,26,.6); }
+.step-body { padding-top: 6px; }
+.step-title { font-size: 22px; margin-bottom: 8px; }
+.step-desc { color: var(--muted); font-size: 15px; line-height: 1.65; }
+
+/* ============================================================
+   FEATURES
+============================================================ */
+.features { background: var(--bg); }
+.feat-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--rl); overflow: hidden;
+  gap: 1px;
+}
+.feat-card {
+  background: var(--bg);
+  padding: 32px 28px;
+  transition: background .2s ease, opacity .5s ease, transform .5s ease;
+}
+.feat-card:hover { background: var(--bg3); }
+.feat-icon {
+  width: 44px; height: 44px;
+  background: rgba(240,92,26,.09);
+  border: 1px solid rgba(240,92,26,.2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent); margin-bottom: 18px;
+  transition: all .2s ease;
+}
+.feat-card:hover .feat-icon {
+  background: rgba(240,92,26,.16);
+  border-color: rgba(240,92,26,.45);
+  box-shadow: 0 0 18px rgba(240,92,26,.2);
+}
+.feat-title { font-size: 18px; margin-bottom: 8px; }
+.feat-desc { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+/* ============================================================
+   MATERIALS
+============================================================ */
+.materials { background: var(--bg2); }
+.mat-grid {
+  display: grid; grid-template-columns: repeat(5,1fr); gap: 14px;
+}
+.mat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 16px; text-align: center;
+  transition: border-color .2s, background .2s, opacity .5s ease, transform .5s ease;
+  cursor: default;
+}
+.mat-card:hover {
+  border-color: var(--borderhover);
+  background: rgba(240,92,26,.04);
+}
+.mat-icon { margin: 0 auto 12px; color: var(--accent); }
+.mat-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 13px; letter-spacing: .06em; margin-bottom: 5px;
+}
+.mat-spec { font-size: 11px; color: var(--muted); line-height: 1.55; }
+
+/* ============================================================
+   WHO IT'S FOR
+============================================================ */
+.who { background: var(--bg); }
+.who-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 16px;
+}
+.who-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 26px 24px;
+  display: flex; align-items: flex-start; gap: 16px;
+  transition: border-color .2s, background .2s, opacity .5s ease, transform .5s ease;
+}
+.who-card:hover {
+  border-color: var(--borderhover);
+  background: rgba(240,92,26,.03);
+}
+.who-emoji { font-size: 26px; flex-shrink: 0; line-height: 1; }
+.who-role { font-size: 19px; margin-bottom: 5px; }
+.who-desc { font-size: 13px; color: var(--muted); line-height: 1.55; }
+
+/* ============================================================
+   PRICING
+============================================================ */
+.pricing { background: var(--bg2); }
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 16px; align-items: stretch;
+}
+.pricing-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 30px 26px;
+  display: flex; flex-direction: column;
+  position: relative;
+  transition: border-color .2s, opacity .5s ease, transform .5s ease;
+}
+.pricing-card:hover { border-color: rgba(255,255,255,.13); }
+.pricing-card.pop {
+  border-color: var(--accent);
+  background: rgba(240,92,26,.05);
+}
+.pricing-card.pop:hover { box-shadow: 0 0 44px rgba(240,92,26,.14); }
+.pop-badge {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; padding: 4px 14px; border-radius: 100px;
+  white-space: nowrap;
+}
+.pt-tier {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.pt-price { margin-bottom: 6px; }
+.pt-price .amount {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 48px; line-height: 1;
+}
+.pt-price .per { font-size: 13px; color: var(--muted); }
+.pt-desc { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.55; }
+.pt-features {
+  list-style: none; display: flex; flex-direction: column;
+  gap: 10px; margin-bottom: 28px; flex: 1;
+}
+.pt-features li { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; }
+.pt-features .ck { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.pt-cta { width: 100%; justify-content: center; }
+.pricing-card.pop .pt-cta { background: var(--accent); color: #fff; border: none; }
+.pricing-card.pop .pt-cta:hover {
+  background: var(--accent2);
+  box-shadow: 0 0 28px rgba(240,92,26,.4);
+}
+
+/* ============================================================
+   TESTIMONIALS
+============================================================ */
+.testimonials { background: var(--bg); }
+.testi-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 22px;
+}
+.testi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 30px;
+  transition: border-color .2s, opacity .5s ease, transform .5s ease;
+}
+.testi-card:hover { border-color: rgba(255,255,255,.11); }
+.testi-stars { display: flex; gap: 3px; color: var(--accent); margin-bottom: 18px; }
+.testi-quote { font-size: 16px; line-height: 1.72; margin-bottom: 22px; }
+.testi-author { display: flex; align-items: center; gap: 12px; }
+.testi-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: #fff;
+  flex-shrink: 0;
+}
+.testi-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.testi-role { font-size: 12px; color: var(--muted); }
+
+/* ============================================================
+   FINAL CTA
+============================================================ */
+.cta-section {
+  background: var(--bg2); text-align: center;
+  position: relative; overflow: hidden;
+}
+.cta-section::before {
+  content: ''; position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(240,92,26,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,92,26,.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.cta-glow {
+  position: absolute; pointer-events: none;
+  width: 700px; height: 400px;
+  top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: radial-gradient(ellipse, rgba(240,92,26,.12) 0%, transparent 70%);
+}
+.cta-inner { position: relative; z-index: 1; }
+.cta-inner h2 { font-size: clamp(44px,7vw,80px); margin-bottom: 16px; }
+.cta-inner p  { font-size: 18px; color: var(--muted); margin-bottom: 38px; }
+.email-form { display: flex; gap: 10px; max-width: 480px; margin: 0 auto 14px; }
+.email-input {
+  flex: 1; background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 18px;
+  color: var(--text); font-size: 15px; outline: none;
+  transition: border-color .2s;
+}
+.email-input::placeholder { color: var(--muted); }
+.email-input:focus { border-color: rgba(240,92,26,.5); }
+.form-note { font-size: 12px; color: var(--muted); }
+.form-success {
+  display: none; margin-top: 16px;
+  color: #5bda74; font-size: 15px; font-weight: 600;
+}
+
+/* ============================================================
+   FOOTER
+============================================================ */
+.footer { border-top: 1px solid var(--border); padding: 64px 0 40px; }
+.footer-grid {
+  display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 48px; margin-bottom: 48px;
+}
+.footer-brand p {
+  font-size: 14px; color: var(--muted);
+  line-height: 1.65; margin-top: 12px; max-width: 230px;
+}
+.footer-col-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 12px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 16px;
+}
+.footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.footer-links a { font-size: 14px; color: var(--muted); transition: color .2s; }
+.footer-links a:hover { color: var(--text); }
+.footer-bottom {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 28px; border-top: 1px solid var(--border);
+  flex-wrap: wrap; gap: 12px;
+}
+.footer-copy { font-size: 13px; color: var(--muted); }
+.footer-legal { display: flex; gap: 24px; }
+.footer-legal a { font-size: 13px; color: var(--muted); transition: color .2s; }
+.footer-legal a:hover { color: var(--text); }
+
+/* ============================================================
+   VIDEO MODAL
+============================================================ */
+.modal-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,.85); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal-inner {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 40px;
+  max-width: 560px; width: 90%;
+  text-align: center;
+  position: relative;
+  animation: modalIn .3s ease;
+}
+@keyframes modalIn {
+  from { opacity:0; transform:scale(.94) translateY(10px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+.modal-close {
+  position: absolute; top: 14px; right: 18px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 22px; line-height: 1;
+  transition: color .2s;
+}
+.modal-close:hover { color: var(--text); }
+.demo-placeholder {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 56px 32px;
+  margin-bottom: 24px;
+}
+.demo-play-icon {
+  width: 64px; height: 64px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 20px;
+  box-shadow: 0 0 32px rgba(240,92,26,.4);
+}
+.demo-placeholder h3 { font-size: 26px; margin-bottom: 8px; }
+.demo-placeholder p  { font-size: 14px; color: var(--muted); }
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+@media (max-width: 1100px) {
+  .mat-grid  { grid-template-columns: repeat(4,1fr); }
+  .pricing-grid { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 900px) {
+  .hero-inner { grid-template-columns: 1fr; text-align: center; gap: 40px; }
+  .hero-sub   { margin: 0 auto 34px; }
+  .hero-ctas  { justify-content: center; }
+  .hero-trust { justify-content: center; }
+  .who-grid   { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 768px) {
+  .section { padding: 72px 0; }
+  .nav-links, .nav-right { display: none; }
+  .ham { display: flex; }
+  .versus-grid   { grid-template-columns: 1fr; }
+  .versus-col.old { border-right: none; border-bottom: 1px solid var(--border); }
+  .feat-grid { grid-template-columns: repeat(2,1fr); }
+  .mat-grid  { grid-template-columns: repeat(3,1fr); }
+  .testi-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+  .stats-inner { gap: 32px; }
+}
+@media (max-width: 520px) {
+  .feat-grid   { grid-template-columns: 1fr; }
+  .mat-grid    { grid-template-columns: repeat(2,1fr); }
+  .who-grid    { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .footer-grid  { grid-template-columns: 1fr; }
+  .footer-bottom { flex-direction: column; text-align: center; }
+  .email-form  { flex-direction: column; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+============================================================ -->
+<nav class="nav" id="nav">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">Fab<em>Draw</em></a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#materials">Materials</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#testimonials">Reviews</a></li>
+      </ul>
+      <div class="nav-right">
+        <a href="#" class="nav-login">Log in</a>
+        <a href="#cta" class="btn btn-primary" style="padding:10px 20px;font-size:13px;">Start Free</a>
+      </div>
+      <button class="ham" id="ham" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile menu -->
+<div class="mob-menu" id="mobMenu">
+  <a href="#features" class="mob-link">Features</a>
+  <a href="#materials" class="mob-link">Materials</a>
+  <a href="#pricing" class="mob-link">Pricing</a>
+  <a href="#testimonials" class="mob-link">Reviews</a>
+  <a href="#cta" class="btn btn-primary btn-lg mob-cta mob-link">Start Free</a>
+</div>
+
+<!-- ============================================================
+     HERO
+============================================================ -->
+<section class="hero" id="home">
+  <div class="hero-glow"></div>
+  <div class="container">
+    <div class="hero-inner">
+
+      <!-- Left: copy -->
+      <div class="hero-content">
+        <div class="badge" style="margin-bottom:22px;">
+          <span class="badge-dot"></span>
+          The Canva for Fabricators
+        </div>
+        <h1 class="hero-title">
+          Stop Drawing<span class="accent-line">On Napkins.</span>
+        </h1>
+        <p class="hero-sub">
+          Turn any fabrication idea into a professional shop drawing in minutes.
+          No CAD experience required. Built for the shop floor, not the engineering desk.
+        </p>
+        <div class="hero-ctas">
+          <a href="#cta" class="btn btn-primary btn-lg">
+            Try FabDraw Free
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <button class="btn btn-ghost btn-lg" id="watchDemo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor"/></svg>
+            Watch Demo
+          </button>
+        </div>
+        <div class="hero-trust">
+          <div class="trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            No CAD experience required
+          </div>
+          <div class="trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Browser-based, nothing to install
+          </div>
+          <div class="trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Free forever plan
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: animated shop drawing -->
+      <div class="hero-visual">
+        <div class="drawing-card">
+          <div class="drawing-card-header">
+            <div class="win-dot"></div>
+            <div class="win-dot"></div>
+            <div class="win-dot"></div>
+            <span class="win-filename">steel-gate-frame.fd</span>
+            <div class="win-toolbar">
+              <span class="win-btn">2D</span>
+              <span class="win-btn">Snap ✓</span>
+              <span class="win-btn">PDF</span>
+            </div>
+          </div>
+          <div class="drawing-body">
+            <svg viewBox="0 0 500 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+              <!-- Grid background -->
+              <defs>
+                <pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M20 0L0 0 0 20" fill="none" stroke="rgba(255,255,255,0.035)" stroke-width=".5"/>
+                </pattern>
+              </defs>
+              <rect width="500" height="340" fill="#0b0f15"/>
+              <rect width="500" height="340" fill="url(#g)"/>
+
+              <!-- Drawing border -->
+              <rect class="dp dp1" x="10" y="10" width="480" height="320" fill="none" stroke="rgba(240,92,26,0.3)" stroke-width=".8"/>
+
+              <!-- ===== MAIN FRAME ===== -->
+              <!-- Left post: 2" SQ -->
+              <rect class="dp dp2" x="70" y="44" width="14" height="196" fill="none" stroke="#c8d4e3" stroke-width="1.8"/>
+              <!-- Right post -->
+              <rect class="dp dp3" x="280" y="44" width="14" height="196" fill="none" stroke="#c8d4e3" stroke-width="1.8"/>
+              <!-- Top rail -->
+              <rect class="dp dp4" x="70" y="44" width="224" height="13" fill="none" stroke="#c8d4e3" stroke-width="1.8"/>
+              <!-- Bottom rail -->
+              <rect class="dp dp5" x="70" y="227" width="224" height="13" fill="none" stroke="#c8d4e3" stroke-width="1.8"/>
+              <!-- Mid rail -->
+              <rect class="dp dp6" x="70" y="133" width="224" height="10" fill="none" stroke="#8a9db8" stroke-width="1.2"/>
+
+              <!-- Balusters -->
+              <rect class="dp dp7"  x="112" y="57" width="8" height="170" fill="none" stroke="#8a9db8" stroke-width="1"/>
+              <rect class="dp dp8"  x="154" y="57" width="8" height="170" fill="none" stroke="#8a9db8" stroke-width="1"/>
+              <rect class="dp dp9"  x="196" y="57" width="8" height="170" fill="none" stroke="#8a9db8" stroke-width="1"/>
+              <rect class="dp dp10" x="238" y="57" width="8" height="170" fill="none" stroke="#8a9db8" stroke-width="1"/>
+
+              <!-- ===== DIMENSIONS ===== -->
+              <!-- Width dim line -->
+              <line class="dp dp11" x1="70" y1="252" x2="70" y2="260" stroke="#f05c1a" stroke-width=".8"/>
+              <line class="dp dp11" x1="294" y1="252" x2="294" y2="260" stroke="#f05c1a" stroke-width=".8"/>
+              <line class="dp dp11" x1="70" y1="257" x2="294" y2="257" stroke="#f05c1a" stroke-width=".8"/>
+              <!-- arrowheads -->
+              <polygon class="dt dt1" points="73,254.5 73,259.5 66,257" fill="#f05c1a"/>
+              <polygon class="dt dt1" points="291,254.5 291,259.5 298,257" fill="#f05c1a"/>
+              <text class="dt dt2" x="182" y="274" fill="#f05c1a" font-size="9.5" font-family="Courier New,monospace" text-anchor="middle">8&apos;-0&quot; OVERALL</text>
+
+              <!-- Height dim line -->
+              <line class="dp dp12" x1="44" y1="44" x2="52" y2="44" stroke="#f05c1a" stroke-width=".8"/>
+              <line class="dp dp12" x1="44" y1="240" x2="52" y2="240" stroke="#f05c1a" stroke-width=".8"/>
+              <line class="dp dp12" x1="48" y1="44"  x2="48" y2="240" stroke="#f05c1a" stroke-width=".8"/>
+              <polygon class="dt dt3" points="45.5,47 50.5,47 48,40" fill="#f05c1a"/>
+              <polygon class="dt dt3" points="45.5,237 50.5,237 48,244" fill="#f05c1a"/>
+              <text class="dt dt4" x="40" y="145" fill="#f05c1a" font-size="9.5" font-family="Courier New,monospace" text-anchor="middle" transform="rotate(-90,40,145)">4&apos;-0&quot;</text>
+
+              <!-- ===== CALLOUTS ===== -->
+              <!-- Top rail callout -->
+              <line class="dp dp13" x1="182" y1="44" x2="182" y2="24" stroke="#7a8fa8" stroke-width=".7" stroke-dasharray="3,2"/>
+              <circle class="dt dt5" cx="182" cy="44" r="2.5" fill="#f05c1a"/>
+              <text class="dt dt6" x="182" y="19" fill="#9aafca" font-size="8" font-family="Courier New,monospace" text-anchor="middle">1.5&quot; SQ TUBE 14GA</text>
+
+              <!-- Post callout -->
+              <line class="dp dp14" x1="77" y1="140" x2="48" y2="115" stroke="#7a8fa8" stroke-width=".7" stroke-dasharray="3,2"/>
+              <circle class="dt dt7" cx="77" cy="140" r="2.5" fill="#f05c1a"/>
+              <text class="dt dt8" x="32" y="111" fill="#9aafca" font-size="8" font-family="Courier New,monospace" text-anchor="middle">2&quot; SQ TUBE</text>
+              <text class="dt dt8" x="32" y="121" fill="#9aafca" font-size="8" font-family="Courier New,monospace" text-anchor="middle">11GA</text>
+
+              <!-- Baluster callout -->
+              <line class="dp dp14" x1="116" y1="80" x2="160" y2="24" stroke="#7a8fa8" stroke-width=".7" stroke-dasharray="3,2"/>
+              <circle class="dt dt9" cx="116" cy="80" r="2.5" fill="#f05c1a"/>
+              <text class="dt dt10" x="178" y="19" fill="#9aafca" font-size="8" font-family="Courier New,monospace" text-anchor="middle">&nbsp;</text>
+
+              <!-- ===== TITLE BLOCK ===== -->
+              <rect class="dt dt1" x="344" y="244" width="150" height="72" fill="none" stroke="rgba(240,92,26,0.4)" stroke-width=".7"/>
+              <line class="dt dt1" x1="344" y1="264" x2="494" y2="264" stroke="rgba(240,92,26,0.3)" stroke-width=".6"/>
+              <line class="dt dt1" x1="344" y1="280" x2="494" y2="280" stroke="rgba(240,92,26,0.3)" stroke-width=".6"/>
+              <line class="dt dt1" x1="420" y1="244" x2="420" y2="316" stroke="rgba(240,92,26,0.3)" stroke-width=".6"/>
+
+              <text class="dt dt2" x="350" y="258" fill="#9aafca" font-size="7.5" font-family="Courier New,monospace">DRAWN BY:</text>
+              <text class="dt dt2" x="426" y="258" fill="#9aafca" font-size="7.5" font-family="Courier New,monospace">SCALE: NTS</text>
+              <text class="dt dt3" x="350" y="275" fill="#e8edf5" font-size="8" font-family="Courier New,monospace" font-weight="bold">FabDraw</text>
+              <text class="dt dt3" x="426" y="275" fill="#9aafca" font-size="7.5" font-family="Courier New,monospace">DATE: 06/26</text>
+              <text class="dt dt4" x="350" y="293" fill="#e8edf5" font-size="8.5" font-family="Courier New,monospace">STEEL TUBE GATE</text>
+              <text class="dt dt5" x="350" y="307" fill="#7a8fa8" font-size="7" font-family="Courier New,monospace">DWG NO: FD-0047</text>
+
+              <!-- FRONT VIEW label -->
+              <text class="dt dt6" x="182" y="298" fill="#7a8fa8" font-size="8.5" font-family="Courier New,monospace" text-anchor="middle">— FRONT VIEW —</text>
+
+              <!-- MATERIAL NOTE -->
+              <text class="dt dt7" x="182" y="312" fill="#7a8fa8" font-size="7.5" font-family="Courier New,monospace" text-anchor="middle">ALL MATERIAL: A500 GR-B STEEL</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div><!-- hero-inner -->
+  </div>
+</section>
+
+<!-- ============================================================
+     STATS BAR
+============================================================ -->
+<div class="stats-bar">
+  <div class="container">
+    <div class="stats-inner">
+      <div class="stat-item">
+        <div class="stat-value">12,000+</div>
+        <div class="stat-label">Drawings Created</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">600+</div>
+        <div class="stat-label">Active Fabricators</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">&lt;5 min</div>
+        <div class="stat-label">First Drawing</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">4.9★</div>
+        <div class="stat-label">Average Rating</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PROBLEM SECTION
+============================================================ -->
+<section class="section problem" id="problem">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">The Problem</div>
+      <h2>The Old Way vs <span class="gt">FabDraw</span></h2>
+      <p>Every day, fabricators waste hours on drawings that should take minutes. We fixed that.</p>
+    </div>
+    <div class="versus-grid sa">
+      <div class="versus-col old">
+        <div class="versus-label">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 5l4 4M9 5l-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          The Old Way
+        </div>
+        <h3 class="versus-title">Manual Drawings & Costly CAD</h3>
+        <ul class="versus-list">
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Hand-sketched napkin drawings that nobody can read
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            AutoCAD takes years of training and costs $2,000+/yr
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Freelance drafters charge $80–150/hr with 3–5 day turnaround
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Revisions require sending files back and forth for days
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Drawings get lost, damaged, or stuck on someone's desktop
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            No bill of materials, no cut list, no standard format for the shop
+          </li>
+        </ul>
+      </div>
+      <div class="versus-col new">
+        <div class="versus-label">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 7l2.5 2.5L10.5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          With FabDraw
+        </div>
+        <h3 class="versus-title">Professional Drawings in Minutes</h3>
+        <ul class="versus-list">
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Professional shop-ready PDF in under 5 minutes
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            If you can use a smartphone, you can use FabDraw
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Included in your subscription — no additional cost
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Instant revisions, live preview as you type dimensions
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Cloud-saved, accessible on any device, always backed up
+          </li>
+          <li>
+            <svg class="li-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 8l2.5 2.5L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Auto-generated BOM, cut list, and weld callouts included
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     HOW IT WORKS
+============================================================ -->
+<section class="section how" id="how-it-works">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Simple Process</div>
+      <h2>From Idea to Shop Drawing<br><span class="gt">in 5 Steps</span></h2>
+      <p>No training required. No software to install. Just open your browser and start building.</p>
+    </div>
+    <div class="steps">
+
+      <div class="step sa">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3 class="step-title">Describe Your Project</h3>
+          <p class="step-desc">Tell FabDraw what you're building — a gate, railing, frame, enclosure, or custom weldment. Pick from dozens of starting templates or start from a blank canvas.</p>
+        </div>
+      </div>
+
+      <div class="step sa">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3 class="step-title">Choose Your Materials</h3>
+          <p class="step-desc">Select from our library of 10 standard steel profiles — square tube, round tube, angle iron, I-beam, and more. Set wall thickness with real-world standard specs built in.</p>
+        </div>
+      </div>
+
+      <div class="step sa">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3 class="step-title">Set Your Dimensions</h3>
+          <p class="step-desc">Enter measurements in feet and inches. FabDraw auto-scales your drawing, snaps joints, and maintains proper proportions as you update any dimension in real time.</p>
+        </div>
+      </div>
+
+      <div class="step sa">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h3 class="step-title">Customize &amp; Annotate</h3>
+          <p class="step-desc">Add weld symbols, joint callouts, notes, and hardware specs directly on your drawing. Rotate to 3D to verify fit and check for clearance issues before a single cut is made.</p>
+        </div>
+      </div>
+
+      <div class="step sa">
+        <div class="step-num">05</div>
+        <div class="step-body">
+          <h3 class="step-title">Export &amp; Share</h3>
+          <p class="step-desc">Download a professional PDF with title block, bill of materials, and cut list automatically generated. Share a live link with your customer, inspector, or shop floor crew.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FEATURES
+============================================================ -->
+<section class="section features" id="features">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Features</div>
+      <h2>Everything You Need.<br><span class="gt">Nothing You Don't.</span></h2>
+      <p>Built for the shop floor, not the engineering desk. Every feature ships on day one.</p>
+    </div>
+    <div class="feat-grid">
+
+      <!-- 1 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="2" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="2" y="11" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M11 14.5h7M14.5 11v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <h4 class="feat-title">Drag &amp; Drop Canvas</h4>
+        <p class="feat-desc">Place structural members with a click. Rearrange, resize, and reconnect without starting over. Your drawing updates live.</p>
+      </div>
+
+      <!-- 2 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M10 2v3M10 15v3M2 10h3M15 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4.93 4.93l2.12 2.12M12.95 12.95l2.12 2.12M4.93 15.07l2.12-2.12M12.95 7.05l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <h4 class="feat-title">Smart Snap &amp; Align</h4>
+        <p class="feat-desc">Members automatically snap to joints, centerlines, and edges. Miter, cope, and butt joints form correctly every time.</p>
+      </div>
+
+      <!-- 3 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3L17 7.5v5L10 17 3 12.5v-5L10 3z" stroke="currentColor" stroke-width="1.5"/><path d="M3 7.5l7 4.5 7-4.5M10 12v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <h4 class="feat-title">3D Rotation View</h4>
+        <p class="feat-desc">Orbit around your structure in 3D before a single cut is made. Catch clearance issues and verify fitup from every angle.</p>
+      </div>
+
+      <!-- 4 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="5" cy="10" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M7.5 10h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><rect x="12.5" y="7" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
+        </div>
+        <h4 class="feat-title">Joint Callouts</h4>
+        <p class="feat-desc">Add weld symbols, bolt callouts, and connection details directly to joints. Your welder knows exactly what's needed at every location.</p>
+      </div>
+
+      <!-- 5 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h14M3 10l3-3M3 10l3 3M17 10l-3-3M17 10l-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="5" width="6" height="10" rx="1" stroke="currentColor" stroke-width="1.3" fill="rgba(240,92,26,0.12)"/></svg>
+        </div>
+        <h4 class="feat-title">Auto-Dimensions</h4>
+        <p class="feat-desc">Every member and assembly gets dimensioned automatically. Update one number and the entire drawing recalculates instantly.</p>
+      </div>
+
+      <!-- 6 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 8h16" stroke="currentColor" stroke-width="1.3"/><path d="M7 8v9M12 8v9" stroke="currentColor" stroke-width="1" stroke-dasharray="1.5 2"/><path d="M5 11.5h3.5M5 14h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </div>
+        <h4 class="feat-title">Bill of Materials</h4>
+        <p class="feat-desc">Auto-generated BOM with quantity, material, size, length, and weight for every member. Ready to hand to your steel supplier.</p>
+      </div>
+
+      <!-- 7 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 4h8l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5"/><path d="M12 4v4h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 13l2 2 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h4 class="feat-title">PDF Export</h4>
+        <p class="feat-desc">Export print-ready PDFs with professional title blocks, revision history, and scale indicators. Looks like a drawing your engineer would produce.</p>
+      </div>
+
+      <!-- 8 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 4V3M14 4V3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="15.5" r="1" fill="currentColor"/><rect x="5" y="7" width="10" height="5" rx=".8" stroke="currentColor" stroke-width="1.2"/></svg>
+        </div>
+        <h4 class="feat-title">100% Browser-Based</h4>
+        <p class="feat-desc">Nothing to download or install. Works on any device with a browser — laptop, tablet, or shop-floor computer. Always up to date.</p>
+      </div>
+
+      <!-- 9 -->
+      <div class="feat-card sa">
+        <div class="feat-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 14v-4M10 7v-.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5.5 16.5a6 6 0 119.6-6.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M14 11l1.5-1 1 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="14.5" r="1" fill="currentColor"/></svg>
+        </div>
+        <h4 class="feat-title">Cloud Save &amp; Sync</h4>
+        <p class="feat-desc">Every change is saved automatically. Pick up where you left off on any device. Share a live link with customers or crew instantly.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     MATERIAL LIBRARY
+============================================================ -->
+<section class="section materials" id="materials">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Material Library</div>
+      <h2>Every Profile.<br><span class="gt">Every Standard Size.</span></h2>
+      <p>All standard ASTM A500 and A36 steel profiles with real wall thicknesses built right in.</p>
+    </div>
+    <div class="mat-grid">
+
+      <!-- Square Tube -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="8" width="32" height="32" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="14" y="14" width="20" height="20" rx="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1.5" opacity=".5"/>
+        </svg>
+        <div class="mat-name">Square Tube</div>
+        <div class="mat-spec">½" – 6" · Wall: 11ga – ½"<br>ASTM A500 Gr-B</div>
+      </div>
+
+      <!-- Round Tube -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="16" stroke="currentColor" stroke-width="2"/>
+          <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1.5" opacity=".5"/>
+        </svg>
+        <div class="mat-name">Round Tube</div>
+        <div class="mat-spec">¾" – 6" OD · Wall: 14ga – 3/8"<br>ASTM A513</div>
+      </div>
+
+      <!-- Rect Tube -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="6" y="12" width="36" height="24" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="12" y="17" width="24" height="14" rx="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1.5" opacity=".5"/>
+        </svg>
+        <div class="mat-name">Rect Tube</div>
+        <div class="mat-spec">1×2 – 4×8 · Wall: 11ga – ½"<br>ASTM A500 Gr-B</div>
+      </div>
+
+      <!-- Pipe -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="15" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="24" cy="24" r="9" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1.5" opacity=".5"/>
+          <line x1="24" y1="9" x2="24" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="24" y1="36" x2="24" y2="39" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div class="mat-name">Pipe</div>
+        <div class="mat-spec">½" – 12" Sch 40/80<br>ASTM A53 Gr-B</div>
+      </div>
+
+      <!-- Angle Iron -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <path d="M10 10v28h28" stroke="currentColor" stroke-width="3" stroke-linecap="square"/>
+          <path d="M16 10v22h22" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" opacity=".4" stroke-dasharray="2 1.5"/>
+        </svg>
+        <div class="mat-name">Angle Iron</div>
+        <div class="mat-spec">¾×¾ – 6×6 · Wall: ⅛" – ¾"<br>ASTM A36</div>
+      </div>
+
+      <!-- Channel -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <path d="M32 10H10v28h22" stroke="currentColor" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter"/>
+          <path d="M26 16H16v16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" opacity=".4" stroke-dasharray="2 1.5"/>
+        </svg>
+        <div class="mat-name">Channel</div>
+        <div class="mat-spec">C3 – C15 · Web: 1.50"–3.40"<br>ASTM A36</div>
+      </div>
+
+      <!-- I-Beam -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <path d="M14 10h20M14 38h20M24 10v28" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          <path d="M18 14h12M18 34h12" stroke="currentColor" stroke-width="1.5" opacity=".4" stroke-dasharray="2 1.5" stroke-linecap="round"/>
+        </svg>
+        <div class="mat-name">I-Beam</div>
+        <div class="mat-spec">W4×13 – W36×135<br>ASTM A992</div>
+      </div>
+
+      <!-- Flat Bar -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="6" y="18" width="36" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="rgba(240,92,26,0.08)"/>
+          <line x1="6" y1="24" x2="42" y2="24" stroke="currentColor" stroke-width=".8" stroke-dasharray="3 2" opacity=".4"/>
+        </svg>
+        <div class="mat-name">Flat Bar</div>
+        <div class="mat-spec">¼×1 – 1×6 · Lengths to 20'<br>ASTM A36</div>
+      </div>
+
+      <!-- Sheet Metal -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="6" y="20" width="36" height="8" rx="1" stroke="currentColor" stroke-width="2" fill="rgba(240,92,26,0.08)"/>
+          <path d="M12 24h24" stroke="currentColor" stroke-width=".8" stroke-dasharray="3 2" opacity=".4"/>
+          <path d="M6 16l3 4M6 32l3-4M42 16l-3 4M42 32l-3-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".5"/>
+        </svg>
+        <div class="mat-name">Sheet Metal</div>
+        <div class="mat-spec">24ga – 10ga · 4×8 / 4×10<br>ASTM A1008</div>
+      </div>
+
+      <!-- Plate -->
+      <div class="mat-card sa">
+        <svg class="mat-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="6" y="14" width="36" height="20" rx="1" stroke="currentColor" stroke-width="2" fill="rgba(240,92,26,0.1)"/>
+          <path d="M12 22h24M12 26h24" stroke="currentColor" stroke-width=".8" stroke-dasharray="3 2" opacity=".35"/>
+          <path d="M6 10l4 4M42 10l-4 4M6 38l4-4M42 38l-4-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".45"/>
+        </svg>
+        <div class="mat-name">Plate</div>
+        <div class="mat-spec">3/16" – 2" · Up to 96"W<br>ASTM A36</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     WHO IT'S FOR
+============================================================ -->
+<section class="section who" id="who">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Who It's For</div>
+      <h2>Built for People<br><span class="gt">Who Build Things</span></h2>
+      <p>From one-man shops to enterprise contractors — FabDraw scales with your business.</p>
+    </div>
+    <div class="who-grid">
+
+      <div class="who-card sa">
+        <div class="who-emoji">🔩</div>
+        <div>
+          <h4 class="who-role">Fabricators</h4>
+          <p class="who-desc">Quote jobs faster, communicate specs clearly to your crew, and eliminate shop-floor confusion.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🔥</div>
+        <div>
+          <h4 class="who-role">Welders</h4>
+          <p class="who-desc">Get clear, dimensioned drawings with joint callouts and weld symbols — before you strike an arc.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🏗️</div>
+        <div>
+          <h4 class="who-role">Contractors</h4>
+          <p class="who-desc">Document custom metal work, submit RFIs with professional drawings, and win more bids.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🔒</div>
+        <div>
+          <h4 class="who-role">Fence Companies</h4>
+          <p class="who-desc">Draw gate frames, panel layouts, and post schedules. Generate material lists automatically.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🪜</div>
+        <div>
+          <h4 class="who-role">Railing Companies</h4>
+          <p class="who-desc">Lay out stair railings, handrails, and guardrails with correct angles and baluster spacing.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🪧</div>
+        <div>
+          <h4 class="who-role">Sign Shops</h4>
+          <p class="who-desc">Design sign frames, post structures, and monument bases with steel tube and angle iron.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🌡️</div>
+        <div>
+          <h4 class="who-role">HVAC Installers</h4>
+          <p class="who-desc">Draw support frames, equipment pads, and curb adapters. Share with structural for approval.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🔧</div>
+        <div>
+          <h4 class="who-role">Maintenance Depts</h4>
+          <p class="who-desc">Document repairs and modifications with as-built drawings your team can actually read and use.</p>
+        </div>
+      </div>
+
+      <div class="who-card sa">
+        <div class="who-emoji">🏛️</div>
+        <div>
+          <h4 class="who-role">Construction Companies</h4>
+          <p class="who-desc">Produce shop drawings for miscellaneous steel, embed plates, and custom connections on-site.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PRICING
+============================================================ -->
+<section class="section pricing" id="pricing">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Pricing</div>
+      <h2>Simple Pricing.<br><span class="gt">No Surprises.</span></h2>
+      <p>Start free. Upgrade when you need to. Cancel anytime.</p>
+    </div>
+    <div class="pricing-grid">
+
+      <!-- Free -->
+      <div class="pricing-card sa">
+        <div class="pt-tier">Free</div>
+        <div class="pt-price">
+          <span class="amount">$0</span>
+          <span class="per"> / mo</span>
+        </div>
+        <p class="pt-desc">Perfect for trying FabDraw on your first few projects.</p>
+        <ul class="pt-features">
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>3 active projects</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>All material profiles</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF export (watermarked)</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>2D drawings</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Community support</li>
+        </ul>
+        <a href="#cta" class="btn btn-outline pt-cta">Get Started Free</a>
+      </div>
+
+      <!-- Pro (popular) -->
+      <div class="pricing-card pop sa">
+        <div class="pop-badge">Most Popular</div>
+        <div class="pt-tier">Pro</div>
+        <div class="pt-price">
+          <span class="amount">$19</span>
+          <span class="per"> / mo</span>
+        </div>
+        <p class="pt-desc">For solo fabricators and small shops doing regular work.</p>
+        <ul class="pt-features">
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Unlimited projects</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Clean PDF export (no watermark)</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>3D rotation view</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Auto bill of materials</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Joint &amp; weld callouts</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Priority email support</li>
+        </ul>
+        <a href="#cta" class="btn pt-cta">Start Pro Trial</a>
+      </div>
+
+      <!-- Team -->
+      <div class="pricing-card sa">
+        <div class="pt-tier">Team</div>
+        <div class="pt-price">
+          <span class="amount">$49</span>
+          <span class="per"> / mo</span>
+        </div>
+        <p class="pt-desc">For shops with multiple estimators, fabricators, and field crews.</p>
+        <ul class="pt-features">
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Everything in Pro</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Up to 5 team seats</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Shared project library</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Custom title blocks &amp; logo</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Revision tracking</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Phone &amp; chat support</li>
+        </ul>
+        <a href="#cta" class="btn btn-outline pt-cta">Start Team Trial</a>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="pricing-card sa">
+        <div class="pt-tier">Enterprise</div>
+        <div class="pt-price">
+          <span class="amount" style="font-size:36px;">Custom</span>
+        </div>
+        <p class="pt-desc">For large fabrication companies, multi-location shops, and OEMs.</p>
+        <ul class="pt-features">
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Everything in Team</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Unlimited seats</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>SSO / SAML integration</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>ERP / MRP API access</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Dedicated account manager</li>
+          <li><svg class="ck" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3L11.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Custom onboarding &amp; training</li>
+        </ul>
+        <a href="mailto:sales@fabdraw.com" class="btn btn-ghost pt-cta">Contact Sales</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     TESTIMONIALS
+============================================================ -->
+<section class="section testimonials" id="testimonials">
+  <div class="container">
+    <div class="sh sa">
+      <div class="badge">Reviews</div>
+      <h2>What Fabricators<br><span class="gt">Are Saying</span></h2>
+      <p>Real feedback from real shops. We're just getting started.</p>
+    </div>
+    <div class="testi-grid">
+
+      <div class="testi-card sa">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"I've been fabricating for 22 years and always relied on hand sketches. FabDraw changed everything — my customers actually understand what I'm building before I cut the first piece. Won a $14k railing job because the drawing looked so professional."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#f05c1a,#ff9a5c);">MR</div>
+          <div>
+            <div class="testi-name">Mike R.</div>
+            <div class="testi-role">Owner, R&amp;R Metal Fabrication · Houston, TX</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testi-card sa">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"We build about 40 custom gates a month. Before FabDraw we were spending 2–3 hours per quote just on drawings. Now it takes 10 minutes and the drawings go straight to the welder. Our rework rate dropped to almost zero."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#1a6ef0,#3d9aff);">JT</div>
+          <div>
+            <div class="testi-name">Jenna T.</div>
+            <div class="testi-role">Operations Manager, Premier Fence Co. · Phoenix, AZ</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testi-card sa">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"I'm a one-man shop. I tried AutoCAD years ago — gave up after a week. FabDraw took me 20 minutes to figure out. Now I produce drawings that look like they came from an engineering firm. It's honestly embarrassing how easy it is."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#1af06e,#3dffa0);">DK</div>
+          <div>
+            <div class="testi-name">Derek K.</div>
+            <div class="testi-role">Sole Proprietor, DK Custom Metal · Nashville, TN</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FINAL CTA
+============================================================ -->
+<section class="section cta-section" id="cta">
+  <div class="cta-glow"></div>
+  <div class="container cta-inner">
+    <div class="badge" style="margin-bottom:20px;">Free forever plan available</div>
+    <h2>Start Drawing<br><span class="gt">for Free Today.</span></h2>
+    <p>From idea to shop drawing in under 5 minutes.<br>No credit card. No CAD experience. No excuses.</p>
+    <form class="email-form" id="emailForm" onsubmit="handleSubmit(event)">
+      <input
+        type="email"
+        class="email-input"
+        id="emailInput"
+        placeholder="your@email.com"
+        required
+        autocomplete="email"
+      >
+      <button type="submit" class="btn btn-primary">
+        Get Early Access
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+    <p class="form-note">Join 600+ fabricators already using FabDraw. Unsubscribe anytime.</p>
+    <p class="form-success" id="formSuccess">🎉 You're on the list! We'll be in touch soon.</p>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+============================================================ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+
+      <div class="footer-brand">
+        <a href="#" class="nav-logo" style="font-size:26px;">Fab<em style="color:var(--accent);font-style:normal;">Draw</em></a>
+        <p>The Canva for Fabricators. Turn any fabrication idea into a professional shop drawing in minutes. Built for the shop floor.</p>
+      </div>
+
+      <div>
+        <div class="footer-col-title">Product</div>
+        <ul class="footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#materials">Materials</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#">Changelog</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="footer-col-title">Company</div>
+        <ul class="footer-links">
+          <li><a href="#">About</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Careers</a></li>
+          <li><a href="mailto:hello@fabdraw.com">Contact</a></li>
+          <li><a href="#">Press Kit</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="footer-col-title">Support</div>
+        <ul class="footer-links">
+          <li><a href="#">Help Center</a></li>
+          <li><a href="#">Video Tutorials</a></li>
+          <li><a href="#">Community</a></li>
+          <li><a href="mailto:support@fabdraw.com">Email Support</a></li>
+          <li><a href="#">Status Page</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p class="footer-copy">© 2026 FabDraw, Inc. All rights reserved.</p>
+      <div class="footer-legal">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+        <a href="#">Cookie Policy</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================================================
+     VIDEO DEMO MODAL
+============================================================ -->
+<div class="modal-backdrop" id="demoModal">
+  <div class="modal-inner">
+    <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+    <div class="demo-placeholder">
+      <div class="demo-play-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 5.5l11 6.5-11 6.5V5.5z" fill="white"/></svg>
+      </div>
+      <h3>Demo Coming Soon</h3>
+      <p style="color:var(--muted);margin-top:6px;">We're putting the finishing touches on the product demo.<br>Sign up below to be notified the moment it goes live.</p>
+    </div>
+    <a href="#cta" class="btn btn-primary" style="width:100%;justify-content:center;" id="modalCTA">
+      Get Early Access Instead
+    </a>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   NAVIGATION: scroll behavior + sticky
+============================================================ */
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 40);
+}, { passive: true });
+
+/* ============================================================
+   HAMBURGER MENU
+============================================================ */
+const ham      = document.getElementById('ham');
+const mobMenu  = document.getElementById('mobMenu');
+const mobLinks = mobMenu.querySelectorAll('.mob-link');
+
+ham.addEventListener('click', () => {
+  const open = mobMenu.classList.toggle('open');
+  ham.classList.toggle('open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+});
+
+mobLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    mobMenu.classList.remove('open');
+    ham.classList.remove('open');
+    document.body.style.overflow = '';
+  });
+});
+
+/* ============================================================
+   DEMO MODAL
+============================================================ */
+const demoModal  = document.getElementById('demoModal');
+const watchDemo  = document.getElementById('watchDemo');
+const modalClose = document.getElementById('modalClose');
+const modalCTA   = document.getElementById('modalCTA');
+
+watchDemo.addEventListener('click', () => {
+  demoModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+});
+function closeModal() {
+  demoModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+modalClose.addEventListener('click', closeModal);
+demoModal.addEventListener('click', e => { if (e.target === demoModal) closeModal(); });
+modalCTA.addEventListener('click', closeModal);
+
+/* ============================================================
+   EMAIL FORM
+============================================================ */
+function handleSubmit(e) {
+  e.preventDefault();
+  const email   = document.getElementById('emailInput').value;
+  const form    = document.getElementById('emailForm');
+  const success = document.getElementById('formSuccess');
+
+  /*
+    Connect to Mailchimp / your API here.
+    Example Mailchimp JSONP endpoint:
+    fetch('https://yourlist.us1.list-manage.com/subscribe/post-json?u=XXXXX&id=XXXXX&EMAIL='
+      + encodeURIComponent(email) + '&c=?')
+  */
+
+  form.style.display = 'none';
+  success.style.display = 'block';
+}
+
+/* ============================================================
+   INTERSECTION OBSERVER — scroll animations
+============================================================ */
+const observerOptions = {
+  threshold: 0.12,
+  rootMargin: '0px 0px -40px 0px'
+};
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      // stagger siblings
+      const siblings = entry.target.parentElement.querySelectorAll('.sa');
+      let delay = 0;
+      siblings.forEach((el, idx) => {
+        if (el === entry.target) delay = idx * 80;
+      });
+      setTimeout(() => {
+        entry.target.classList.add('vis');
+      }, delay);
+      observer.unobserve(entry.target);
+    }
+  });
+}, observerOptions);
+
+document.querySelectorAll('.sa').forEach(el => observer.observe(el));
+
+/* ============================================================
+   SMOOTH ANCHOR SCROLL (fallback for older browsers)
+============================================================ */
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const href = a.getAttribute('href');
+    if (href === '#') return;
+    const target = document.querySelector(href);
+    if (target) {
+      e.preventDefault();
+      const offset = 80; // nav height
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+  });
+});
+</script>
+</body>
+</html>
