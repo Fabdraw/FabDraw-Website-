@@ -206,110 +206,172 @@ export default function Canvas2D() {
       }
 
       const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
-      const len = piece.length * z * SCALE;
-      const vizH = getVisualHeight(piece) * z * SCALE;
+      const halfLen = piece.length / 2 * z * SCALE;
+      const vh = getVisualHeight(piece) * z * SCALE;
 
       ctx.translate(cx2, cy2);
       ctx.rotate(rad);
 
-      // Piece fill
-      const grd = ctx.createLinearGradient(-len / 2, -vizH / 2, -len / 2, vizH / 2);
-      const baseColor = mat.color;
-      grd.addColorStop(0, baseColor + '99');
-      grd.addColorStop(0.4, baseColor + 'cc');
-      grd.addColorStop(1, baseColor + '55');
-      ctx.fillStyle = grd;
+      const color = mat.color;
 
       // Shape drawing
-      if (piece.type === 'round_tube' || piece.type === 'pipe') {
-        // Draw as long oval / capsule
-        const r2 = vizH / 2;
+      if (piece.type === 'square_tube' || piece.type === 'rect_tube') {
+        const wallPx = piece.wall * z * SCALE;
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, halfLen * 2 - wallPx * 2, vh - wallPx * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh * 0.35);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
+      } else if (piece.type === 'round_tube' || piece.type === 'pipe') {
+        const wallPx = piece.wall * z * SCALE;
+        const radius = vh / 2;
+        ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(-len / 2 + r2, -r2);
-        ctx.lineTo(len / 2 - r2, -r2);
-        ctx.arc(len / 2 - r2, 0, r2, -Math.PI / 2, Math.PI / 2);
-        ctx.lineTo(-len / 2 + r2, r2);
-        ctx.arc(-len / 2 + r2, 0, r2, Math.PI / 2, -Math.PI / 2);
-        ctx.closePath();
-        ctx.fill();
-        // Outer ring
-        ctx.strokeStyle = isSelected ? '#ffffff' : baseColor;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.stroke();
-        // Inner wall circle hint
-        if (z > 0.6) {
-          const innerR = (piece.width / 2 - piece.wall) * z * SCALE;
-          if (innerR > 2) {
-            ctx.strokeStyle = baseColor + '44';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
-            ctx.beginPath();
-            ctx.arc(0, 0, Math.min(innerR, r2 - 1), 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-        }
-      } else if (piece.type === 'angle') {
-        const leg = piece.width * z * SCALE;
-        const t = piece.wall * z * SCALE;
-        ctx.beginPath();
-        ctx.rect(-len / 2, -leg / 2, len, t);
-        ctx.fill();
-        ctx.strokeStyle = isSelected ? '#fff' : baseColor;
-        ctx.lineWidth = isSelected ? 2 : 1.5;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.rect(-len / 2, -leg / 2, t, leg);
-        ctx.fillStyle = grd;
-        ctx.fill();
-        ctx.strokeStyle = isSelected ? '#fff' : baseColor;
-        ctx.stroke();
-      } else if (piece.type === 'ibeam') {
-        const fw = piece.width * z * SCALE;
-        const fh = piece.wall * z * SCALE;
-        const webW = (piece.wall * 0.6) * z * SCALE;
-        ctx.fillStyle = grd;
-        // Top flange
-        ctx.fillRect(-len / 2, -vizH / 2, len, fh);
-        // Bottom flange
-        ctx.fillRect(-len / 2, vizH / 2 - fh, len, fh);
-        // Web
-        ctx.fillRect(-len / 2, -vizH / 2 + fh, len, vizH - fh * 2);
-        ctx.strokeStyle = isSelected ? '#fff' : baseColor;
-        ctx.lineWidth = isSelected ? 2 : 1.5;
-        // Outline flanges
-        ctx.strokeRect(-len / 2, -vizH / 2, len, fh);
-        ctx.strokeRect(-len / 2, vizH / 2 - fh, len, fh);
-      } else {
-        // Rectangle (square_tube, rect_tube, flat_bar, sheet, plate, channel)
-        ctx.fillRect(-len / 2, -vizH / 2, len, vizH);
-        if (isSelected) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2.5;
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, vh, radius);
         } else {
-          ctx.strokeStyle = baseColor;
-          ctx.lineWidth = 1.5;
+          ctx.moveTo(-halfLen + radius, -radius);
+          ctx.lineTo(halfLen - radius, -radius);
+          ctx.arc(halfLen - radius, 0, radius, -Math.PI / 2, Math.PI / 2);
+          ctx.lineTo(-halfLen + radius, radius);
+          ctx.arc(-halfLen + radius, 0, radius, Math.PI / 2, -Math.PI / 2);
+          ctx.closePath();
         }
-        ctx.strokeRect(-len / 2, -vizH / 2, len, vizH);
-
-        // Hollow interior for tubes and channel
-        if ((piece.type === 'square_tube' || piece.type === 'rect_tube') && z > 0.5) {
-          const innerW = (piece.width - 2 * piece.wall) * z * SCALE;
-          const innerH = (piece.height - 2 * piece.wall) * z * SCALE;
-          if (innerW > 2 && innerH > 2) {
-            ctx.clearRect(-innerW / 2, -innerH / 2, innerW, innerH);
-            ctx.fillStyle = '#0d111755';
-            ctx.fillRect(-innerW / 2, -innerH / 2, innerW, innerH);
-            ctx.strokeStyle = baseColor + '55';
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(-innerW / 2, -innerH / 2, innerW, innerH);
-          }
+        ctx.fill();
+        const innerR = Math.max(1, radius - wallPx);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(-halfLen + wallPx, -innerR, halfLen * 2 - wallPx * 2, innerR * 2, innerR);
+        } else {
+          ctx.moveTo(-halfLen + wallPx + innerR, -innerR);
+          ctx.lineTo(halfLen - wallPx - innerR, -innerR);
+          ctx.arc(halfLen - wallPx - innerR, 0, innerR, -Math.PI / 2, Math.PI / 2);
+          ctx.lineTo(-halfLen + wallPx + innerR, innerR);
+          ctx.arc(-halfLen + wallPx + innerR, 0, innerR, Math.PI / 2, -Math.PI / 2);
+          ctx.closePath();
         }
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, radius * 0.5, radius * 0.4);
+        } else {
+          ctx.rect(-halfLen, -radius, halfLen * 2, radius * 0.5);
+        }
+        ctx.fill();
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, vh, radius);
+        } else {
+          ctx.moveTo(-halfLen + radius, -radius);
+          ctx.lineTo(halfLen - radius, -radius);
+          ctx.arc(halfLen - radius, 0, radius, -Math.PI / 2, Math.PI / 2);
+          ctx.lineTo(-halfLen + radius, radius);
+          ctx.arc(-halfLen + radius, 0, radius, Math.PI / 2, -Math.PI / 2);
+          ctx.closePath();
+        }
+        ctx.stroke();
+      } else if (piece.type === 'angle') {
+        const legThickPx = Math.max(3, piece.wall * z * SCALE * 2);
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, vh / 2 - legThickPx, halfLen * 2, legThickPx);
+        ctx.fillRect(-halfLen, -vh / 2, legThickPx, vh);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(-halfLen, -vh / 2);
+        ctx.lineTo(-halfLen + legThickPx, -vh / 2);
+        ctx.lineTo(-halfLen + legThickPx, vh / 2 - legThickPx);
+        ctx.lineTo(halfLen, vh / 2 - legThickPx);
+        ctx.lineTo(halfLen, vh / 2);
+        ctx.lineTo(-halfLen, vh / 2);
+        ctx.closePath();
+        ctx.stroke();
+      } else if (piece.type === 'channel') {
+        const flangeH = Math.max(4, vh * 0.28);
+        const webW = Math.max(4, vh * 0.2);
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
+        ctx.fillRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
+        ctx.fillRect(-halfLen, -vh / 2, webW, vh);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
+        ctx.strokeRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
+        ctx.strokeRect(-halfLen, -vh / 2, webW, vh);
+      } else if (piece.type === 'ibeam') {
+        const flangeH = Math.max(4, vh * 0.25);
+        const webThick = Math.max(3, vh * 0.12);
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
+        ctx.fillRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
+        ctx.fillRect(-halfLen, -webThick / 2, halfLen * 2, webThick);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
+        ctx.strokeRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
+        ctx.strokeRect(-halfLen, -webThick / 2, halfLen * 2, webThick);
+      } else if (piece.type === 'flat_bar') {
+        const flatVh = Math.max(6, piece.height * z * SCALE * 0.25);
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh * 0.3);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.strokeRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh);
+      } else if (piece.type === 'sheet') {
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 0.5;
+        const hatchSpacing = 3 * z * SCALE;
+        for (let x = -halfLen; x < halfLen; x += hatchSpacing) {
+          ctx.beginPath();
+          ctx.moveTo(x, -vh / 2);
+          ctx.lineTo(x, vh / 2);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
+      } else if (piece.type === 'plate') {
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 0.5;
+        const spacing = Math.max(4, z * SCALE);
+        for (let x = -halfLen; x < halfLen; x += spacing) {
+          ctx.beginPath(); ctx.moveTo(x, -vh / 2); ctx.lineTo(x, vh / 2); ctx.stroke();
+        }
+        for (let y = -vh / 2; y < vh / 2; y += spacing) {
+          ctx.beginPath(); ctx.moveTo(-halfLen, y); ctx.lineTo(halfLen, y); ctx.stroke();
+        }
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 2;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
+        ctx.strokeStyle = isSelected ? '#ffffff' : color;
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
       }
+
+      // Use len for label check (compat)
+      const len = halfLen * 2;
 
       // Length label
       if (z > 0.4 && len > 60) {
-        ctx.rotate(0);
         ctx.fillStyle = '#e2e8f0';
         ctx.font = `${Math.max(9, Math.min(12, 11 * z))}px Inter, sans-serif`;
         ctx.textAlign = 'center';
@@ -321,27 +383,31 @@ export default function Canvas2D() {
       ctx.restore();
 
       // Holes on piece
-      for (const hole of piece.holes) {
+      if (piece.holes && piece.holes.length > 0) {
         const { sx, sy, ex, ey } = getPieceEndpoints(piece);
-        const t2 = hole.fromStart / piece.length;
-        const hwx = sx + (ex - sx) * t2;
-        const hwy = sy + (ey - sy) * t2;
-        const [hcx, hcy] = worldToCanvas(hwx, hwy, z, px, py);
-        const hr = Math.max(3, (hole.diameter / 2) * z * SCALE);
-        ctx.beginPath();
-        ctx.arc(hcx, hcy, hr, 0, Math.PI * 2);
-        ctx.fillStyle = '#0d1117';
-        ctx.fill();
-        ctx.strokeStyle = hole.type === 'tapped' ? '#fbbf24' : hole.type === 'countersink' ? '#a78bfa' : '#e2e8f0';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        // Cross hair
-        ctx.strokeStyle = '#ffffff44';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(hcx - hr, hcy); ctx.lineTo(hcx + hr, hcy);
-        ctx.moveTo(hcx, hcy - hr); ctx.lineTo(hcx, hcy + hr);
-        ctx.stroke();
+        for (let hi = 0; hi < piece.holes.length; hi++) {
+          const hole = piece.holes[hi];
+          const t2 = hole.fromStart / piece.length;
+          const hwx = sx + (ex - sx) * t2;
+          const hwy = sy + (ey - sy) * t2;
+          const [hcx, hcy] = worldToCanvas(hwx, hwy, z, px, py);
+          const hr = Math.max(3, (hole.diameter / 2) * z * SCALE);
+          ctx.save();
+          ctx.translate(hcx, hcy);
+          ctx.fillStyle = '#000000';
+          ctx.beginPath();
+          ctx.arc(0, 0, hr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.max(8, hr * 0.9)}px "JetBrains Mono", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(hi + 1), 0, 0);
+          ctx.restore();
+        }
       }
 
       // Snap points (only for selected)
@@ -378,7 +444,7 @@ export default function Canvas2D() {
 
       const dominantPiece = getVisualHeight(pieceA) >= getVisualHeight(pieceB) ? pieceA : pieceB;
       const capMat = MATERIALS[dominantPiece.type];
-      ctx.fillStyle = capMat.color + 'cc';
+      ctx.fillStyle = capMat.color;
       ctx.fillRect(cx2 - capSizePx / 2, cy2 - capSizePx / 2, capSizePx, capSizePx);
       ctx.strokeStyle = capMat.color;
       ctx.lineWidth = 1;
@@ -411,13 +477,25 @@ export default function Canvas2D() {
         const hwx = sx + (ex - sx) * t2;
         const hwy = sy + (ey - sy) * t2;
         const [hpx, hpy] = worldToCanvas(hwx, hwy, z, px, py);
+        ctx.save();
+        ctx.translate(hpx, hpy);
+        ctx.fillStyle = 'rgba(59,130,246,0.3)';
         ctx.beginPath();
-        ctx.arc(hpx, hpy, 8, 0, Math.PI * 2);
-        ctx.strokeStyle = '#fbbf24';
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3b82f6';
         ctx.lineWidth = 2;
         ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+        ctx.fillStyle = '#3b82f6';
+        ctx.font = '9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('ADD HOLE', 0, 13);
+        ctx.restore();
       }
     }
 

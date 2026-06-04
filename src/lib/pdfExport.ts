@@ -304,7 +304,7 @@ export function exportPDF(
     { label: 'SIZE (W×H)', w: 90 },
     { label: 'WALL', w: 60 },
     { label: 'LENGTH', w: 90 },
-    { label: 'ANGLE', w: 55 },
+    { label: 'QTY', w: 55 },
     { label: 'HOLES', w: 50 },
     { label: 'WEIGHT', w: 80 },
     { label: 'NOTES', w: 0 }, // fills remaining
@@ -339,8 +339,22 @@ export function exportPDF(
     doc.line(cx - 5, tableY, cx - 5, H - 30);
   }
 
+  // Group pieces before rendering rows
+  const bomMap = new Map<string, { count: number; totalWeight: number; piece: Piece }>();
+  for (const p of pieces) {
+    const key = `${p.type}|${p.width}|${p.height}|${p.wall}|${p.grade}|${Math.round(p.length * 100)}`;
+    const existing = bomMap.get(key);
+    if (existing) {
+      existing.count++;
+      existing.totalWeight += calcWeight(p);
+    } else {
+      bomMap.set(key, { count: 1, totalWeight: calcWeight(p), piece: p });
+    }
+  }
+  const bomRows = Array.from(bomMap.values());
+
   // Rows
-  pieces.forEach((piece, i) => {
+  bomRows.forEach(({ count, totalWeight: rowWeight, piece }, i) => {
     const ry = tableY + rowH + i * rowH;
     if (ry + rowH > H - 30) return; // skip if overflow
 
@@ -356,7 +370,6 @@ export function exportPDF(
 
     const mat = MATERIALS[piece.type];
     const [r, g, b] = hexToRgb(mat.color);
-    const weight = calcWeight(piece);
 
     const values = [
       `${i + 1}`,
@@ -365,9 +378,9 @@ export function exportPDF(
       `${piece.width}" × ${piece.height}"`,
       `${piece.wall}"`,
       inchesToFtIn(piece.length),
-      `${piece.angle}°`,
+      `${count}`,
       `${piece.holes.length}`,
-      formatWeight(weight),
+      formatWeight(rowWeight),
       piece.notes.substring(0, 40),
     ];
 

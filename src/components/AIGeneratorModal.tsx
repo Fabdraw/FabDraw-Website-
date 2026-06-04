@@ -14,7 +14,38 @@ const EXAMPLES = [
   'Motorcycle trailer frame 5 feet long by 2.5 feet wide',
 ];
 
-const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. When given a description of a metal structure return ONLY a valid JSON array of piece objects with no markdown no explanation no code blocks just raw JSON. A 4 leg table means 4 upright legs at the 4 corners plus 4 horizontal frame rails connecting the tops of the legs plus optionally a sheet metal top. Legs must have orientation "upright". Frame rails must have orientation "horizontal" and zHeight equal to leg length minus tube height. All coordinates in inches from origin. angle in degrees 0 is horizontal 90 is vertical in plan view. Place legs at actual corner positions based on table dimensions. Example for 48x48 table 34 inch tall legs using 2x2 square tube: legs at x:0,y:0 x:48,y:0 x:0,y:48 x:48,y:48 all orientation:"upright" length:34. Rails connecting them at zHeight:32 length:48 or 44 depending on orientation angle:0 or angle:90. Make structures that a real fabricator would build. Always return valid JSON array only.`;
+const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. When given a description of a metal structure return ONLY a valid JSON array of piece objects with no markdown no explanation no code blocks just raw JSON array starting with [ and ending with ].
+
+Rules for piece fields:
+- id: unique string like "p1" "p2" etc
+- type: one of square_tube round_tube rect_tube pipe angle channel ibeam flat_bar sheet plate
+- grade: one of mild_steel stainless aluminum
+- width: outer width in inches (for square_tube this equals height)
+- height: outer height in inches
+- wall: wall thickness in inches
+- length: piece length in inches
+- x: X position of piece CENTER in inches (for horizontal pieces) or XY position (for upright)
+- y: Y position of piece CENTER in inches
+- angle: rotation degrees 0=along X axis 90=along Y axis
+- orientation: horizontal or upright
+- zHeight: height above floor in inches (0 for floor level, use legLength minus tubeSize for frame rails at top of legs)
+- notes: empty string
+- weldSymbol: empty string
+- holes: empty array
+
+For a table with 4 legs:
+- 4 upright leg pieces at corner positions, orientation upright, length = leg height
+- 4 horizontal frame rails connecting leg tops, orientation horizontal, zHeight = legLength - tubeSize
+- Rails along X axis: angle 0, length = tableWidth (or tableWidth minus tubeSize*2 for inside fit)
+- Rails along Y axis: angle 90, length = tableDepth (or tableDepth minus tubeSize*2)
+- Optional sheet metal top: type sheet, orientation horizontal, angle 0, zHeight = legLength, length = tableWidth, height = tableDepth
+
+Example 48x48 table, 34 inch legs, 2x2 0.125 wall square tube:
+Legs at corners: x:0,y:0 and x:48,y:0 and x:0,y:48 and x:48,y:48 all upright length:34
+X-direction rails: x:24,y:2 and x:24,y:46 angle:0 zHeight:32 length:44
+Y-direction rails: x:2,y:24 and x:46,y:24 angle:90 zHeight:32 length:44
+
+Always return valid JSON array only. No text before or after the array.`;
 
 const VALID_TYPES = ['square_tube','round_tube','rect_tube','pipe','angle','channel','ibeam','flat_bar','sheet','plate'] as const;
 const VALID_GRADES = ['mild_steel','stainless','aluminum'] as const;
@@ -59,7 +90,7 @@ async function generateStructureAI(prompt: string): Promise<ParsedPiece[]> {
     .join('');
 
   // Strip markdown fences if present
-  const stripped = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const stripped = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
   const parsed = JSON.parse(stripped);
   if (!Array.isArray(parsed)) throw new Error('AI did not return an array');
   return (parsed as Record<string, unknown>[]).map(mapAIPiece);
