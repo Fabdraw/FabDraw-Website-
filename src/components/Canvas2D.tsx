@@ -207,76 +207,85 @@ export default function Canvas2D() {
 
       const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
       const halfLen = piece.length / 2 * z * SCALE;
-      const vh = getVisualHeight(piece) * z * SCALE;
+      // Visual height: tubeSize * SCALE * zoom, minimum 8px for tubes
+      const rawVh = getVisualHeight(piece) * z * SCALE;
+      const isRound = piece.type === 'round_tube' || piece.type === 'pipe';
+      const isTube = piece.type === 'square_tube' || piece.type === 'rect_tube' || isRound;
+      const vh = isTube ? Math.max(8, rawVh) : rawVh;
 
       ctx.translate(cx2, cy2);
       ctx.rotate(rad);
 
       const color = mat.color;
+      // Canvas background colour used for hollow interiors so they appear truly empty
+      const canvasBg = '#0d1117';
 
       // Shape drawing
       if (piece.type === 'square_tube' || piece.type === 'rect_tube') {
-        const wallPx = piece.wall * z * SCALE;
+        const wallPx = Math.max(1.5, piece.wall * z * SCALE);
+        // Outer body
         ctx.fillStyle = color;
         ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, halfLen * 2 - wallPx * 2, vh - wallPx * 2);
+        // Inner hollow — canvas background so it looks truly empty
+        const innerW = halfLen * 2 - wallPx * 2;
+        const innerH = vh - wallPx * 2;
+        if (innerW > 0 && innerH > 0) {
+          ctx.fillStyle = canvasBg;
+          ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, innerW, innerH);
+          // Subtle inner surface tint to add depth
+          ctx.fillStyle = color + '22';
+          ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, innerW, innerH);
+        }
+        // Top highlight
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh * 0.35);
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh * 0.38);
+        // Border
         ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
       } else if (piece.type === 'round_tube' || piece.type === 'pipe') {
-        const wallPx = piece.wall * z * SCALE;
+        const wallPx = Math.max(1.5, piece.wall * z * SCALE);
         const radius = vh / 2;
+
+        // Helper to draw a capsule path
+        const capsule = (x: number, y: number, w: number, h: number, r: number) => {
+          const cr = Math.min(r, w / 2, h / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + cr, y);
+          ctx.lineTo(x + w - cr, y);
+          ctx.arc(x + w - cr, y + cr, cr, -Math.PI / 2, Math.PI / 2);
+          ctx.lineTo(x + cr, y + h);
+          ctx.arc(x + cr, y + cr, cr, Math.PI / 2, -Math.PI / 2);
+          ctx.closePath();
+        };
+
+        // Outer body
         ctx.fillStyle = color;
-        ctx.beginPath();
-        if ((ctx as any).roundRect) {
-          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, vh, radius);
-        } else {
-          ctx.moveTo(-halfLen + radius, -radius);
-          ctx.lineTo(halfLen - radius, -radius);
-          ctx.arc(halfLen - radius, 0, radius, -Math.PI / 2, Math.PI / 2);
-          ctx.lineTo(-halfLen + radius, radius);
-          ctx.arc(-halfLen + radius, 0, radius, Math.PI / 2, -Math.PI / 2);
-          ctx.closePath();
-        }
+        capsule(-halfLen, -radius, halfLen * 2, vh, radius);
         ctx.fill();
+
+        // Inner hollow — canvas background
         const innerR = Math.max(1, radius - wallPx);
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.beginPath();
-        if ((ctx as any).roundRect) {
-          (ctx as any).roundRect(-halfLen + wallPx, -innerR, halfLen * 2 - wallPx * 2, innerR * 2, innerR);
-        } else {
-          ctx.moveTo(-halfLen + wallPx + innerR, -innerR);
-          ctx.lineTo(halfLen - wallPx - innerR, -innerR);
-          ctx.arc(halfLen - wallPx - innerR, 0, innerR, -Math.PI / 2, Math.PI / 2);
-          ctx.lineTo(-halfLen + wallPx + innerR, innerR);
-          ctx.arc(-halfLen + wallPx + innerR, 0, innerR, Math.PI / 2, -Math.PI / 2);
-          ctx.closePath();
+        const innerLen = halfLen * 2 - wallPx * 2;
+        if (innerLen > 0 && innerR > 1) {
+          ctx.fillStyle = canvasBg;
+          capsule(-halfLen + wallPx, -innerR, innerLen, innerR * 2, innerR);
+          ctx.fill();
+          // Subtle tint
+          ctx.fillStyle = color + '22';
+          capsule(-halfLen + wallPx, -innerR, innerLen, innerR * 2, innerR);
+          ctx.fill();
         }
-        ctx.fill();
+
+        // Top highlight arc
         ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.beginPath();
-        if ((ctx as any).roundRect) {
-          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, radius * 0.5, radius * 0.4);
-        } else {
-          ctx.rect(-halfLen, -radius, halfLen * 2, radius * 0.5);
-        }
+        capsule(-halfLen, -radius, halfLen * 2, radius * 0.5, radius * 0.4);
         ctx.fill();
+
+        // Border
         ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1;
-        ctx.beginPath();
-        if ((ctx as any).roundRect) {
-          (ctx as any).roundRect(-halfLen, -radius, halfLen * 2, vh, radius);
-        } else {
-          ctx.moveTo(-halfLen + radius, -radius);
-          ctx.lineTo(halfLen - radius, -radius);
-          ctx.arc(halfLen - radius, 0, radius, -Math.PI / 2, Math.PI / 2);
-          ctx.lineTo(-halfLen + radius, radius);
-          ctx.arc(-halfLen + radius, 0, radius, Math.PI / 2, -Math.PI / 2);
-          ctx.closePath();
-        }
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        capsule(-halfLen, -radius, halfLen * 2, vh, radius);
         ctx.stroke();
       } else if (piece.type === 'angle') {
         const legThickPx = Math.max(3, piece.wall * z * SCALE * 2);
@@ -319,7 +328,8 @@ export default function Canvas2D() {
         ctx.strokeRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
         ctx.strokeRect(-halfLen, -webThick / 2, halfLen * 2, webThick);
       } else if (piece.type === 'flat_bar') {
-        const flatVh = Math.max(6, piece.height * z * SCALE * 0.25);
+        // Flat bar visual height: bar width (the wider face) at 30%, min 6px
+        const flatVh = Math.max(6, piece.width * z * SCALE * 0.30);
         ctx.fillStyle = color;
         ctx.fillRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh);
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -367,16 +377,13 @@ export default function Canvas2D() {
         ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
       }
 
-      // Use len for label check (compat)
-      const len = halfLen * 2;
-
-      // Length label
-      if (z > 0.4 && len > 60) {
-        ctx.fillStyle = '#e2e8f0';
-        ctx.font = `${Math.max(9, Math.min(12, 11 * z))}px Inter, sans-serif`;
+      // Dimension label — only when piece is long enough to fit text legibly
+      if (z > 0.4 && halfLen > 40) {
+        ctx.fillStyle = 'rgba(241,245,249,0.75)';
+        ctx.font = `9px "JetBrains Mono", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const label = `${mat.label} ${piece.length}"`;
+        const label = `${piece.length}"`;
         ctx.fillText(label, 0, 0);
       }
 
