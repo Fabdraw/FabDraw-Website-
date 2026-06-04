@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Anthropic from '@anthropic-ai/sdk';
 import { X, Sparkles, Send, Loader2 } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
@@ -13,142 +14,55 @@ const EXAMPLES = [
   'Motorcycle trailer frame 5 feet long by 2.5 feet wide',
 ];
 
-interface ParsedPiece {
-  type: Piece['type'];
-  width: number;
-  height: number;
-  wall: number;
-  length: number;
-  x: number;
-  y: number;
-  angle: number;
-  orientation: Piece['orientation'];
-  zHeight: number;
-  grade: Piece['grade'];
-  notes: string;
+const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. When given a description of a metal structure return ONLY a valid JSON array of piece objects with no markdown no explanation no code blocks just raw JSON. A 4 leg table means 4 upright legs at the 4 corners plus 4 horizontal frame rails connecting the tops of the legs plus optionally a sheet metal top. Legs must have orientation "upright". Frame rails must have orientation "horizontal" and zHeight equal to leg length minus tube height. All coordinates in inches from origin. angle in degrees 0 is horizontal 90 is vertical in plan view. Place legs at actual corner positions based on table dimensions. Example for 48x48 table 34 inch tall legs using 2x2 square tube: legs at x:0,y:0 x:48,y:0 x:0,y:48 x:48,y:48 all orientation:"upright" length:34. Rails connecting them at zHeight:32 length:48 or 44 depending on orientation angle:0 or angle:90. Make structures that a real fabricator would build. Always return valid JSON array only.`;
+
+const VALID_TYPES = ['square_tube','round_tube','rect_tube','pipe','angle','channel','ibeam','flat_bar','sheet','plate'] as const;
+const VALID_GRADES = ['mild_steel','stainless','aluminum'] as const;
+const VALID_ORIENTATIONS = ['horizontal','vertical','upright'] as const;
+
+type ParsedPiece = Omit<Piece, 'id'>;
+
+function mapAIPiece(obj: Record<string, unknown>): ParsedPiece {
+  const type = VALID_TYPES.includes(obj.type as Piece['type']) ? (obj.type as Piece['type']) : 'square_tube';
+  const grade = VALID_GRADES.includes(obj.grade as Piece['grade']) ? (obj.grade as Piece['grade']) : 'mild_steel';
+  const orientation = VALID_ORIENTATIONS.includes(obj.orientation as Piece['orientation']) ? (obj.orientation as Piece['orientation']) : 'horizontal';
+  return {
+    type,
+    grade,
+    width: typeof obj.width === 'number' ? obj.width : 2,
+    height: typeof obj.height === 'number' ? obj.height : 2,
+    wall: typeof obj.wall === 'number' ? obj.wall : 0.125,
+    length: typeof obj.length === 'number' ? obj.length : 24,
+    x: typeof obj.x === 'number' ? obj.x : 0,
+    y: typeof obj.y === 'number' ? obj.y : 0,
+    angle: typeof obj.angle === 'number' ? obj.angle : 0,
+    orientation,
+    zHeight: typeof obj.zHeight === 'number' ? obj.zHeight : 0,
+    notes: typeof obj.notes === 'string' ? obj.notes : '',
+    weldSymbol: typeof obj.weldSymbol === 'string' ? obj.weldSymbol : '',
+    holes: Array.isArray(obj.holes) ? obj.holes : [],
+  };
 }
 
-function generateStructure(prompt: string): ParsedPiece[] {
-  const lower = prompt.toLowerCase();
-  const pieces: ParsedPiece[] = [];
-  const rand = () => Math.random() * 0.5 - 0.25;
+async function generateStructureAI(prompt: string): Promise<ParsedPiece[]> {
+  const client = new Anthropic({ apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY, dangerouslyAllowBrowser: true });
+  const message = await client.messages.create({
+    model: 'claude-opus-4-5',
+    max_tokens: 4096,
+    system: AI_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: prompt }],
+  });
 
-  // Very simple heuristic-based generation
-  const isTable = lower.includes('table') || lower.includes('workbench') || lower.includes('bench');
-  const isRack = lower.includes('rack') || lower.includes('frame');
-  const isCart = lower.includes('cart');
+  const rawText = message.content
+    .filter(block => block.type === 'text')
+    .map(block => (block as { type: 'text'; text: string }).text)
+    .join('');
 
-  // Extract dimensions
-  const ftMatch = lower.match(/(\d+)\s*(?:x|by|×)\s*(\d+)\s*(?:ft|feet|foot)/);
-  const inMatch = lower.match(/(\d+)\s*(?:x|by|×)\s*(\d+)\s*(?:in|inch)/);
-  const heightMatch = lower.match(/(\d+)\s*(?:inch|in|"|')\s*tall/);
-
-  let W = 48; // width in inches
-  let D = 24; // depth in inches
-  let H = 34; // height in inches
-
-  if (ftMatch) {
-    W = parseFloat(ftMatch[1]) * 12;
-    D = parseFloat(ftMatch[2]) * 12;
-  } else if (inMatch) {
-    W = parseFloat(inMatch[1]);
-    D = parseFloat(inMatch[2]);
-  }
-  if (heightMatch) H = parseFloat(heightMatch[1]);
-
-  const tube = '2x2' as const;
-  const tubeW = 2, tubeH = 2, tubeWall = 0.125;
-
-  if (isTable || isCart || isRack) {
-    // 4 legs
-    const legPositions = [
-      { x: 0, y: 0 },
-      { x: W, y: 0 },
-      { x: 0, y: D },
-      { x: W, y: D },
-    ];
-    for (const pos of legPositions) {
-      pieces.push({
-        type: 'square_tube', grade: 'mild_steel',
-        width: tubeW, height: tubeH, wall: tubeWall,
-        length: H, x: pos.x + rand(), y: pos.y + rand(),
-        angle: 0, orientation: 'upright', zHeight: H, notes: 'Leg',
-      });
-    }
-
-    // Top frame rails (long sides)
-    pieces.push({
-      type: 'square_tube', grade: 'mild_steel',
-      width: tubeW, height: tubeH, wall: tubeWall,
-      length: W, x: W / 2, y: 0,
-      angle: 0, orientation: 'horizontal', zHeight: H, notes: 'Top rail front',
-    });
-    pieces.push({
-      type: 'square_tube', grade: 'mild_steel',
-      width: tubeW, height: tubeH, wall: tubeWall,
-      length: W, x: W / 2, y: D,
-      angle: 0, orientation: 'horizontal', zHeight: H, notes: 'Top rail back',
-    });
-
-    // Top frame cross members
-    pieces.push({
-      type: 'square_tube', grade: 'mild_steel',
-      width: tubeW, height: tubeH, wall: tubeWall,
-      length: D, x: 0, y: D / 2,
-      angle: 90, orientation: 'horizontal', zHeight: H, notes: 'Top rail left',
-    });
-    pieces.push({
-      type: 'square_tube', grade: 'mild_steel',
-      width: tubeW, height: tubeH, wall: tubeWall,
-      length: D, x: W, y: D / 2,
-      angle: 90, orientation: 'horizontal', zHeight: H, notes: 'Top rail right',
-    });
-
-    // Bottom stretchers (if tall enough)
-    if (H > 20) {
-      const sh = H * 0.35;
-      pieces.push({
-        type: 'square_tube', grade: 'mild_steel',
-        width: tubeW, height: tubeH, wall: tubeWall,
-        length: W - tubeW, x: W / 2, y: 0,
-        angle: 0, orientation: 'horizontal', zHeight: sh, notes: 'Bottom stretcher front',
-      });
-      pieces.push({
-        type: 'square_tube', grade: 'mild_steel',
-        width: tubeW, height: tubeH, wall: tubeWall,
-        length: W - tubeW, x: W / 2, y: D,
-        angle: 0, orientation: 'horizontal', zHeight: sh, notes: 'Bottom stretcher back',
-      });
-    }
-  } else {
-    // Generic: just a rectangle frame
-    pieces.push({
-      type: 'rect_tube', grade: 'mild_steel',
-      width: 2, height: 3, wall: 0.120,
-      length: W, x: W / 2, y: 0,
-      angle: 0, orientation: 'horizontal', zHeight: 0, notes: 'Main rail',
-    });
-    pieces.push({
-      type: 'rect_tube', grade: 'mild_steel',
-      width: 2, height: 3, wall: 0.120,
-      length: W, x: W / 2, y: D,
-      angle: 0, orientation: 'horizontal', zHeight: 0, notes: 'Main rail',
-    });
-    pieces.push({
-      type: 'rect_tube', grade: 'mild_steel',
-      width: 2, height: 3, wall: 0.120,
-      length: D, x: 0, y: D / 2,
-      angle: 90, orientation: 'horizontal', zHeight: 0, notes: 'Cross member',
-    });
-    pieces.push({
-      type: 'rect_tube', grade: 'mild_steel',
-      width: 2, height: 3, wall: 0.120,
-      length: D, x: W, y: D / 2,
-      angle: 90, orientation: 'horizontal', zHeight: 0, notes: 'Cross member',
-    });
-  }
-
-  return pieces;
+  // Strip markdown fences if present
+  const stripped = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const parsed = JSON.parse(stripped);
+  if (!Array.isArray(parsed)) throw new Error('AI did not return an array');
+  return (parsed as Record<string, unknown>[]).map(mapAIPiece);
 }
 
 export default function AIGeneratorModal() {
@@ -167,15 +81,13 @@ export default function AIGeneratorModal() {
     setResult('');
     setGenerated([]);
 
-    // Simulate AI thinking
-    await new Promise(r => setTimeout(r, 1200));
-
     try {
-      const parsedPieces = generateStructure(prompt);
+      const parsedPieces = await generateStructureAI(prompt);
       setGenerated(parsedPieces);
       setResult(`Generated ${parsedPieces.length} pieces based on your description. Review and click "Add to Drawing" to place them.`);
-    } catch {
-      setResult('Failed to generate. Try a more specific description.');
+    } catch (err) {
+      setResult('Failed to generate. Check your API key or try a more specific description.');
+      console.error('AI generation error:', err);
     } finally {
       setLoading(false);
     }
@@ -187,8 +99,6 @@ export default function AIGeneratorModal() {
       const newPiece: Piece = {
         id: crypto.randomUUID(),
         ...p,
-        weldSymbol: '',
-        holes: [],
       };
       addPiece(newPiece);
     }
@@ -202,8 +112,6 @@ export default function AIGeneratorModal() {
       const newPiece: Piece = {
         id: crypto.randomUUID(),
         ...p,
-        weldSymbol: '',
-        holes: [],
       };
       addPiece(newPiece);
     }

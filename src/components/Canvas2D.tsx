@@ -10,7 +10,7 @@ import {
 import { MATERIALS } from '../lib/materials';
 import type { Piece, Connection, Hole } from '../types';
 
-const SNAP_RADIUS = 18; // px
+const SNAP_RADIUS = 20; // px
 
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -137,23 +137,70 @@ export default function Canvas2D() {
 
       if (piece.orientation === 'upright') {
         const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
-        const r = Math.max(6, piece.width * z * SCALE / 2);
+        const sizePx = Math.max(8, piece.width * z * SCALE);
+        const half = sizePx / 2;
+        const wallPx = piece.wall * z * SCALE;
+
+        if (piece.type === 'round_tube' || piece.type === 'pipe') {
+          // Outer circle
+          ctx.beginPath();
+          ctx.arc(cx2, cy2, half, 0, Math.PI * 2);
+          ctx.fillStyle = mat.color + 'cc';
+          ctx.fill();
+          ctx.strokeStyle = isSelected ? '#fff' : mat.color;
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.stroke();
+          // Inner hollow
+          const innerR = half - wallPx;
+          if (innerR > 2) {
+            ctx.beginPath();
+            ctx.arc(cx2, cy2, innerR, 0, Math.PI * 2);
+            ctx.fillStyle = '#0d1117';
+            ctx.fill();
+            ctx.strokeStyle = mat.color + '66';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        } else {
+          // Square/rect: outer box
+          ctx.fillStyle = mat.color + 'cc';
+          ctx.fillRect(cx2 - half, cy2 - half, sizePx, sizePx);
+          ctx.strokeStyle = isSelected ? '#fff' : mat.color;
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.strokeRect(cx2 - half, cy2 - half, sizePx, sizePx);
+          // Inner hollow for tubes
+          if ((piece.type === 'square_tube' || piece.type === 'rect_tube') && wallPx > 0 && (half - wallPx) > 2) {
+            ctx.clearRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
+            ctx.fillStyle = '#0d111755';
+            ctx.fillRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
+            ctx.strokeStyle = mat.color + '44';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
+          }
+        }
+
+        // Upward arrow above cross-section
+        const arrowY = cy2 - half - 4;
+        const arrowSize = Math.max(5, 6 * z);
+        ctx.strokeStyle = mat.color + 'aa';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(cx2, cy2, r, 0, Math.PI * 2);
-        const grad = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
-        grad.addColorStop(0, mat.color + 'cc');
-        grad.addColorStop(1, mat.color + '44');
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.strokeStyle = isSelected ? '#fff' : mat.color;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.moveTo(cx2, arrowY - arrowSize);
+        ctx.lineTo(cx2, arrowY);
+        ctx.moveTo(cx2 - arrowSize * 0.5, arrowY - arrowSize * 0.5);
+        ctx.lineTo(cx2, arrowY - arrowSize);
+        ctx.lineTo(cx2 + arrowSize * 0.5, arrowY - arrowSize * 0.5);
         ctx.stroke();
-        // Z height label
-        ctx.fillStyle = '#e2e8f0';
-        ctx.font = `bold ${Math.max(9, 10 * z)}px Inter, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${piece.zHeight}"`, cx2, cy2);
+
+        // Height label
+        if (z > 0.3) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = `bold ${Math.max(8, 9 * z)}px JetBrains Mono, monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`${piece.length}"`, cx2, arrowY - arrowSize - 2);
+        }
+
         ctx.restore();
         continue;
       }
@@ -311,6 +358,31 @@ export default function Canvas2D() {
           ctx.stroke();
         }
       }
+    }
+
+    // CORNER CAPS - filled squares at connection points between horizontal pieces
+    for (const conn of cs) {
+      const pieceA = ps.find(p => p.id === conn.pieceAId);
+      const pieceB = ps.find(p => p.id === conn.pieceBId);
+      if (!pieceA || !pieceB) continue;
+      if (pieceA.type === 'sheet' || pieceB.type === 'sheet') continue;
+      if (pieceA.orientation === 'upright' || pieceB.orientation === 'upright') continue;
+
+      const snapPtsA = getSnapPoints(pieceA);
+      const sp = snapPtsA.find(s => s.id === conn.snapPointA);
+      if (!sp) continue;
+
+      const [cx2, cy2] = worldToCanvas(sp.x, sp.y, z, px, py);
+      const capH = Math.max(getVisualHeight(pieceA), getVisualHeight(pieceB));
+      const capSizePx = (capH + 0.1) * z * SCALE;
+
+      const dominantPiece = getVisualHeight(pieceA) >= getVisualHeight(pieceB) ? pieceA : pieceB;
+      const capMat = MATERIALS[dominantPiece.type];
+      ctx.fillStyle = capMat.color + 'cc';
+      ctx.fillRect(cx2 - capSizePx / 2, cy2 - capSizePx / 2, capSizePx, capSizePx);
+      ctx.strokeStyle = capMat.color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx2 - capSizePx / 2, cy2 - capSizePx / 2, capSizePx, capSizePx);
     }
 
     // Snap highlight - accent color circle + crosshair
