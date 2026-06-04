@@ -18,12 +18,12 @@ export default function Canvas3D() {
     // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x12151e);
-    scene.fog = new THREE.Fog(0x12151e, 50, 300);
+    scene.fog = new THREE.Fog(0x12151e, 500, 3000);
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.01, 500);
-    camera.position.set(20, 20, 30);
-    camera.lookAt(0, 0, 0);
+    // Camera - positioned for inch-scale scene (typical table ~48" wide, ~34" tall)
+    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 5000);
+    camera.position.set(60, 40, 60);
+    camera.lookAt(24, 17, 24);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -34,25 +34,25 @@ export default function Canvas3D() {
     mount.appendChild(renderer.domElement);
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0x334466, 1.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 2);
-    dirLight.position.set(20, 40, 20);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(50, 80, 50);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.set(2048, 2048);
     scene.add(dirLight);
 
-    const rimLight = new THREE.DirectionalLight(0xc94010, 0.4);
-    rimLight.position.set(-20, 10, -20);
-    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+    fillLight.position.set(-30, 20, -30);
+    scene.add(fillLight);
 
-    // Grid
-    const gridHelper = new THREE.GridHelper(100, 50, 0x1e2535, 0x1a2030);
+    // Grid - 200 inches wide, 20 divisions (10" each)
+    const gridHelper = new THREE.GridHelper(200, 20, 0x333344, 0x222233);
     scene.add(gridHelper);
 
     // Ground plane (shadow catcher)
-    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundGeo = new THREE.PlaneGeometry(2000, 2000);
     const groundMat = new THREE.ShadowMaterial({ opacity: 0.3 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -77,64 +77,87 @@ export default function Canvas3D() {
       const { r, g, b } = hexToRgb(mat.color);
       const color = new THREE.Color(r * 0.7, g * 0.7, b * 0.7);
 
-      const material = new THREE.MeshStandardMaterial({
+      const material = new THREE.MeshPhongMaterial({
         color,
-        metalness: piece.grade === 'stainless' ? 0.8 : piece.grade === 'aluminum' ? 0.7 : 0.4,
-        roughness: piece.grade === 'stainless' ? 0.2 : piece.grade === 'aluminum' ? 0.3 : 0.6,
-        envMapIntensity: 1.0,
+        shininess: piece.grade === 'stainless' ? 80 : piece.grade === 'aluminum' ? 60 : 20,
+        specular: new THREE.Color(0.2, 0.2, 0.2),
       });
 
-      const INCH = 1 / 12; // 1 inch in world units (feet scale)
-
+      // Use inches directly as Three.js units
       if (piece.orientation === 'upright') {
-        // Vertical tube
-        const vizH = getVisualHeight(piece) * INCH;
+        // Vertical tube - rises from Y=0 to Y=piece.length
         let geo: THREE.BufferGeometry;
         if (piece.type === 'round_tube' || piece.type === 'pipe') {
-          geo = new THREE.CylinderGeometry(piece.width / 2 * INCH, piece.width / 2 * INCH, piece.zHeight * INCH, 16);
+          geo = new THREE.CylinderGeometry(piece.width / 2, piece.width / 2, piece.length, 16);
         } else {
-          geo = new THREE.BoxGeometry(piece.width * INCH, piece.zHeight * INCH, piece.height * INCH);
+          geo = new THREE.BoxGeometry(piece.width, piece.length, piece.height);
         }
         const mesh = new THREE.Mesh(geo, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.position.set(piece.x * INCH, piece.zHeight / 2 * INCH, piece.y * INCH);
+        // Center vertically at half length
+        mesh.position.set(piece.x, piece.length / 2, piece.y);
         group.add(mesh);
+
+        // Edge overlay
+        const edges = new THREE.EdgesGeometry(geo);
+        const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4), linewidth: 1 });
+        const edgeMesh = new THREE.LineSegments(edges, edgeMat);
+        edgeMesh.position.copy(mesh.position);
+        group.add(edgeMesh);
       } else {
         const rad = (piece.angle * Math.PI) / 180;
-        const len = piece.length * INCH;
-        const vizH = getVisualHeight(piece) * INCH;
+        const len = piece.length;
+        const vizH = getVisualHeight(piece);
         let geo: THREE.BufferGeometry;
 
         if (piece.type === 'round_tube' || piece.type === 'pipe') {
-          geo = new THREE.CylinderGeometry(piece.width / 2 * INCH, piece.width / 2 * INCH, len, 12);
+          geo = new THREE.CylinderGeometry(piece.width / 2, piece.width / 2, len, 12);
           const mesh = new THREE.Mesh(geo, material);
           mesh.castShadow = true;
           mesh.receiveShadow = true;
           mesh.rotation.z = Math.PI / 2;
-          mesh.rotation.y = rad;
-          // For rotated tubes, position correctly
+          // For rotated tubes, position correctly using pivot
           const pivot = new THREE.Group();
           pivot.add(mesh);
-          pivot.position.set(piece.x * INCH, piece.height / 2 * INCH, piece.y * INCH);
+          pivot.position.set(piece.x, piece.zHeight + piece.width / 2, piece.y);
           pivot.rotation.y = -rad;
           group.add(pivot);
+
+          const edges = new THREE.EdgesGeometry(geo);
+          const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
+          const edgeMesh = new THREE.LineSegments(edges, edgeMat);
+          const edgePivot = new THREE.Group();
+          edgePivot.add(edgeMesh);
+          edgePivot.position.copy(pivot.position);
+          edgePivot.rotation.copy(pivot.rotation);
+          group.add(edgePivot);
           continue;
         }
 
-        geo = new THREE.BoxGeometry(len, vizH, piece.wall * INCH || 0.05);
+        // Box geometry: length along X, vizH along Y, wall/width along Z
+        const thickness = piece.type === 'flat_bar' ? piece.height : piece.wall;
+        geo = new THREE.BoxGeometry(len, vizH, Math.max(thickness, 0.1));
 
         const mesh = new THREE.Mesh(geo, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.position.set(piece.x * INCH, vizH / 2, piece.y * INCH);
+        mesh.position.set(piece.x, piece.zHeight + vizH / 2, piece.y);
         mesh.rotation.y = -rad;
         group.add(mesh);
+
+        const edges = new THREE.EdgesGeometry(geo);
+        const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
+        const edgeMesh = new THREE.LineSegments(edges, edgeMat);
+        edgeMesh.position.copy(mesh.position);
+        edgeMesh.rotation.copy(mesh.rotation);
+        group.add(edgeMesh);
       }
     }
     scene.add(group);
 
     // Center camera on content
+    let orbitTarget = new THREE.Vector3(24, 17, 24);
     if (pieces.length > 0) {
       const box = new THREE.Box3().setFromObject(group);
       const center = new THREE.Vector3();
@@ -143,6 +166,7 @@ export default function Canvas3D() {
       box.getSize(size);
       const maxDim = Math.max(size.x, size.y, size.z);
       const dist = maxDim * 2.5;
+      orbitTarget = center.clone();
       camera.position.set(center.x + dist, center.y + dist * 0.8, center.z + dist);
       camera.lookAt(center);
     }
@@ -153,8 +177,8 @@ export default function Canvas3D() {
     let lastMY = 0;
     let theta = Math.PI / 4;
     let phi = Math.PI / 3;
-    let radius = camera.position.distanceTo(new THREE.Vector3());
-    const target = new THREE.Vector3();
+    let radius = camera.position.distanceTo(orbitTarget);
+    const target = orbitTarget.clone();
 
     const onMouseDown = (e: MouseEvent) => {
       isMouseDown = true;
@@ -178,7 +202,7 @@ export default function Canvas3D() {
       camera.lookAt(target);
     };
     const onWheel = (e: WheelEvent) => {
-      radius = Math.max(0.5, Math.min(200, radius * (e.deltaY > 0 ? 1.1 : 0.9)));
+      radius = Math.max(5, Math.min(2000, radius * (e.deltaY > 0 ? 1.1 : 0.9)));
       camera.position.set(
         target.x + radius * Math.sin(phi) * Math.sin(theta),
         target.y + radius * Math.cos(phi),
