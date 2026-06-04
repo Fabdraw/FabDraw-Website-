@@ -339,22 +339,22 @@ export function exportPDF(
     doc.line(cx - 5, tableY, cx - 5, H - 30);
   }
 
-  // Group pieces before rendering rows
-  const bomMap = new Map<string, { count: number; totalWeight: number; piece: Piece }>();
+  // Group pieces for BOM
+  const bomMap = new Map<string, { piece: Piece; qty: number; totalWeight: number }>();
   for (const p of pieces) {
     const key = `${p.type}|${p.width}|${p.height}|${p.wall}|${p.grade}|${Math.round(p.length * 100)}`;
     const existing = bomMap.get(key);
     if (existing) {
-      existing.count++;
+      existing.qty++;
       existing.totalWeight += calcWeight(p);
     } else {
-      bomMap.set(key, { count: 1, totalWeight: calcWeight(p), piece: p });
+      bomMap.set(key, { piece: p, qty: 1, totalWeight: calcWeight(p) });
     }
   }
   const bomRows = Array.from(bomMap.values());
 
   // Rows
-  bomRows.forEach(({ count, totalWeight: rowWeight, piece }, i) => {
+  bomRows.forEach(({ piece, qty, totalWeight: rowWeight }, i) => {
     const ry = tableY + rowH + i * rowH;
     if (ry + rowH > H - 30) return; // skip if overflow
 
@@ -378,7 +378,7 @@ export function exportPDF(
       `${piece.width}" × ${piece.height}"`,
       `${piece.wall}"`,
       inchesToFtIn(piece.length),
-      `${count}`,
+      `${qty}`,
       `${piece.holes.length}`,
       formatWeight(rowWeight),
       piece.notes.substring(0, 40),

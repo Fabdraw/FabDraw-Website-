@@ -135,6 +135,25 @@ export default function Canvas3D() {
           continue;
         }
 
+        // Sheet/plate: flat on XZ plane
+        if (piece.type === 'sheet' || piece.type === 'plate') {
+          geo = new THREE.BoxGeometry(len, 0.5, piece.height);
+          const mesh = new THREE.Mesh(geo, material);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.position.set(piece.x, (piece.zHeight ?? 0) + 0.25, piece.y);
+          mesh.rotation.set(0, -rad, 0);
+          group.add(mesh);
+
+          const edges = new THREE.EdgesGeometry(geo);
+          const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
+          const edgeMesh = new THREE.LineSegments(edges, edgeMat);
+          edgeMesh.position.copy(mesh.position);
+          edgeMesh.rotation.copy(mesh.rotation);
+          group.add(edgeMesh);
+          continue;
+        }
+
         // Box geometry: length along X, vizH along Y, wall/width along Z
         const thickness = piece.type === 'flat_bar' ? piece.height : piece.wall;
         geo = new THREE.BoxGeometry(len, vizH, Math.max(thickness, 0.1));

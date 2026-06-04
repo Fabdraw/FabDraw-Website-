@@ -16,7 +16,7 @@ export default function BOMPanel() {
   const grouped = useMemo(() => {
     const map = new Map<string, { count: number; totalWeight: number; piece: typeof pieces[0]; ids: string[] }>();
     for (const p of pieces) {
-      const key = `${p.type}|${p.width}x${p.height}|${p.wall}|${p.length}|${p.grade}`;
+      const key = `${p.type}|${p.width}|${p.height}|${p.wall}|${p.grade}|${Math.round(p.length * 100)}`;
       const existing = map.get(key);
       if (existing) {
         existing.count++;
