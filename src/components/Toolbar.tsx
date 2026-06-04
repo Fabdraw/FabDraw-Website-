@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
-  MousePointer2, Hand, Crosshair, Undo2, Redo2,
-  Download, Trash2, Copy, Clipboard, FileText, Sparkles,
-  ZoomIn, ZoomOut, Maximize2, LayoutGrid, Box
+  MousePointer2, Hand, Undo2, Redo2,
+  Download, Trash2, Copy, Clipboard, LayoutGrid, Sparkles,
+  ZoomIn, ZoomOut, Maximize2, Box, Check, Save
 } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
@@ -15,10 +15,11 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
-  const { pieces, connections, zoom, panX, panY, setZoom, setPan, deletePieces, setPieces, setConnections, titleBlock, name } = useProjectStore();
+  const { pieces, connections, zoom, panX, panY, setZoom, setPan, deletePieces, setPieces, setConnections, titleBlock, name, setName } = useProjectStore();
   const { mode, setMode, selectedIds, setSelectedIds, clipboard, setClipboard, holeAddMode, setHoleAddMode, activeView, setActiveView, setShowTitleBlockModal, setShowAIModal } = useUIStore();
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore();
   const [exporting, setExporting] = useState(false);
+  const [editingName, setEditingName] = useState(false);
 
   const handleUndo = () => {
     const entry = undo();
@@ -105,47 +106,45 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
     }
   };
 
-  const btnBase = 'flex items-center justify-center w-9 h-9 rounded transition-colors duration-150 focus:outline-none';
-  const btn = `${btnBase} text-slate-400 hover:text-slate-100 hover:bg-slate-700`;
-  const btnActive = `${btnBase} text-white bg-accent`;
-  const btnDisabled = `${btnBase} text-slate-600 cursor-not-allowed`;
+  // Button style helpers
+  const btn = 'flex items-center justify-center w-[30px] h-[30px] rounded-md transition-colors focus:outline-none text-[#475569] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#94a3b8]';
+  const btnActive = 'flex items-center justify-center w-[30px] h-[30px] rounded-md focus:outline-none bg-[rgba(249,115,22,0.15)] text-[#f97316]';
+  const btnDisabled = 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#2d3748] cursor-not-allowed';
 
-  const Divider = () => <div className="w-px h-6 bg-slate-700 mx-1" />;
+  const Divider = () => <div className="w-px h-5 mx-2" style={{ background: 'rgba(255,255,255,0.08)' }} />;
 
   return (
-    <div className="flex items-center gap-1 px-3 py-1.5 bg-[#1a1d2e] border-b border-slate-800 select-none">
-      {/* Logo */}
-      <div className="flex items-center gap-2 mr-3">
-        <div className="w-6 h-6 rounded bg-accent flex items-center justify-center">
-          <span className="text-white font-black text-xs">F</span>
-        </div>
-        <span className="font-bold text-slate-200 text-sm tracking-wide">FabDraw</span>
+    <div
+      className="flex items-center gap-1 px-3 select-none shrink-0"
+      style={{
+        height: '48px',
+        background: '#0f1117',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Logo + project name */}
+      <div className="flex items-center gap-2 mr-2">
+        <div
+          className="w-2 h-2 rounded-sm shrink-0"
+          style={{ background: '#f97316' }}
+        />
+        <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.1em', color: '#f1f5f9' }}>
+          FABDRAW
+        </span>
       </div>
 
-      <Divider />
+      <input
+        className="focus:outline-none bg-transparent border-0 border-b border-transparent focus:border-[#f97316] text-[#f1f5f9] text-[13px] w-32 transition-colors"
+        style={{ borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent' }}
+        value={name}
+        onChange={e => setName?.(e.target.value)}
+        onFocus={() => setEditingName(true)}
+        onBlur={() => setEditingName(false)}
+        title="Project name"
+      />
 
-      {/* Mode tools */}
-      <button
-        className={mode === 'select' && !holeAddMode ? btnActive : btn}
-        onClick={() => { setMode('select'); setHoleAddMode(false); }}
-        title="Select (V)"
-      >
-        <MousePointer2 size={16} />
-      </button>
-      <button
-        className={mode === 'pan' ? btnActive : btn}
-        onClick={() => setMode('pan')}
-        title="Pan (Space/H)"
-      >
-        <Hand size={16} />
-      </button>
-      <button
-        className={holeAddMode ? btnActive : btn}
-        onClick={() => setHoleAddMode(!holeAddMode)}
-        title="Add Hole (O)"
-      >
-        <Crosshair size={16} />
-      </button>
+      {/* Save indicator */}
+      <div className="w-1.5 h-1.5 rounded-full ml-1 shrink-0" style={{ background: '#22c55e' }} title="Saved" />
 
       <Divider />
 
@@ -156,7 +155,7 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
         disabled={!canUndo}
         title="Undo (Ctrl+Z)"
       >
-        <Undo2 size={16} />
+        <Undo2 size={15} />
       </button>
       <button
         className={canRedo ? btn : btnDisabled}
@@ -164,19 +163,19 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
         disabled={!canRedo}
         title="Redo (Ctrl+Shift+Z)"
       >
-        <Redo2 size={16} />
+        <Redo2 size={15} />
       </button>
 
       <Divider />
 
-      {/* Edit ops */}
+      {/* Copy/Paste/Delete */}
       <button
         className={selectedIds.length > 0 ? btn : btnDisabled}
         onClick={handleCopy}
         disabled={selectedIds.length === 0}
         title="Copy (Ctrl+C)"
       >
-        <Copy size={16} />
+        <Copy size={15} />
       </button>
       <button
         className={clipboard.length > 0 ? btn : btnDisabled}
@@ -184,83 +183,119 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
         disabled={clipboard.length === 0}
         title="Paste (Ctrl+V)"
       >
-        <Clipboard size={16} />
+        <Clipboard size={15} />
       </button>
       <button
-        className={selectedIds.length > 0 ? `${btnBase} text-red-400 hover:text-red-300 hover:bg-red-900/30` : btnDisabled}
+        className={selectedIds.length > 0 ? 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-colors' : btnDisabled}
         onClick={handleDelete}
         disabled={selectedIds.length === 0}
         title="Delete (Del)"
       >
-        <Trash2 size={16} />
+        <Trash2 size={15} />
+      </button>
+
+      <Divider />
+
+      {/* Select / Pan */}
+      <button
+        className={mode === 'select' && !holeAddMode ? btnActive : btn}
+        onClick={() => { setMode('select'); setHoleAddMode(false); }}
+        title="Select (V)"
+      >
+        <MousePointer2 size={15} />
+      </button>
+      <button
+        className={mode === 'pan' ? btnActive : btn}
+        onClick={() => setMode('pan')}
+        title="Pan (Space/H)"
+      >
+        <Hand size={15} />
       </button>
 
       <Divider />
 
       {/* Zoom */}
-      <button className={btn} onClick={() => { const nz = Math.min(10, zoom * 1.25); setZoom(nz); }} title="Zoom In (+)">
-        <ZoomIn size={16} />
+      <button className={btn} onClick={() => { const nz = Math.max(0.05, zoom * 0.8); setZoom(nz); }} title="Zoom Out (-)">
+        <ZoomOut size={15} />
       </button>
-      <span className="text-slate-400 text-xs font-mono w-12 text-center tabular-nums">
+      <span
+        className="text-center tabular-nums"
+        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', color: '#94a3b8', width: '42px' }}
+      >
         {(zoom * 100).toFixed(0)}%
       </span>
-      <button className={btn} onClick={() => { const nz = Math.max(0.05, zoom * 0.8); setZoom(nz); }} title="Zoom Out (-)">
-        <ZoomOut size={16} />
+      <button className={btn} onClick={() => { const nz = Math.min(10, zoom * 1.25); setZoom(nz); }} title="Zoom In (+)">
+        <ZoomIn size={15} />
       </button>
       <button className={btn} onClick={handleFitView} title="Fit View (F)">
-        <Maximize2 size={16} />
+        <Maximize2 size={15} />
       </button>
 
       <Divider />
 
-      {/* View toggle */}
+      {/* 2D / 3D toggle */}
       <button
         className={activeView === '2d' ? btnActive : btn}
         onClick={() => setActiveView('2d')}
         title="2D View"
+        style={{ fontSize: '11px', fontWeight: 700, width: '30px', height: '30px' }}
       >
-        <LayoutGrid size={16} />
+        2D
       </button>
       <button
         className={activeView === '3d' ? btnActive : btn}
         onClick={() => setActiveView('3d')}
         title="3D View"
+        style={{ fontSize: '11px', fontWeight: 700, width: '30px', height: '30px' }}
       >
-        <Box size={16} />
+        3D
+      </button>
+
+      <Divider />
+
+      {/* Title Block */}
+      <button
+        className={btn}
+        onClick={() => setShowTitleBlockModal(true)}
+        title="Edit Title Block"
+      >
+        <LayoutGrid size={15} />
       </button>
 
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Right side actions */}
+      {/* Export PDF */}
       <button
-        className={`${btnBase} px-3 gap-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-900/30 text-xs font-medium`}
-        onClick={() => setShowAIModal(true)}
-        title="AI Generator"
-      >
-        <Sparkles size={14} />
-        AI
-      </button>
-      <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Edit Title Block">
-        <FileText size={16} />
-      </button>
-      <button
-        className={`${btnBase} px-3 gap-1.5 text-accent hover:text-orange-400 hover:bg-orange-900/20 text-xs font-medium ${exporting ? 'opacity-50' : ''}`}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white text-xs font-medium"
+        style={{
+          background: 'linear-gradient(135deg, #f97316, #ea580c)',
+          fontSize: '12px',
+          opacity: exporting ? 0.5 : 1,
+        }}
         onClick={handleExportPDF}
         disabled={exporting}
         title="Export PDF"
       >
-        <Download size={14} />
-        {exporting ? 'Exporting...' : 'PDF'}
-      </button>
-      <button className={btn} onClick={onExportJSON} title="Export JSON">
-        <span className="text-xs font-mono">JSON</span>
+        <Download size={13} />
+        {exporting ? 'Exporting...' : 'Export PDF'}
       </button>
 
-      {/* Project name */}
-      <Divider />
-      <div className="text-slate-400 text-xs truncate max-w-32" title={name}>{name}</div>
-      <div className="w-1.5 h-1.5 rounded-full bg-green-400 ml-1" title="Saved" />
+      {/* AI button */}
+      <button
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
+        style={{
+          border: '1px solid #f97316',
+          color: '#f97316',
+          background: 'transparent',
+          fontSize: '12px',
+        }}
+        onClick={() => setShowAIModal(true)}
+        title="AI Generator"
+      >
+        <Sparkles size={13} />
+        AI
+      </button>
     </div>
   );
 }
