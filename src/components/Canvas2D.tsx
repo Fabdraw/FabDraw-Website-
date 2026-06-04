@@ -207,33 +207,29 @@ export default function Canvas2D() {
 
       const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
       const halfLen = piece.length / 2 * z * SCALE;
-      // Visual height: tubeSize * SCALE * zoom, minimum 8px for tubes
+      // Visual height: tubeSize * SCALE * zoom, minimum 8px for tubes/bars
       const rawVh = getVisualHeight(piece) * z * SCALE;
       const isRound = piece.type === 'round_tube' || piece.type === 'pipe';
       const isTube = piece.type === 'square_tube' || piece.type === 'rect_tube' || isRound;
-      const vh = isTube ? Math.max(8, rawVh) : rawVh;
+      const vh = isTube ? Math.max(8, rawVh) : Math.max(4, rawVh);
 
       ctx.translate(cx2, cy2);
       ctx.rotate(rad);
 
       const color = mat.color;
-      // Canvas background colour used for hollow interiors so they appear truly empty
-      const canvasBg = '#0d1117';
 
       // Shape drawing
       if (piece.type === 'square_tube' || piece.type === 'rect_tube') {
-        const wallPx = Math.max(1.5, piece.wall * z * SCALE);
-        // Outer body
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        // Inner hollow — canvas background so it looks truly empty
+        // Wall thickness: at least 20% of visual height so hollow is clearly visible
+        const wallPx = Math.max(Math.ceil(vh * 0.20), Math.max(2, piece.wall * z * SCALE));
         const innerW = halfLen * 2 - wallPx * 2;
         const innerH = vh - wallPx * 2;
+        // Outer body — solid piece colour, clearly visible on dark canvas
+        ctx.fillStyle = color;
+        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
+        // Inner hollow — dark fill so walls read as solid metal
         if (innerW > 0 && innerH > 0) {
-          ctx.fillStyle = canvasBg;
-          ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, innerW, innerH);
-          // Subtle inner surface tint to add depth
-          ctx.fillStyle = color + '22';
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
           ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, innerW, innerH);
         }
         // Top highlight
@@ -244,7 +240,7 @@ export default function Canvas2D() {
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
       } else if (piece.type === 'round_tube' || piece.type === 'pipe') {
-        const wallPx = Math.max(1.5, piece.wall * z * SCALE);
+        const wallPx = Math.max(Math.ceil(vh * 0.20), Math.max(2, piece.wall * z * SCALE));
         const radius = vh / 2;
 
         // Helper to draw a capsule path
@@ -264,22 +260,18 @@ export default function Canvas2D() {
         capsule(-halfLen, -radius, halfLen * 2, vh, radius);
         ctx.fill();
 
-        // Inner hollow — canvas background
+        // Inner hollow
         const innerR = Math.max(1, radius - wallPx);
         const innerLen = halfLen * 2 - wallPx * 2;
         if (innerLen > 0 && innerR > 1) {
-          ctx.fillStyle = canvasBg;
-          capsule(-halfLen + wallPx, -innerR, innerLen, innerR * 2, innerR);
-          ctx.fill();
-          // Subtle tint
-          ctx.fillStyle = color + '22';
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
           capsule(-halfLen + wallPx, -innerR, innerLen, innerR * 2, innerR);
           ctx.fill();
         }
 
-        // Top highlight arc
+        // Top highlight
         ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        capsule(-halfLen, -radius, halfLen * 2, radius * 0.5, radius * 0.4);
+        capsule(-halfLen, -radius, halfLen * 2, radius * 0.45, radius * 0.4);
         ctx.fill();
 
         // Border

@@ -14,38 +14,51 @@ const EXAMPLES = [
   'Motorcycle trailer frame 5 feet long by 2.5 feet wide',
 ];
 
-const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. When given a description of a metal structure return ONLY a valid JSON array of piece objects with no markdown no explanation no code blocks just raw JSON array starting with [ and ending with ].
+const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. Return ONLY a valid JSON array. No markdown, no explanation, no code fences. Start with [ end with ].
 
-Rules for piece fields:
-- id: unique string like "p1" "p2" etc
-- type: one of square_tube round_tube rect_tube pipe angle channel ibeam flat_bar sheet plate
-- grade: one of mild_steel stainless aluminum
-- width: outer width in inches (for square_tube this equals height)
-- height: outer height in inches
-- wall: wall thickness in inches
-- length: piece length in inches
-- x: X position of piece CENTER in inches (for horizontal pieces) or XY position (for upright)
-- y: Y position of piece CENTER in inches
-- angle: rotation degrees 0=along X axis 90=along Y axis
-- orientation: horizontal or upright
-- zHeight: height above floor in inches (0 for floor level, use legLength minus tubeSize for frame rails at top of legs)
-- notes: empty string
-- weldSymbol: empty string
-- holes: empty array
+PIECE FIELDS (all required):
+id: unique string "p1","p2",etc
+type: square_tube | round_tube | rect_tube | pipe | angle | channel | ibeam | flat_bar | sheet | plate
+grade: mild_steel | stainless | aluminum
+width: outer width inches
+height: outer height inches (= width for square tubes)
+wall: wall thickness inches
+length: piece length inches
+x: CENTER x position inches
+y: CENTER y position inches
+angle: degrees, 0=along X axis, 90=along Y axis
+orientation: "horizontal" or "upright"
+zHeight: height above floor inches
+notes: ""
+weldSymbol: ""
+holes: []
 
-For a table with 4 legs:
-- 4 upright leg pieces at corner positions, orientation upright, length = leg height
-- 4 horizontal frame rails connecting leg tops, orientation horizontal, zHeight = legLength - tubeSize
-- Rails along X axis: angle 0, length = tableWidth (or tableWidth minus tubeSize*2 for inside fit)
-- Rails along Y axis: angle 90, length = tableDepth (or tableDepth minus tubeSize*2)
-- Optional sheet metal top: type sheet, orientation horizontal, angle 0, zHeight = legLength, length = tableWidth, height = tableDepth
+TABLE RULES — follow exactly:
+- A rectangular table has EXACTLY 4 legs, one at each corner. No more, no less.
+- Corners are at: (0,0), (width,0), (0,depth), (width,depth)
+- Legs: orientation "upright", x/y at corner position, length = leg height
+- Frame rails: EXACTLY 4 horizontal rails connecting leg tops
+  - 2 rails along X axis (angle:0): centered at x=width/2, y=0 and y=depth
+  - 2 rails along Y axis (angle:90): centered at x=0 and x=width, y=depth/2
+  - All rails: zHeight = legHeight - tubeSize, length = (tableWidth or tableDepth) - tubeSize*2
+- Sheet top (if requested): EXACTLY 1 sheet piece, type "sheet", orientation "horizontal",
+  x = width/2, y = depth/2, length = width, height = depth, zHeight = legHeight
+  DO NOT split the sheet into multiple pieces. One sheet only.
 
-Example 48x48 table, 34 inch legs, 2x2 0.125 wall square tube:
-Legs at corners: x:0,y:0 and x:48,y:0 and x:0,y:48 and x:48,y:48 all upright length:34
-X-direction rails: x:24,y:2 and x:24,y:46 angle:0 zHeight:32 length:44
-Y-direction rails: x:2,y:24 and x:46,y:24 angle:90 zHeight:32 length:44
+EXAMPLE — 48x48 table, 34" legs, 2x2 sq tube 0.125 wall:
+[
+  {"id":"p1","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":0,"y":0,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p2","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":48,"y":0,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p3","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":0,"y":48,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p4","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":48,"y":48,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p5","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":24,"y":0,"angle":0,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p6","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":24,"y":48,"angle":0,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p7","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":0,"y":24,"angle":90,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p8","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":48,"y":24,"angle":90,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
+  {"id":"p9","type":"sheet","grade":"mild_steel","width":48,"height":48,"wall":0.06,"length":48,"x":24,"y":24,"angle":0,"orientation":"horizontal","zHeight":34,"notes":"","weldSymbol":"","holes":[]}
+]
 
-Always return valid JSON array only. No text before or after the array.`;
+Return valid JSON array only.`;
 
 const VALID_TYPES = ['square_tube','round_tube','rect_tube','pipe','angle','channel','ibeam','flat_bar','sheet','plate'] as const;
 const VALID_GRADES = ['mild_steel','stainless','aluminum'] as const;
