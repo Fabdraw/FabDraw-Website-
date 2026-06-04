@@ -1,5 +1,29 @@
 import type { MaterialDef, MaterialType } from '../types';
 
+export const SHEET_GAUGES: { gauge: string; mild: number; stainless: number; aluminum: number }[] = [
+  { gauge: '30ga', mild: 0.0120, stainless: 0.0125, aluminum: 0.0100 },
+  { gauge: '28ga', mild: 0.0149, stainless: 0.0156, aluminum: 0.0126 },
+  { gauge: '26ga', mild: 0.0179, stainless: 0.0187, aluminum: 0.0159 },
+  { gauge: '24ga', mild: 0.0239, stainless: 0.0250, aluminum: 0.0201 },
+  { gauge: '22ga', mild: 0.0299, stainless: 0.0312, aluminum: 0.0253 },
+  { gauge: '20ga', mild: 0.0359, stainless: 0.0375, aluminum: 0.0320 },
+  { gauge: '19ga', mild: 0.0418, stainless: 0.0437, aluminum: 0.0359 },
+  { gauge: '18ga', mild: 0.0478, stainless: 0.0500, aluminum: 0.0403 },
+  { gauge: '17ga', mild: 0.0538, stainless: 0.0562, aluminum: 0.0453 },
+  { gauge: '16ga', mild: 0.0598, stainless: 0.0625, aluminum: 0.0508 },
+  { gauge: '15ga', mild: 0.0673, stainless: 0.0703, aluminum: 0.0571 },
+  { gauge: '14ga', mild: 0.0747, stainless: 0.0781, aluminum: 0.0641 },
+  { gauge: '13ga', mild: 0.0897, stainless: 0.0937, aluminum: 0.0720 },
+  { gauge: '12ga', mild: 0.1046, stainless: 0.1093, aluminum: 0.0808 },
+  { gauge: '11ga', mild: 0.1196, stainless: 0.1250, aluminum: 0.0907 },
+  { gauge: '10ga', mild: 0.1345, stainless: 0.1406, aluminum: 0.1019 },
+  { gauge: '9ga',  mild: 0.1495, stainless: 0.1562, aluminum: 0.1144 },
+  { gauge: '8ga',  mild: 0.1644, stainless: 0.1718, aluminum: 0.1285 },
+  { gauge: '7ga',  mild: 0.1793, stainless: 0.1875, aluminum: 0.1443 },
+];
+
+export const SHEET_PRESETS = ['36x48','36x96','48x48','48x96','48x120','48x144','60x120','72x96','72x144','Custom'];
+
 export const MATERIALS: Record<MaterialType, MaterialDef> = {
   square_tube: {
     type: 'square_tube',
@@ -7,9 +31,9 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['1x1', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6'],
     walls: [0.065, 0.083, 0.095, 0.120, 0.125, 0.188, 0.250],
     color: '#4a90d9',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="2" width="28" height="28" rx="1" stroke="#94a3b8" stroke-width="2.5" fill="none"/>
-      <rect x="7" y="7" width="18" height="18" rx="0.5" stroke="#64748b" stroke-width="1.5" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="32" height="18" rx="0.5" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
+      <rect x="6" y="5" width="24" height="12" rx="0.5" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
     </svg>`,
   },
   round_tube: {
@@ -18,9 +42,9 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['0.75', '1', '1.25', '1.5', '2', '2.5', '3', '4'],
     walls: [0.065, 0.083, 0.095, 0.120, 0.125, 0.188, 0.250],
     color: '#7c6fcd',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="13" stroke="#94a3b8" stroke-width="2.5" fill="none"/>
-      <circle cx="16" cy="16" r="8" stroke="#64748b" stroke-width="1.5" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="18" cy="11" r="9" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
+      <circle cx="18" cy="11" r="5.5" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
     </svg>`,
   },
   rect_tube: {
@@ -29,9 +53,9 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['1x2', '1x3', '1.5x3', '2x3', '2x4', '2x6', '3x4', '3x6'],
     walls: [0.065, 0.083, 0.095, 0.120, 0.125, 0.188, 0.250],
     color: '#5aadad',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="7" width="28" height="18" rx="1" stroke="#94a3b8" stroke-width="2.5" fill="none"/>
-      <rect x="7" y="12" width="18" height="8" rx="0.5" stroke="#64748b" stroke-width="1.5" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="4" width="34" height="14" rx="0.5" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
+      <rect x="5" y="7" width="26" height="8" rx="0.5" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
     </svg>`,
   },
   pipe: {
@@ -40,9 +64,9 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['0.5"NPS', '0.75"NPS', '1"NPS', '1.25"NPS', '1.5"NPS', '2"NPS', '3"NPS', '4"NPS'],
     walls: [0.109, 0.113, 0.133, 0.140, 0.145, 0.154, 0.216, 0.237],
     color: '#a0796f',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="13" stroke="#94a3b8" stroke-width="3.5" fill="none"/>
-      <circle cx="16" cy="16" r="7" stroke="#64748b" stroke-width="1" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="18" cy="11" r="9" stroke="rgba(148,163,184,0.8)" stroke-width="3" fill="none"/>
+      <circle cx="18" cy="11" r="4" stroke="rgba(148,163,184,0.8)" stroke-width="1.5" fill="none"/>
     </svg>`,
   },
   angle: {
@@ -51,9 +75,8 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '3x2', '4x3'],
     walls: [0.125, 0.188, 0.250, 0.375],
     color: '#d4a843',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <polyline points="4,4 4,28 28,28" stroke="#94a3b8" stroke-width="5" fill="none" stroke-linecap="square"/>
-      <polyline points="8,4 8,24 28,24" stroke="#64748b" stroke-width="1" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 4 18 L 4 4 L 8 4 L 8 14 L 32 14 L 32 18 Z" fill="rgba(212,168,67,0.3)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
   channel: {
@@ -62,9 +85,10 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['C3x4.1', 'C4x5.4', 'C5x6.7', 'C6x8.2', 'C8x11.5', 'C10x15.3', 'C12x20.7'],
     walls: [0.170, 0.180, 0.190, 0.200, 0.220, 0.240, 0.280],
     color: '#7aad6f',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <polyline points="28,4 4,4 4,28 28,28" stroke="#94a3b8" stroke-width="4" fill="none" stroke-linecap="square"/>
-      <polyline points="26,8 8,8 8,24 26,24" stroke="#64748b" stroke-width="1" fill="none"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="4" width="4" height="14" fill="rgba(122,173,111,0.3)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
+      <rect x="4" y="4" width="24" height="4" fill="rgba(122,173,111,0.3)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
+      <rect x="4" y="14" width="24" height="4" fill="rgba(122,173,111,0.3)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
   ibeam: {
@@ -73,10 +97,10 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['W4x13', 'W5x16', 'W6x20', 'W8x24', 'W10x33', 'W12x40', 'W14x48', 'W16x57'],
     walls: [0.230, 0.240, 0.250, 0.245, 0.290, 0.295, 0.285, 0.295],
     color: '#e07070',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="2" width="28" height="5" fill="#94a3b8"/>
-      <rect x="2" y="25" width="28" height="5" fill="#94a3b8"/>
-      <rect x="13" y="7" width="6" height="18" fill="#94a3b8"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="3" width="32" height="4" fill="rgba(224,112,112,0.5)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
+      <rect x="15" y="7" width="6" height="8" fill="rgba(224,112,112,0.5)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
+      <rect x="2" y="15" width="32" height="4" fill="rgba(224,112,112,0.5)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
   flat_bar: {
@@ -85,8 +109,8 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['1/4x1', '1/4x1.5', '1/4x2', '3/8x2', '1/2x2', '1/2x3', '1/2x4', '1x2', '1x4'],
     walls: [0.25, 0.375, 0.5],
     color: '#94a3b8',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="11" width="28" height="10" rx="1" fill="#64748b" stroke="#94a3b8" stroke-width="1.5"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="8" width="32" height="6" rx="0.5" fill="rgba(148,163,184,0.4)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
   sheet: {
@@ -95,12 +119,12 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['12x24', '24x24', '24x48', '36x48', '48x48', '48x96'],
     walls: [0.036, 0.048, 0.060, 0.075, 0.090, 0.105, 0.120],
     color: '#60a0e0',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="2" width="28" height="28" rx="1" fill="rgba(96,160,224,0.2)" stroke="#94a3b8" stroke-width="1.5"/>
-      <line x1="2" y1="8" x2="8" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="8" y1="8" x2="14" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="14" y1="8" x2="20" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="20" y1="8" x2="26" y2="2" stroke="#64748b" stroke-width="1"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="9" width="32" height="3" fill="rgba(96,160,224,0.5)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
+      <line x1="8" y1="7" x2="8" y2="14" stroke="rgba(148,163,184,0.8)" stroke-width="1"/>
+      <line x1="14" y1="7" x2="14" y2="14" stroke="rgba(148,163,184,0.8)" stroke-width="1"/>
+      <line x1="20" y1="7" x2="20" y2="14" stroke="rgba(148,163,184,0.8)" stroke-width="1"/>
+      <line x1="26" y1="7" x2="26" y2="14" stroke="rgba(148,163,184,0.8)" stroke-width="1"/>
     </svg>`,
   },
   plate: {
@@ -109,14 +133,8 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
     sizes: ['6x6', '6x12', '12x12', '12x24', '24x24', '24x48'],
     walls: [0.125, 0.188, 0.250, 0.375, 0.500, 0.750, 1.0],
     color: '#708090',
-    svgIcon: `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="2" width="28" height="28" rx="1" fill="#4a5568" stroke="#94a3b8" stroke-width="1.5"/>
-      <line x1="2" y1="10" x2="10" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="2" y1="18" x2="18" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="2" y1="26" x2="26" y2="2" stroke="#64748b" stroke-width="1"/>
-      <line x1="10" y1="30" x2="30" y2="10" stroke="#64748b" stroke-width="1"/>
-      <line x1="18" y1="30" x2="30" y2="18" stroke="#64748b" stroke-width="1"/>
-      <line x1="26" y1="30" x2="30" y2="26" stroke="#64748b" stroke-width="1"/>
+    svgIcon: `<svg width="36" height="22" viewBox="0 0 36 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="7" width="32" height="8" fill="rgba(112,128,144,0.6)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
 };

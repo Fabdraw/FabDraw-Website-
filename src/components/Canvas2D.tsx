@@ -62,16 +62,16 @@ export default function Canvas2D() {
     ctx.clearRect(0, 0, W, H);
 
     // Background
-    ctx.fillStyle = '#12151e';
+    ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid
+    // Grid - minor lines
     const gridInches = z >= 1.5 ? 1 : z >= 0.5 ? 6 : 12;
     const gridPx = gridInches * z * SCALE;
     const startX = ((px % gridPx) + gridPx) % gridPx;
     const startY = ((py % gridPx) + gridPx) % gridPx;
 
-    ctx.strokeStyle = z >= 1.5 ? '#1e2535' : '#1a2030';
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 0.5;
     for (let x = startX; x < W; x += gridPx) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -80,11 +80,11 @@ export default function Canvas2D() {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
 
-    // Major grid every foot
-    const majorPx = 12 * z * SCALE;
+    // Major grid every 10 units
+    const majorPx = 10 * gridInches * z * SCALE;
     const majorStartX = ((px % majorPx) + majorPx) % majorPx;
     const majorStartY = ((py % majorPx) + majorPx) % majorPx;
-    ctx.strokeStyle = '#222840';
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1;
     for (let x = majorStartX; x < W; x += majorPx) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -93,14 +93,12 @@ export default function Canvas2D() {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
 
-    // Origin cross
+    // Origin crosshair - orange at 30% opacity, 20px lines
     const [ox, oy] = worldToCanvas(0, 0, z, px, py);
-    ctx.strokeStyle = '#2a3550';
+    ctx.strokeStyle = 'rgba(249,115,22,0.3)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(ox - 20, oy); ctx.lineTo(ox + 20, oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, oy - 20); ctx.lineTo(ox, oy + 20); ctx.stroke();
 
     // Draw connections
     for (const conn of cs) {
@@ -253,7 +251,7 @@ export default function Canvas2D() {
           const innerH = (piece.height - 2 * piece.wall) * z * SCALE;
           if (innerW > 2 && innerH > 2) {
             ctx.clearRect(-innerW / 2, -innerH / 2, innerW, innerH);
-            ctx.fillStyle = '#12151e55';
+            ctx.fillStyle = '#0d111755';
             ctx.fillRect(-innerW / 2, -innerH / 2, innerW, innerH);
             ctx.strokeStyle = baseColor + '55';
             ctx.lineWidth = 0.5;
@@ -285,7 +283,7 @@ export default function Canvas2D() {
         const hr = Math.max(3, (hole.diameter / 2) * z * SCALE);
         ctx.beginPath();
         ctx.arc(hcx, hcy, hr, 0, Math.PI * 2);
-        ctx.fillStyle = '#12151e';
+        ctx.fillStyle = '#0d1117';
         ctx.fill();
         ctx.strokeStyle = hole.type === 'tapped' ? '#fbbf24' : hole.type === 'countersink' ? '#a78bfa' : '#e2e8f0';
         ctx.lineWidth = 1.5;
@@ -315,17 +313,21 @@ export default function Canvas2D() {
       }
     }
 
-    // Snap highlight
+    // Snap highlight - accent color circle + crosshair
     const sh = snapRef.current;
     if (sh) {
       const [shx, shy] = worldToCanvas(sh.x, sh.y, z, px, py);
       ctx.beginPath();
-      ctx.arc(shx, shy, 10, 0, Math.PI * 2);
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = '#fbbf2440';
+      ctx.arc(shx, shy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(249,115,22,0.8)';
       ctx.fill();
+      // Crosshair lines 20px
+      ctx.strokeStyle = 'rgba(249,115,22,0.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(shx - 20, shy); ctx.lineTo(shx + 20, shy);
+      ctx.moveTo(shx, shy - 20); ctx.lineTo(shx, shy + 20);
+      ctx.stroke();
     }
 
     // Hole preview

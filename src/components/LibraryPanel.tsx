@@ -1,20 +1,35 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
 import { MATERIALS, parseSizeString } from '../lib/materials';
 import type { MaterialType, MaterialGrade, Piece } from '../types';
 
-const GRADE_LABELS: Record<MaterialGrade, string> = {
-  mild_steel: 'Mild Steel (A36)',
-  stainless: 'Stainless (304)',
-  aluminum: 'Aluminum (6061)',
-};
-
 interface LibProps {
   collapsed?: boolean;
 }
+
+const materialGroups = [
+  {
+    label: 'STRUCTURAL TUBE',
+    id: 'tube',
+    types: ['square_tube', 'round_tube', 'rect_tube', 'pipe'] as MaterialType[],
+  },
+  {
+    label: 'STRUCTURAL STEEL',
+    id: 'structural',
+    types: ['angle', 'channel', 'ibeam'] as MaterialType[],
+  },
+  {
+    label: 'FLAT STOCK',
+    id: 'flat',
+    types: ['flat_bar', 'sheet', 'plate'] as MaterialType[],
+  },
+];
+
+const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#f1f5f9] text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-[#f97316] transition-colors';
+const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
 
 export default function LibraryPanel({ collapsed }: LibProps) {
   const { pieces, connections, addPiece, zoom, panX, panY } = useProjectStore();
@@ -26,22 +41,6 @@ export default function LibraryPanel({ collapsed }: LibProps) {
   const [selectedWall, setSelectedWall] = useState<number>(0.125);
   const [selectedGrade, setSelectedGrade] = useState<MaterialGrade>('mild_steel');
   const [length, setLength] = useState<number>(48);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['structural', 'flat']));
-
-  const materialGroups = [
-    { label: 'Structural Tube', id: 'tube', types: ['square_tube', 'round_tube', 'rect_tube', 'pipe'] as MaterialType[] },
-    { label: 'Structural Steel', id: 'structural', types: ['angle', 'channel', 'ibeam'] as MaterialType[] },
-    { label: 'Flat', id: 'flat', types: ['flat_bar', 'sheet', 'plate'] as MaterialType[] },
-  ];
-
-  const toggleGroup = (id: string) => {
-    setExpandedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const handleTypeSelect = (type: MaterialType) => {
     setSelectedType(type);
@@ -51,10 +50,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
   };
 
   const handleAddPiece = () => {
-    const mat = MATERIALS[selectedType];
     const { width, height } = parseSizeString(selectedType, selectedSize);
-
-    // Center of canvas in world coords
     const SCALE = 8;
     const canvas = document.querySelector('canvas');
     const cw = canvas?.offsetWidth ?? 800;
@@ -89,70 +85,96 @@ export default function LibraryPanel({ collapsed }: LibProps) {
 
   const mat = MATERIALS[selectedType];
 
-  return (
-    <div className="flex flex-col h-full bg-[#1a1d2e] border-r border-slate-800 w-56 shrink-0">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-slate-800">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Library</div>
-      </div>
+  const feetInches = (inches: number) => {
+    const ft = Math.floor(inches / 12);
+    const inPart = (inches % 12).toFixed(2).replace(/\.?0+$/, '');
+    return ft > 0 ? `${ft}'-${inPart}"` : `${inPart}"`;
+  };
 
-      {/* Material type selector */}
+  return (
+    <div
+      className="flex flex-col h-full shrink-0 overflow-hidden"
+      style={{
+        width: '240px',
+        background: '#161b25',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Material list */}
       <div className="flex-1 overflow-y-auto">
         {materialGroups.map(group => (
           <div key={group.id}>
-            <button
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:bg-slate-800/50 transition-colors"
-              onClick={() => toggleGroup(group.id)}
+            <div
+              style={{
+                fontSize: '9px',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: '#475569',
+                padding: '16px 12px 8px',
+              }}
             >
-              {expandedGroups.has(group.id)
-                ? <ChevronDown size={12} />
-                : <ChevronRight size={12} />
-              }
               {group.label}
-            </button>
-            {expandedGroups.has(group.id) && (
-              <div className="pb-1">
-                {group.types.map(type => {
-                  const m = MATERIALS[type];
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => handleTypeSelect(type)}
-                      className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
-                        selectedType === type
-                          ? 'bg-accent/20 text-orange-300 border-l-2 border-accent'
-                          : 'text-slate-300 hover:bg-slate-800 border-l-2 border-transparent'
-                      }`}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: m.color }}
-                      />
-                      <span className="truncate">{m.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            </div>
+            {group.types.map(type => {
+              const m = MATERIALS[type];
+              const isSelected = selectedType === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => handleTypeSelect(type)}
+                  className="panel-item w-full flex items-center gap-2 px-3"
+                  style={{
+                    height: '40px',
+                    background: isSelected ? 'rgba(249,115,22,0.06)' : 'transparent',
+                    borderLeft: isSelected ? '2px solid #f97316' : '2px solid transparent',
+                    color: isSelected ? '#f97316' : '#94a3b8',
+                    fontSize: '12px',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                  }}
+                >
+                  <span
+                    className="shrink-0"
+                    dangerouslySetInnerHTML={{ __html: m.svgIcon }}
+                  />
+                  <span className="truncate">{m.label}</span>
+                </button>
+              );
+            })}
           </div>
         ))}
       </div>
 
-      {/* Configuration panel */}
-      <div className="border-t border-slate-800 p-3 space-y-3">
+      {/* Configuration card */}
+      <div
+        className="shrink-0 space-y-2.5"
+        style={{
+          padding: '12px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
         {/* SVG preview */}
-        <div className="flex items-center justify-center h-12 bg-slate-900 rounded-lg border border-slate-800">
-          <div
-            dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
-            className="opacity-90"
-          />
-        </div>
+        <div
+          className="flex items-center justify-center"
+          style={{
+            height: '40px',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+          dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
+        />
 
         {/* Size */}
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Size</label>
+          <label className={labelCls}>Size</label>
           <select
-            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-accent"
+            className={inputCls}
             value={selectedSize}
             onChange={e => setSelectedSize(e.target.value)}
           >
@@ -164,9 +186,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
 
         {/* Wall */}
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Wall Thickness</label>
+          <label className={labelCls}>Wall Thickness</label>
           <select
-            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-accent"
+            className={inputCls}
             value={selectedWall}
             onChange={e => setSelectedWall(parseFloat(e.target.value))}
           >
@@ -178,41 +200,68 @@ export default function LibraryPanel({ collapsed }: LibProps) {
 
         {/* Length */}
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Length (inches)</label>
+          <label className={labelCls}>Length (inches)</label>
           <input
             type="number"
-            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-accent"
+            className={inputCls}
             value={length}
             min={0.1}
             step={0.25}
             onChange={e => setLength(parseFloat(e.target.value) || 1)}
           />
-          <div className="text-xs text-slate-600 mt-0.5">
-            = {Math.floor(length / 12)}' {(length % 12).toFixed(2).replace(/\.?0+$/, '')}"
+          <div
+            className="mt-0.5"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '10px',
+              color: '#475569',
+            }}
+          >
+            {feetInches(length)}
           </div>
         </div>
 
-        {/* Grade */}
+        {/* Grade pills */}
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Material Grade</label>
-          <select
-            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-accent"
-            value={selectedGrade}
-            onChange={e => setSelectedGrade(e.target.value as MaterialGrade)}
-          >
-            {Object.entries(GRADE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+          <label className={labelCls}>Grade</label>
+          <div className="flex gap-1">
+            {([
+              { key: 'mild_steel' as MaterialGrade, label: 'Mild' },
+              { key: 'stainless' as MaterialGrade, label: 'SS' },
+              { key: 'aluminum' as MaterialGrade, label: 'Alum' },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setSelectedGrade(key)}
+                className="flex-1 py-1 rounded-md text-[11px] font-medium panel-item"
+                style={{
+                  background: selectedGrade === key ? '#f97316' : 'rgba(255,255,255,0.04)',
+                  color: selectedGrade === key ? '#fff' : '#94a3b8',
+                  border: selectedGrade === key ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {label}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         {/* Add button */}
         <button
           onClick={handleAddPiece}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-accent hover:bg-orange-600 text-white text-sm font-semibold rounded transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-white text-[13px] font-medium"
+          style={{
+            background: 'linear-gradient(135deg, #f97316, #ea580c)',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+          }}
         >
-          <Plus size={16} />
-          Add Piece
+          <Plus size={14} />
+          Add to Drawing
         </button>
       </div>
     </div>
