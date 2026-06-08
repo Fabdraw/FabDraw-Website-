@@ -1,185 +1,196 @@
 import React, { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useProjectStore } from '../store/projectStore'
-import { MATERIALS, getOD, getHeight } from '../lib/materials'
+import { getMaterial, getSizeValue, getWall } from '../lib/materials'
 
 export default function Canvas3D() {
-  const mountRef = useRef<HTMLDivElement>(null)
-  const rendererRef = useRef<THREE.WebGLRenderer|null>(null)
-  const sceneRef = useRef<THREE.Scene|null>(null)
-  const cameraRef = useRef<THREE.PerspectiveCamera|null>(null)
-  const meshGroupRef = useRef<THREE.Group|null>(null)
-  const rafRef = useRef(0)
-
-  const isDraggingRef = useRef(false)
-  const lastMouseRef = useRef({x:0,y:0})
-  const cameraAngRef = useRef({theta: 0.8, phi: 0.5, radius: 60})
-
-  const { pieces } = useProjectStore()
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const { project } = useProjectStore()
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const sceneRef = useRef<THREE.Scene | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const animFrameRef = useRef<number>(0)
+  const orbitRef = useRef({ theta: 45, phi: 35, radius: 60, target: new THREE.Vector3(0, 0, 0) })
+  const mouseRef = useRef({ down: false, x: 0, y: 0, button: 0 })
 
   useEffect(() => {
-    const el = mountRef.current
-    if (!el) return
+    if (!canvasRef.current) return
+    const container = canvasRef.current
+    const w = container.clientWidth, h = container.clientHeight
 
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color('#0d1117')
-    scene.fog = new THREE.Fog('#0d1117', 100, 400)
-    sceneRef.current = scene
-
-    const W = el.clientWidth, H = el.clientHeight
-    const camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 1000)
-    cameraRef.current = camera
-
-    const renderer = new THREE.WebGLRenderer({antialias:true})
-    renderer.setSize(W, H)
+    const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setSize(w, h)
+    renderer.setClearColor(0x0a0d14)
     renderer.shadowMap.enabled = true
-    el.appendChild(renderer.domElement)
+    container.appendChild(renderer.domElement)
     rendererRef.current = renderer
 
+    const scene = new THREE.Scene()
+    sceneRef.current = scene
+
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 2000)
+    cameraRef.current = camera
+
     // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4)
-    scene.add(ambient)
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8)
-    dir.position.set(50, 80, 30)
-    dir.castShadow = true
-    scene.add(dir)
-    const fill = new THREE.DirectionalLight(0x8899cc, 0.3)
-    fill.position.set(-30, 20, -40)
-    scene.add(fill)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8)
+    dl.position.set(30, 50, 30)
+    scene.add(dl)
+    const dl2 = new THREE.DirectionalLight(0x8888ff, 0.3)
+    dl2.position.set(-20, -10, -20)
+    scene.add(dl2)
+    const pl = new THREE.PointLight(0xffa040, 0.2)
+    pl.position.set(0, 20, 0)
+    scene.add(pl)
 
     // Grid
-    const grid = new THREE.GridHelper(200, 40, 0x1a2030, 0x1a2030)
+    const grid = new THREE.GridHelper(200, 200, 0x1a2035, 0x111827)
     scene.add(grid)
 
-    // Origin
-    const axes = new THREE.AxesHelper(8)
-    scene.add(axes)
-
-    // Mesh group
-    const group = new THREE.Group()
-    scene.add(group)
-    meshGroupRef.current = group
-
-    const updateCamera = () => {
-      const {theta,phi,radius} = cameraAngRef.current
-      camera.position.set(
-        radius * Math.sin(phi) * Math.sin(theta),
-        radius * Math.cos(phi),
-        radius * Math.sin(phi) * Math.cos(theta)
-      )
-      camera.lookAt(0, 8, 0)
+    function updateCamera() {
+      const { theta, phi, radius, target } = orbitRef.current
+      const tRad = theta * Math.PI / 180
+      const pRad = phi * Math.PI / 180
+      camera.position.x = target.x + radius * Math.cos(pRad) * Math.sin(tRad)
+      camera.position.y = target.y + radius * Math.sin(pRad)
+      camera.position.z = target.z + radius * Math.cos(pRad) * Math.cos(tRad)
+      camera.lookAt(target)
     }
+
     updateCamera()
 
-    const animate = () => {
-      rafRef.current = requestAnimationFrame(animate)
+    function animate() {
+      animFrameRef.current = requestAnimationFrame(animate)
       renderer.render(scene, camera)
     }
     animate()
 
-    const onResize = () => {
-      const W2=el.clientWidth,H2=el.clientHeight
-      camera.aspect=W2/H2;camera.updateProjectionMatrix()
-      renderer.setSize(W2,H2)
+    function onMouseDown(e: MouseEvent) {
+      mouseRef.current = { down: true, x: e.clientX, y: e.clientY, button: e.button }
     }
-    window.addEventListener('resize',onResize)
+    function onMouseMove(e: MouseEvent) {
+      if (!mouseRef.current.down) return
+      const dx = e.clientX - mouseRef.current.x
+      const dy = e.clientY - mouseRef.current.y
+      mouseRef.current.x = e.clientX
+      mouseRef.current.y = e.clientY
+      if (mouseRef.current.button === 0) {
+        orbitRef.current.theta -= dx * 0.4
+        orbitRef.current.phi = Math.max(5, Math.min(89, orbitRef.current.phi + dy * 0.4))
+      } else if (mouseRef.current.button === 2) {
+        const right = new THREE.Vector3()
+        right.crossVectors(camera.getWorldDirection(new THREE.Vector3()), camera.up).normalize()
+        const up = camera.up.clone()
+        orbitRef.current.target.addScaledVector(right, -dx * 0.05)
+        orbitRef.current.target.addScaledVector(up, dy * 0.05)
+      }
+      updateCamera()
+    }
+    function onMouseUp() { mouseRef.current.down = false }
+    function onWheel(e: WheelEvent) {
+      orbitRef.current.radius = Math.max(5, Math.min(500, orbitRef.current.radius * (e.deltaY > 0 ? 1.1 : 0.9)))
+      updateCamera()
+    }
 
-    const onMouseDown = (e: MouseEvent) => {
-      isDraggingRef.current = true
-      lastMouseRef.current = {x:e.clientX,y:e.clientY}
-    }
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current) return
-      const dx = e.clientX - lastMouseRef.current.x
-      const dy = e.clientY - lastMouseRef.current.y
-      cameraAngRef.current.theta -= dx * 0.01
-      cameraAngRef.current.phi = Math.max(0.1, Math.min(Math.PI/2-0.05, cameraAngRef.current.phi + dy*0.01))
-      lastMouseRef.current = {x:e.clientX,y:e.clientY}
-      updateCamera()
-    }
-    const onMouseUp = () => { isDraggingRef.current = false }
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      cameraAngRef.current.radius = Math.max(5, Math.min(300, cameraAngRef.current.radius + e.deltaY * 0.1))
-      updateCamera()
-    }
-    el.addEventListener('mousedown',onMouseDown)
-    window.addEventListener('mousemove',onMouseMove)
-    window.addEventListener('mouseup',onMouseUp)
-    el.addEventListener('wheel',onWheel,{passive:false})
+    renderer.domElement.addEventListener('mousedown', onMouseDown)
+    renderer.domElement.addEventListener('mousemove', onMouseMove)
+    renderer.domElement.addEventListener('mouseup', onMouseUp)
+    renderer.domElement.addEventListener('wheel', onWheel)
+    renderer.domElement.addEventListener('contextmenu', e => e.preventDefault())
+
+    const ro = new ResizeObserver(() => {
+      const w2 = container.clientWidth, h2 = container.clientHeight
+      renderer.setSize(w2, h2)
+      camera.aspect = w2 / h2
+      camera.updateProjectionMatrix()
+    })
+    ro.observe(container)
 
     return () => {
-      cancelAnimationFrame(rafRef.current)
-      window.removeEventListener('resize',onResize)
-      el.removeEventListener('mousedown',onMouseDown)
-      window.removeEventListener('mousemove',onMouseMove)
-      window.removeEventListener('mouseup',onMouseUp)
-      el.removeEventListener('wheel',onWheel)
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+      renderer.domElement.removeEventListener('mousedown', onMouseDown)
+      renderer.domElement.removeEventListener('mousemove', onMouseMove)
+      renderer.domElement.removeEventListener('mouseup', onMouseUp)
+      renderer.domElement.removeEventListener('wheel', onWheel)
+      ro.disconnect()
       renderer.dispose()
-      if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement)
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [])
 
-  // Rebuild meshes when pieces change
   useEffect(() => {
-    const group = meshGroupRef.current
-    if (!group) return
+    const scene = sceneRef.current
+    if (!scene) return
 
-    // Clear old meshes
-    while (group.children.length) {
-      const child = group.children[0]
-      group.remove(child)
-      if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose()
-    }
+    const toRemove = scene.children.filter(c => c.userData.isPiece)
+    toRemove.forEach(c => {
+      scene.remove(c)
+      if ((c as THREE.Mesh).geometry) (c as THREE.Mesh).geometry.dispose()
+    })
 
-    for (const piece of pieces) {
-      const mat3d = MATERIALS[piece.type]
-      const color = new THREE.Color(mat3d.color)
-      const material = new THREE.MeshStandardMaterial({color, roughness:0.5, metalness:0.3})
+    for (const p of project.pieces) {
+      const mat = getMaterial(p.type)
+      const sv = getSizeValue(p.type, p.sizeIdx)
+      const wall = getWall(p.type, p.thkIdx)
+      const color = new THREE.Color(mat.color)
+      const material = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.92 })
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 })
 
-      let geo: THREE.BufferGeometry
-      const od = getOD(piece.type, piece.sizeIdx)
-      const h = getHeight(piece.type, piece.sizeIdx)
-      const len = piece.length
+      let geometry: THREE.BufferGeometry
 
-      if (piece.type==='round_tube'||piece.type==='pipe') {
-        geo = new THREE.CylinderGeometry(od/2, od/2, piece.upright?len:od, 16)
-      } else if (piece.type==='flat_bar') {
-        geo = new THREE.BoxGeometry(piece.upright?od:len, od*0.15+0.2, od)
-      } else if (piece.type==='sheet') {
-        geo = new THREE.BoxGeometry(piece.customW??48, 0.1, piece.customH??48)
-      } else if (piece.type==='plate') {
-        geo = new THREE.BoxGeometry(piece.length, 0.5, piece.customH??12)
+      if (p.upright) {
+        const w = Array.isArray(sv) ? sv[0] : sv
+        const h = Array.isArray(sv) ? sv[1] : sv
+        const isRound = mat.isRound
+        if (isRound) {
+          geometry = new THREE.CylinderGeometry(w / 2, w / 2, p.length, 16)
+        } else {
+          geometry = new THREE.BoxGeometry(w, p.length, h)
+        }
+        const mesh = new THREE.Mesh(geometry, material)
+        mesh.position.set(p.x, p.zOffset + p.length / 2, p.y)
+        mesh.userData.isPiece = true
+        scene.add(mesh)
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMat)
+        edges.position.copy(mesh.position)
+        edges.userData.isPiece = true
+        scene.add(edges)
       } else {
-        const w = od
-        const ht = (piece.type==='rect_tube') ? h : od
-        geo = new THREE.BoxGeometry(piece.upright?w:len, piece.upright?len:ht, w)
+        const vizH = Array.isArray(sv) ? Math.min(sv[0], sv[1]) : sv
+        if (p.type === 'sheet' || p.type === 'plate') {
+          geometry = new THREE.BoxGeometry(p.length, wall * 2, p.customH)
+          const mesh = new THREE.Mesh(geometry, material)
+          const angleRad = -p.angle * Math.PI / 180
+          mesh.rotation.y = angleRad
+          mesh.position.set(p.x, p.zOffset + wall, p.y)
+          mesh.userData.isPiece = true
+          scene.add(mesh)
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMat)
+          edges.rotation.y = angleRad
+          edges.position.copy(mesh.position)
+          edges.userData.isPiece = true
+          scene.add(edges)
+        } else {
+          const vizW = Array.isArray(sv) ? Math.max(sv[0], sv[1]) : sv
+          geometry = new THREE.BoxGeometry(p.length, vizH, vizW)
+          const mesh = new THREE.Mesh(geometry, material)
+          const angleRad = -p.angle * Math.PI / 180
+          mesh.rotation.y = angleRad
+          mesh.position.set(p.x, p.zOffset + vizH / 2, p.y)
+          mesh.userData.isPiece = true
+          scene.add(mesh)
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMat)
+          edges.rotation.y = angleRad
+          edges.position.copy(mesh.position)
+          edges.userData.isPiece = true
+          scene.add(edges)
+        }
       }
-
-      const mesh = new THREE.Mesh(geo, material)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-
-      const INCH = 1
-      if (piece.upright) {
-        mesh.position.set(piece.x*INCH, piece.zOffset + len/2, piece.y*INCH)
-      } else if (piece.type==='sheet'||piece.type==='plate') {
-        mesh.position.set(piece.x*INCH, piece.zOffset + 0.05, piece.y*INCH)
-      } else {
-        mesh.position.set(piece.x*INCH, piece.zOffset + od/2, piece.y*INCH)
-        mesh.rotation.y = -piece.angle * Math.PI / 180
-      }
-
-      group.add(mesh)
     }
-  }, [pieces])
+  }, [project.pieces])
 
-  return (
-    <div ref={mountRef} className="w-full h-full" style={{cursor:'grab',background:'#0d1117'}}>
-      <div className="absolute top-3 right-3 text-xs text-slate-600 pointer-events-none select-none">
-        Drag to orbit • Scroll to zoom
-      </div>
-    </div>
-  )
+  return <div ref={canvasRef} style={{ width: '100%', height: '100%' }} />
 }

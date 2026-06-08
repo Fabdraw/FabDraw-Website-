@@ -1,46 +1,43 @@
 import { create } from 'zustand'
 import type { Piece, Connection } from '../types'
 
-interface Snapshot { pieces: Piece[]; connections: Connection[] }
+interface Snapshot {
+  pieces: Piece[]
+  connections: Connection[]
+}
 
-interface HistoryState {
+interface HistoryStore {
   snapshots: Snapshot[]
   index: number
-  canUndo: boolean
-  canRedo: boolean
   push: (s: Snapshot) => void
   undo: () => Snapshot | null
   redo: () => Snapshot | null
-  clear: () => void
+  canUndo: () => boolean
+  canRedo: () => boolean
 }
 
-export const useHistoryStore = create<HistoryState>((set, get) => ({
+export const useHistoryStore = create<HistoryStore>((set, get) => ({
   snapshots: [],
   index: -1,
-  canUndo: false,
-  canRedo: false,
-
   push: (s) => set(state => {
-    const newSnaps = [...state.snapshots.slice(0, state.index+1), s].slice(-80)
-    const newIdx = newSnaps.length - 1
-    return { snapshots: newSnaps, index: newIdx, canUndo: newIdx > 0, canRedo: false }
+    const trimmed = state.snapshots.slice(0, state.index + 1)
+    const next = [...trimmed, s].slice(-80)
+    return { snapshots: next, index: next.length - 1 }
   }),
-
   undo: () => {
     const { snapshots, index } = get()
     if (index <= 0) return null
     const newIdx = index - 1
-    set({ index: newIdx, canUndo: newIdx > 0, canRedo: true })
+    set({ index: newIdx })
     return snapshots[newIdx]
   },
-
   redo: () => {
     const { snapshots, index } = get()
-    if (index >= snapshots.length-1) return null
+    if (index >= snapshots.length - 1) return null
     const newIdx = index + 1
-    set({ index: newIdx, canUndo: true, canRedo: newIdx < snapshots.length-1 })
+    set({ index: newIdx })
     return snapshots[newIdx]
   },
-
-  clear: () => set({ snapshots: [], index: -1, canUndo: false, canRedo: false }),
+  canUndo: () => get().index > 0,
+  canRedo: () => get().index < get().snapshots.length - 1,
 }))

@@ -1,39 +1,51 @@
-import type { Piece, MaterialGrade } from '../types'
-import { getOD, getHeight, getWall } from './materials'
+import type { Piece } from '../types'
 
-const DENSITY: Record<MaterialGrade, number> = {
+const DENSITY: Record<string, number> = {
   mild_steel: 0.2833,
   stainless: 0.2890,
   aluminum: 0.0975,
 }
 
-export function calcWeight(piece: Piece): number {
-  const d = DENSITY[piece.material]
-  const { type, sizeIdx, thkIdx, length, customW, customH } = piece
-  const t = getWall(type, thkIdx)
-  const od = getOD(type, sizeIdx)
-  const h = getHeight(type, sizeIdx)
-  let area = 0
+export function calcWeight(piece: Piece, sizeValue: number | number[], wall: number): number {
+  const d = DENSITY[piece.material] ?? 0.2833
+  const len = piece.length
+  const t = wall
 
-  switch (type) {
-    case 'square_tube': { const s=od; area=(s*s)-((s-2*t)*(s-2*t)); break }
-    case 'round_tube': case 'pipe': { const r=od/2; area=Math.PI*(r*r-(r-t)*(r-t)); break }
-    case 'rect_tube': { const w2=od; area=(w2*h)-((w2-2*t)*(h-2*t)); break }
-    case 'angle': { area=2*od*t-t*t; break }
-    case 'flat_bar': { area=od*t; break }
-    case 'channel': { area=od*t*2.5; break }
-    case 'ibeam': { area=od*t*3.0; break }
-    case 'sheet': case 'plate': { return (customW??48)*(customH??48)*t*d }
-    default: area=od*t
+  switch (piece.type) {
+    case 'square_tube': {
+      const s = sizeValue as number
+      return ((s * s) - (s - 2 * t) * (s - 2 * t)) * len * d
+    }
+    case 'round_tube':
+    case 'pipe': {
+      const od = sizeValue as number
+      const r = od / 2, ri = r - t
+      return Math.PI * (r * r - ri * ri) * len * d
+    }
+    case 'rect_tube': {
+      const [w, h] = sizeValue as number[]
+      return (w * h - (w - 2 * t) * (h - 2 * t)) * len * d
+    }
+    case 'angle': {
+      const s = sizeValue as number
+      return (2 * s * t - t * t) * len * d
+    }
+    case 'flat_bar': {
+      const s = sizeValue as number
+      return s * t * len * d
+    }
+    case 'channel': {
+      const s = sizeValue as number
+      return s * t * 2.5 * len * d
+    }
+    case 'ibeam': {
+      const s = sizeValue as number
+      return s * t * 3.0 * len * d
+    }
+    case 'sheet':
+    case 'plate': {
+      return piece.customW * piece.customH * t * d
+    }
+    default: return 0
   }
-  return area * length * d
-}
-
-export function formatWeight(lbs: number): string {
-  if (lbs < 0.01) return '< 0.01 lbs'
-  return `${lbs.toFixed(2)} lbs`
-}
-
-export function totalWeight(pieces: Piece[]): number {
-  return pieces.reduce((s,p) => s+calcWeight(p), 0)
 }

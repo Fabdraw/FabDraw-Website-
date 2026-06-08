@@ -8,7 +8,7 @@
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: #0a0d14;
-  color: #f8fafc;
+  color: #f1f5f9;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -21,11 +21,18 @@ body {
 
 #root { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-.canvas-pan { cursor: grab !important; }
-.canvas-pan:active { cursor: grabbing !important; }
-.canvas-hole { cursor: crosshair !important; }
-.canvas-select { cursor: default !important; }
+input[type=number] { font-family: 'JetBrains Mono', Consolas, monospace; }
+::selection { background: rgba(249,115,22,0.3); }
 
-input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+[cmdk-group-heading] {
+  font-size: 10px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 16px 4px;
+  font-weight: 600;
+}
 
-.font-mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+[cmdk-item][aria-selected="true"] {
+  background: rgba(255,255,255,0.06) !important;
+}

@@ -1,68 +1,65 @@
 import React, { useState } from 'react'
-import { Sparkles, X, Loader2, Plus, RefreshCw } from 'lucide-react'
+import { X, Sparkles, Send } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
-import { useHistoryStore } from '../store/historyStore'
 import { toast } from 'sonner'
-import type { Piece, MaterialType, MaterialGrade } from '../types'
+import type { Piece } from '../types'
 
 const EXAMPLE_PROMPTS = [
-  '4-leg welding table 4x2 feet with 2x2 square tube legs and 3/16" plate top',
-  'Simple A-frame horse stand 3 feet tall from 1.5" angle iron',
-  'Trailer tongue with 2x4 rect tube and hitch plate',
+  'Create a 4x4 square tube frame 48" wide x 36" tall',
+  'Add 3 cross braces for a welding table',
+  'Generate a simple A-frame structure',
+  'Create a trailer hitch receiver mount',
 ]
 
-interface AIResult {
-  pieces: Partial<Piece>[]
-  description: string
-}
-
 export default function AIModal() {
+  const { project, addPiece } = useProjectStore()
+  const { setShowAIModal } = useUIStore()
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<AIResult|null>(null)
-  const [error, setError] = useState('')
+  const [response, setResponse] = useState('')
 
-  const { pieces, connections } = useProjectStore()
-  const { setShowAIModal } = useUIStore()
-  const historyStore = useHistoryStore()
-
-  const generate = async () => {
+  async function handleGenerate() {
     if (!prompt.trim()) return
     setLoading(true)
-    setError('')
-    setResult(null)
+    setResponse('')
+
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+
+    if (!apiKey) {
+      toast.error('VITE_ANTHROPIC_API_KEY not set in .env')
+      setLoading(false)
+      return
+    }
 
     try {
-      const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY
-      if (!apiKey) throw new Error('No API key set. Add VITE_ANTHROPIC_API_KEY to .env')
+      const systemPrompt = `You are a metal fabrication expert and CAD assistant for FabDraw, a professional fabrication drawing tool.
 
-      const systemPrompt = `You are a fabrication CAD assistant. Generate piece layouts for metal fabrication drawings.
-Return ONLY valid JSON with this structure:
-{
-  "description": "brief description of what was generated",
-  "pieces": [
-    {
-      "type": "square_tube|round_tube|rect_tube|pipe|angle|channel|ibeam|flat_bar|sheet|plate",
-      "sizeIdx": 5,
-      "thkIdx": 1,
-      "material": "mild_steel|stainless|aluminum",
-      "length": 24,
-      "x": 0,
-      "y": 0,
-      "angle": 0,
-      "upright": false,
-      "zOffset": 0
-    }
-  ]
-}
-sizeIdx and thkIdx are indices into the material's sizes/thicknesses arrays (0-based).
-For square_tube sizes: 0=0.5", 1=0.75", 2=1", 3=1.25", 4=1.5", 5=2", 6=2.5", 7=3", 8=4"
-For square_tube thicknesses: 0=16ga, 1=14ga, 2=13ga, 3=11ga, 4=10ga, 5=3/16", 6=1/4"
-Position x,y in inches on the drawing. length in inches.
-Space pieces so they don't overlap. Use realistic dimensions.`
+When the user asks you to generate or create fabrication pieces, respond with a JSON array of piece objects.
+Each piece has these fields:
+- type: one of 'square_tube', 'round_tube', 'rect_tube', 'pipe', 'angle', 'channel', 'ibeam', 'flat_bar', 'sheet', 'plate'
+- sizeIdx: index into the material's size array (0-based)
+- thkIdx: index into the material's thickness array (0-based)
+- material: 'mild_steel', 'stainless', or 'aluminum'
+- length: length in inches
+- x: X position in inches (world coordinates)
+- y: Y position in inches (world coordinates)
+- angle: rotation in degrees (0 = horizontal)
+- upright: false for side view, true for cross-section
+- zOffset: vertical offset in 3D (default 0)
+- customW: custom width (for sheet/plate only, default 24)
+- customH: custom height (for sheet/plate only, default 24)
+- holes: [] (empty array)
+- note: fabrication note string
+- weldSymbol: weld symbol string
 
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+Common sizeIdx values for square_tube: 0=0.5", 1=0.75", 2=1", 3=1.25", 4=1.5", 5=2", 6=2.5", 7=3", 8=4"
+Common thkIdx values for square_tube: 0=16ga, 1=14ga, 2=13ga, 3=11ga, 4=10ga, 5=3/16", 6=1/4"
+
+Respond with ONLY valid JSON array. No markdown, no explanation, just the JSON array.
+Example: [{"type":"square_tube","sizeIdx":5,"thkIdx":1,"material":"mild_steel","length":48,"x":0,"y":0,"angle":0,"upright":false,"zOffset":0,"customW":24,"customH":24,"holes":[],"note":"","weldSymbol":""}]`
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,156 +69,141 @@ Space pieces so they don't overlap. Use realistic dimensions.`
         },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 2000,
-          messages: [{role:'user',content:prompt}],
+          max_tokens: 2048,
           system: systemPrompt,
-        })
+          messages: [{ role: 'user', content: prompt }],
+        }),
       })
 
-      if (!resp.ok) throw new Error(`API error: ${resp.status}`)
-      const data = await resp.json()
-      const text = data.content?.[0]?.text ?? ''
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('No JSON in response')
-      const parsed = JSON.parse(jsonMatch[0]) as AIResult
-      setResult(parsed)
-    } catch (e: any) {
-      setError(e.message || 'Failed to generate')
+      if (!res.ok) {
+        const err = await res.text()
+        throw new Error(`API error: ${res.status} ${err}`)
+      }
+
+      const data = await res.json()
+      let text = data.content?.[0]?.text ?? ''
+      setResponse(text)
+
+      // Strip markdown code fences if present
+      text = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
+
+      const pieces = JSON.parse(text)
+      if (!Array.isArray(pieces)) throw new Error('Expected JSON array')
+
+      let added = 0
+      for (const p of pieces) {
+        addPiece({
+          type: p.type ?? 'square_tube',
+          sizeIdx: p.sizeIdx ?? 5,
+          thkIdx: p.thkIdx ?? 1,
+          material: p.material ?? 'mild_steel',
+          length: p.length ?? 24,
+          x: (p.x ?? 0) + Math.random() * 2,
+          y: (p.y ?? 0) + Math.random() * 2,
+          angle: p.angle ?? 0,
+          upright: p.upright ?? false,
+          zOffset: p.zOffset ?? 0,
+          customW: p.customW ?? 24,
+          customH: p.customH ?? 24,
+          holes: p.holes ?? [],
+          note: p.note ?? '',
+          weldSymbol: p.weldSymbol ?? '',
+        })
+        added++
+      }
+
+      toast.success(`AI added ${added} piece${added !== 1 ? 's' : ''} to drawing`)
+      setShowAIModal(false)
+    } catch (e) {
+      console.error(e)
+      toast.error(`AI error: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const addToDrawing = (replace = false) => {
-    if (!result) return
-    historyStore.push({pieces, connections})
-    if (replace) useProjectStore.getState().clearProject()
-
-    const newPieces: Piece[] = result.pieces.map((p, i) => ({
-      id: crypto.randomUUID(),
-      type: (p.type || 'square_tube') as MaterialType,
-      sizeIdx: p.sizeIdx ?? 5,
-      thkIdx: p.thkIdx ?? 1,
-      material: (p.material || 'mild_steel') as MaterialGrade,
-      length: p.length ?? 24,
-      x: (p.x ?? 0) + (replace ? 0 : 4),
-      y: (p.y ?? 0) + (replace ? 0 : 4),
-      angle: p.angle ?? 0,
-      upright: p.upright ?? false,
-      zOffset: p.zOffset ?? 0,
-      holes: [],
-      note: '',
-      weldSymbol: '',
-    }))
-    newPieces.forEach(p => useProjectStore.getState().addPiece(p))
-    toast.success(`Added ${newPieces.length} pieces from AI`)
-    setShowAIModal(false)
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.7)'}}>
-      <div className="relative flex flex-col rounded-xl overflow-hidden" style={{width:'560px',maxHeight:'90vh',background:'#111827',border:'1px solid rgba(255,255,255,0.1)'}}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#111827', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 10, width: 560, maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{borderColor:'rgba(255,255,255,0.08)',background:'linear-gradient(135deg,rgba(124,58,237,0.15),rgba(109,40,217,0.1))'}}>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#7c3aed,#6d28d9)'}}>
-              <Sparkles size={16} color="white" />
-            </div>
-            <div>
-              <div className="font-semibold text-white">AI Layout Generator</div>
-              <div className="text-xs text-slate-500">Describe your fabrication project</div>
-            </div>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(139,92,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Sparkles size={16} color="#8b5cf6" />
           </div>
-          <button onClick={()=>setShowAIModal(false)} className="p-2 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-all"><X size={16}/></button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9' }}>AI Fabrication Assistant</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>Describe what you want to build</div>
+          </div>
+          <button onClick={() => setShowAIModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}>
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-          {/* Prompt */}
-          <div>
-            <textarea
-              value={prompt}
-              onChange={e=>setPrompt(e.target.value)}
-              rows={4}
-              placeholder="e.g. 4x4 welding table with 2x2 square tube legs and plate top..."
-              className="w-full rounded-lg px-3 py-2.5 text-sm text-white outline-none resize-none"
-              style={{background:'#1f2937',border:'1px solid rgba(255,255,255,0.12)',userSelect:'text',color:'white',caretColor:'white'}}
-              onKeyDown={e=>{if(e.key==='Enter'&&e.ctrlKey)generate()}}
-            />
+        {/* Examples */}
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+          <div style={{ fontSize: 10, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Examples</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {EXAMPLE_PROMPTS.map(ex => (
+              <button
+                key={ex}
+                onClick={() => setPrompt(ex)}
+                style={{ padding: '4px 10px', borderRadius: 14, border: '1px solid rgba(139,92,246,0.2)', background: 'rgba(139,92,246,0.06)', color: '#a78bfa', fontSize: 11, cursor: 'pointer' }}
+              >
+                {ex}
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Examples */}
-          <div>
-            <div className="text-xs text-slate-500 mb-2">Examples:</div>
-            <div className="flex flex-col gap-1">
-              {EXAMPLE_PROMPTS.map((ex,i) => (
-                <button key={i} onClick={()=>setPrompt(ex)}
-                  className="text-left text-xs px-3 py-2 rounded transition-all hover:bg-white/5 text-slate-400 hover:text-slate-300"
-                  style={{border:'1px solid rgba(255,255,255,0.06)'}}>
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Input */}
+        <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleGenerate() }}
+            placeholder="Describe the structure you want to create..."
+            style={{
+              width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(139,92,246,0.2)',
+              borderRadius: 6, color: '#f1f5f9', padding: '10px 12px', fontSize: 13,
+              outline: 'none', resize: 'none', fontFamily: 'inherit',
+              minHeight: 100,
+            }}
+            rows={4}
+          />
 
-          {/* Error */}
-          {error && (
-            <div className="rounded-lg px-3 py-2 text-sm text-red-400" style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)'}}>
-              {error}
-            </div>
-          )}
-
-          {/* Result preview */}
-          {result && (
-            <div className="rounded-lg p-3 flex flex-col gap-2" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)'}}>
-              <div className="text-xs font-semibold text-green-400">{result.description}</div>
-              <div className="text-xs text-slate-400">{result.pieces.length} pieces generated:</div>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {result.pieces.map((p,i) => (
-                  <div key={i} className="text-xs text-slate-500 font-mono">
-                    {p.type} — {p.length}" @ {p.x?.toFixed(1)},{p.y?.toFixed(1)}
-                  </div>
-                ))}
-              </div>
+          {response && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.06)', maxHeight: 160, overflowY: 'auto' }}>
+              <div style={{ fontSize: 10, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>AI Response</div>
+              <pre style={{ fontSize: 11, color: '#64748b', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{response}</pre>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-4 border-t" style={{borderColor:'rgba(255,255,255,0.08)'}}>
-          {result ? (
-            <>
-              <button onClick={()=>setResult(null)}
-                className="flex items-center gap-2 px-4 py-2 rounded text-sm text-slate-400 hover:bg-white/10 transition-all">
-                <RefreshCw size={14}/> Regenerate
-              </button>
-              <button onClick={()=>addToDrawing(false)}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-sm font-semibold text-white transition-all hover:brightness-110"
-                style={{background:'rgba(249,115,22,0.8)'}}>
-                <Plus size={14}/> Add to Drawing
-              </button>
-              <button onClick={()=>addToDrawing(true)}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-sm font-semibold text-white transition-all hover:brightness-110"
-                style={{background:'#f97316'}}>
-                Replace Drawing
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={()=>setShowAIModal(false)}
-                className="flex-1 py-2 rounded text-sm text-slate-400 hover:text-white hover:bg-white/10 transition-all border" style={{borderColor:'rgba(255,255,255,0.1)'}}>
-                Cancel
-              </button>
-              <button
-                onClick={generate}
-                disabled={!prompt.trim()||loading}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-sm font-semibold text-white transition-all disabled:opacity-50"
-                style={{background:'linear-gradient(135deg,#7c3aed,#6d28d9)'}}>
-                {loading ? <><Loader2 size={14} className="animate-spin"/>Generating...</> : <><Sparkles size={14}/>Generate (Ctrl+Enter)</>}
-              </button>
-            </>
-          )}
+        <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
+          <button onClick={() => setShowAIModal(false)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#94a3b8', fontSize: 13, cursor: 'pointer' }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !prompt.trim()}
+            style={{
+              padding: '8px 20px', borderRadius: 6, border: 'none',
+              background: loading ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.8)',
+              color: 'white', fontSize: 13, fontWeight: 600, cursor: loading ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6, opacity: !prompt.trim() ? 0.5 : 1,
+            }}
+          >
+            {loading ? (
+              <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+            ) : (
+              <Send size={14} />
+            )}
+            {loading ? 'Generating...' : 'Generate (Ctrl+Enter)'}
+          </button>
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

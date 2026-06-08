@@ -22,8 +22,8 @@ export interface Piece {
   angle: number
   upright: boolean
   zOffset: number
-  customW?: number
-  customH?: number
+  customW: number
+  customH: number
   holes: Hole[]
   note: string
   weldSymbol: string
