@@ -1,285 +1,185 @@
-import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
-import { useProjectStore } from '../store/projectStore';
-import { MATERIALS } from '../lib/materials';
-import { getVisualHeight } from '../lib/geometry';
+import React, { useEffect, useRef } from 'react'
+import * as THREE from 'three'
+import { useProjectStore } from '../store/projectStore'
+import { MATERIALS, getOD, getHeight } from '../lib/materials'
 
 export default function Canvas3D() {
-  const mountRef = useRef<HTMLDivElement>(null);
-  const { pieces } = useProjectStore();
+  const mountRef = useRef<HTMLDivElement>(null)
+  const rendererRef = useRef<THREE.WebGLRenderer|null>(null)
+  const sceneRef = useRef<THREE.Scene|null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera|null>(null)
+  const meshGroupRef = useRef<THREE.Group|null>(null)
+  const rafRef = useRef(0)
+
+  const isDraggingRef = useRef(false)
+  const lastMouseRef = useRef({x:0,y:0})
+  const cameraAngRef = useRef({theta: 0.8, phi: 0.5, radius: 60})
+
+  const { pieces } = useProjectStore()
 
   useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
+    const el = mountRef.current
+    if (!el) return
 
-    const W = mount.clientWidth;
-    const H = mount.clientHeight;
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color('#0d1117')
+    scene.fog = new THREE.Fog('#0d1117', 100, 400)
+    sceneRef.current = scene
 
-    // Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x12151e);
-    scene.fog = new THREE.Fog(0x12151e, 500, 3000);
+    const W = el.clientWidth, H = el.clientHeight
+    const camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 1000)
+    cameraRef.current = camera
 
-    // Camera - positioned for inch-scale scene (typical table ~48" wide, ~34" tall)
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 5000);
-    camera.position.set(60, 40, 60);
-    camera.lookAt(24, 17, 24);
-
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    mount.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({antialias:true})
+    renderer.setSize(W, H)
+    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.shadowMap.enabled = true
+    el.appendChild(renderer.domElement)
+    rendererRef.current = renderer
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4)
+    scene.add(ambient)
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8)
+    dir.position.set(50, 80, 30)
+    dir.castShadow = true
+    scene.add(dir)
+    const fill = new THREE.DirectionalLight(0x8899cc, 0.3)
+    fill.position.set(-30, 20, -40)
+    scene.add(fill)
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(50, 80, 50);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048, 2048);
-    scene.add(dirLight);
+    // Grid
+    const grid = new THREE.GridHelper(200, 40, 0x1a2030, 0x1a2030)
+    scene.add(grid)
 
-    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fillLight.position.set(-30, 20, -30);
-    scene.add(fillLight);
+    // Origin
+    const axes = new THREE.AxesHelper(8)
+    scene.add(axes)
 
-    // Grid - 200 inches wide, 20 divisions (10" each)
-    const gridHelper = new THREE.GridHelper(200, 20, 0x333344, 0x222233);
-    scene.add(gridHelper);
+    // Mesh group
+    const group = new THREE.Group()
+    scene.add(group)
+    meshGroupRef.current = group
 
-    // Ground plane (shadow catcher)
-    const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-    const groundMat = new THREE.ShadowMaterial({ opacity: 0.3 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.01;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // Helper to parse hex color
-    const hexToRgb = (hex: string) => {
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16) / 255,
-        g: parseInt(result[2], 16) / 255,
-        b: parseInt(result[3], 16) / 255,
-      } : { r: 0.5, g: 0.5, b: 0.5 };
-    };
-
-    // Add pieces
-    const group = new THREE.Group();
-    for (const piece of pieces) {
-      const mat = MATERIALS[piece.type];
-      const { r, g, b } = hexToRgb(mat.color);
-      const color = new THREE.Color(r * 0.7, g * 0.7, b * 0.7);
-
-      const material = new THREE.MeshPhongMaterial({
-        color,
-        shininess: piece.grade === 'stainless' ? 80 : piece.grade === 'aluminum' ? 60 : 20,
-        specular: new THREE.Color(0.2, 0.2, 0.2),
-      });
-
-      // Use inches directly as Three.js units
-      if (piece.orientation === 'upright') {
-        // Vertical tube - rises from Y=0 to Y=piece.length
-        let geo: THREE.BufferGeometry;
-        if (piece.type === 'round_tube' || piece.type === 'pipe') {
-          geo = new THREE.CylinderGeometry(piece.width / 2, piece.width / 2, piece.length, 16);
-        } else {
-          geo = new THREE.BoxGeometry(piece.width, piece.length, piece.height);
-        }
-        const mesh = new THREE.Mesh(geo, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        // Center vertically at half length
-        mesh.position.set(piece.x, piece.length / 2, piece.y);
-        group.add(mesh);
-
-        // Edge overlay
-        const edges = new THREE.EdgesGeometry(geo);
-        const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4), linewidth: 1 });
-        const edgeMesh = new THREE.LineSegments(edges, edgeMat);
-        edgeMesh.position.copy(mesh.position);
-        group.add(edgeMesh);
-      } else {
-        const rad = (piece.angle * Math.PI) / 180;
-        const len = piece.length;
-        const vizH = getVisualHeight(piece);
-        let geo: THREE.BufferGeometry;
-
-        if (piece.type === 'round_tube' || piece.type === 'pipe') {
-          geo = new THREE.CylinderGeometry(piece.width / 2, piece.width / 2, len, 12);
-          const mesh = new THREE.Mesh(geo, material);
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.rotation.z = Math.PI / 2;
-          // For rotated tubes, position correctly using pivot
-          const pivot = new THREE.Group();
-          pivot.add(mesh);
-          pivot.position.set(piece.x, piece.zHeight + piece.width / 2, piece.y);
-          pivot.rotation.y = -rad;
-          group.add(pivot);
-
-          const edges = new THREE.EdgesGeometry(geo);
-          const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
-          const edgeMesh = new THREE.LineSegments(edges, edgeMat);
-          const edgePivot = new THREE.Group();
-          edgePivot.add(edgeMesh);
-          edgePivot.position.copy(pivot.position);
-          edgePivot.rotation.copy(pivot.rotation);
-          group.add(edgePivot);
-          continue;
-        }
-
-        // Sheet/plate: flat on XZ plane
-        if (piece.type === 'sheet' || piece.type === 'plate') {
-          geo = new THREE.BoxGeometry(len, 0.5, piece.height);
-          const mesh = new THREE.Mesh(geo, material);
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.position.set(piece.x, (piece.zHeight ?? 0) + 0.25, piece.y);
-          mesh.rotation.set(0, -rad, 0);
-          group.add(mesh);
-
-          const edges = new THREE.EdgesGeometry(geo);
-          const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
-          const edgeMesh = new THREE.LineSegments(edges, edgeMat);
-          edgeMesh.position.copy(mesh.position);
-          edgeMesh.rotation.copy(mesh.rotation);
-          group.add(edgeMesh);
-          continue;
-        }
-
-        // Box geometry: length along X, vizH along Y, wall/width along Z
-        const thickness = piece.type === 'flat_bar' ? piece.height : piece.wall;
-        geo = new THREE.BoxGeometry(len, vizH, Math.max(thickness, 0.1));
-
-        const mesh = new THREE.Mesh(geo, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.position.set(piece.x, piece.zHeight + vizH / 2, piece.y);
-        mesh.rotation.y = -rad;
-        group.add(mesh);
-
-        const edges = new THREE.EdgesGeometry(geo);
-        const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color(r * 0.4, g * 0.4, b * 0.4) });
-        const edgeMesh = new THREE.LineSegments(edges, edgeMat);
-        edgeMesh.position.copy(mesh.position);
-        edgeMesh.rotation.copy(mesh.rotation);
-        group.add(edgeMesh);
-      }
+    const updateCamera = () => {
+      const {theta,phi,radius} = cameraAngRef.current
+      camera.position.set(
+        radius * Math.sin(phi) * Math.sin(theta),
+        radius * Math.cos(phi),
+        radius * Math.sin(phi) * Math.cos(theta)
+      )
+      camera.lookAt(0, 8, 0)
     }
-    scene.add(group);
+    updateCamera()
 
-    // Center camera on content
-    let orbitTarget = new THREE.Vector3(24, 17, 24);
-    if (pieces.length > 0) {
-      const box = new THREE.Box3().setFromObject(group);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const dist = maxDim * 2.5;
-      orbitTarget = center.clone();
-      camera.position.set(center.x + dist, center.y + dist * 0.8, center.z + dist);
-      camera.lookAt(center);
+    const animate = () => {
+      rafRef.current = requestAnimationFrame(animate)
+      renderer.render(scene, camera)
     }
+    animate()
 
-    // Orbit controls (manual)
-    let isMouseDown = false;
-    let lastMX = 0;
-    let lastMY = 0;
-    let theta = Math.PI / 4;
-    let phi = Math.PI / 3;
-    let radius = camera.position.distanceTo(orbitTarget);
-    const target = orbitTarget.clone();
+    const onResize = () => {
+      const W2=el.clientWidth,H2=el.clientHeight
+      camera.aspect=W2/H2;camera.updateProjectionMatrix()
+      renderer.setSize(W2,H2)
+    }
+    window.addEventListener('resize',onResize)
 
     const onMouseDown = (e: MouseEvent) => {
-      isMouseDown = true;
-      lastMX = e.clientX;
-      lastMY = e.clientY;
-    };
-    const onMouseUp = () => { isMouseDown = false; };
+      isDraggingRef.current = true
+      lastMouseRef.current = {x:e.clientX,y:e.clientY}
+    }
     const onMouseMove = (e: MouseEvent) => {
-      if (!isMouseDown) return;
-      const dx = e.clientX - lastMX;
-      const dy = e.clientY - lastMY;
-      theta -= dx * 0.005;
-      phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, phi - dy * 0.005));
-      lastMX = e.clientX;
-      lastMY = e.clientY;
-      camera.position.set(
-        target.x + radius * Math.sin(phi) * Math.sin(theta),
-        target.y + radius * Math.cos(phi),
-        target.z + radius * Math.sin(phi) * Math.cos(theta),
-      );
-      camera.lookAt(target);
-    };
+      if (!isDraggingRef.current) return
+      const dx = e.clientX - lastMouseRef.current.x
+      const dy = e.clientY - lastMouseRef.current.y
+      cameraAngRef.current.theta -= dx * 0.01
+      cameraAngRef.current.phi = Math.max(0.1, Math.min(Math.PI/2-0.05, cameraAngRef.current.phi + dy*0.01))
+      lastMouseRef.current = {x:e.clientX,y:e.clientY}
+      updateCamera()
+    }
+    const onMouseUp = () => { isDraggingRef.current = false }
     const onWheel = (e: WheelEvent) => {
-      radius = Math.max(5, Math.min(2000, radius * (e.deltaY > 0 ? 1.1 : 0.9)));
-      camera.position.set(
-        target.x + radius * Math.sin(phi) * Math.sin(theta),
-        target.y + radius * Math.cos(phi),
-        target.z + radius * Math.sin(phi) * Math.cos(theta),
-      );
-      camera.lookAt(target);
-    };
-
-    renderer.domElement.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('mousemove', onMouseMove);
-    renderer.domElement.addEventListener('wheel', onWheel, { passive: true });
-
-    // Animate
-    let animId = 0;
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    // Resize
-    const ro = new ResizeObserver(() => {
-      if (!mount) return;
-      const w = mount.clientWidth;
-      const h = mount.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    });
-    ro.observe(mount);
+      e.preventDefault()
+      cameraAngRef.current.radius = Math.max(5, Math.min(300, cameraAngRef.current.radius + e.deltaY * 0.1))
+      updateCamera()
+    }
+    el.addEventListener('mousedown',onMouseDown)
+    window.addEventListener('mousemove',onMouseMove)
+    window.addEventListener('mouseup',onMouseUp)
+    el.addEventListener('wheel',onWheel,{passive:false})
 
     return () => {
-      cancelAnimationFrame(animId);
-      ro.disconnect();
-      renderer.domElement.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('mousemove', onMouseMove);
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      mount.removeChild(renderer.domElement);
-      renderer.dispose();
-    };
-  }, [pieces]);
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize',onResize)
+      el.removeEventListener('mousedown',onMouseDown)
+      window.removeEventListener('mousemove',onMouseMove)
+      window.removeEventListener('mouseup',onMouseUp)
+      el.removeEventListener('wheel',onWheel)
+      renderer.dispose()
+      if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement)
+    }
+  }, [])
+
+  // Rebuild meshes when pieces change
+  useEffect(() => {
+    const group = meshGroupRef.current
+    if (!group) return
+
+    // Clear old meshes
+    while (group.children.length) {
+      const child = group.children[0]
+      group.remove(child)
+      if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose()
+    }
+
+    for (const piece of pieces) {
+      const mat3d = MATERIALS[piece.type]
+      const color = new THREE.Color(mat3d.color)
+      const material = new THREE.MeshStandardMaterial({color, roughness:0.5, metalness:0.3})
+
+      let geo: THREE.BufferGeometry
+      const od = getOD(piece.type, piece.sizeIdx)
+      const h = getHeight(piece.type, piece.sizeIdx)
+      const len = piece.length
+
+      if (piece.type==='round_tube'||piece.type==='pipe') {
+        geo = new THREE.CylinderGeometry(od/2, od/2, piece.upright?len:od, 16)
+      } else if (piece.type==='flat_bar') {
+        geo = new THREE.BoxGeometry(piece.upright?od:len, od*0.15+0.2, od)
+      } else if (piece.type==='sheet') {
+        geo = new THREE.BoxGeometry(piece.customW??48, 0.1, piece.customH??48)
+      } else if (piece.type==='plate') {
+        geo = new THREE.BoxGeometry(piece.length, 0.5, piece.customH??12)
+      } else {
+        const w = od
+        const ht = (piece.type==='rect_tube') ? h : od
+        geo = new THREE.BoxGeometry(piece.upright?w:len, piece.upright?len:ht, w)
+      }
+
+      const mesh = new THREE.Mesh(geo, material)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+
+      const INCH = 1
+      if (piece.upright) {
+        mesh.position.set(piece.x*INCH, piece.zOffset + len/2, piece.y*INCH)
+      } else if (piece.type==='sheet'||piece.type==='plate') {
+        mesh.position.set(piece.x*INCH, piece.zOffset + 0.05, piece.y*INCH)
+      } else {
+        mesh.position.set(piece.x*INCH, piece.zOffset + od/2, piece.y*INCH)
+        mesh.rotation.y = -piece.angle * Math.PI / 180
+      }
+
+      group.add(mesh)
+    }
+  }, [pieces])
 
   return (
-    <div className="w-full h-full relative">
-      <div ref={mountRef} className="w-full h-full" />
-      <div className="absolute bottom-4 left-4 text-xs text-slate-500 font-mono">
-        3D View  •  Drag to rotate  •  Scroll to zoom
+    <div ref={mountRef} className="w-full h-full" style={{cursor:'grab',background:'#0d1117'}}>
+      <div className="absolute top-3 right-3 text-xs text-slate-600 pointer-events-none select-none">
+        Drag to orbit • Scroll to zoom
       </div>
-      {pieces.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center text-slate-600">
-            <div className="text-2xl mb-2">No pieces</div>
-            <div className="text-sm">Add pieces in the Library panel</div>
-          </div>
-        </div>
-      )}
     </div>
-  );
+  )
 }

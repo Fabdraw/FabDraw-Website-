@@ -1,78 +1,76 @@
-import React from 'react';
-import { X } from 'lucide-react';
-import { useProjectStore } from '../store/projectStore';
-import { useUIStore } from '../store/uiStore';
+import React from 'react'
+import { useForm } from 'react-hook-form'
+import { X } from 'lucide-react'
+import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
+import type { TitleBlock } from '../types'
 
 export default function TitleBlockModal() {
-  const { titleBlock, updateTitleBlock } = useProjectStore();
-  const { setShowTitleBlockModal } = useUIStore();
+  const { titleBlock, updateTitleBlock } = useProjectStore()
+  const { setShowTitleBlockModal } = useUIStore()
+  const { register, handleSubmit } = useForm<TitleBlock>({ defaultValues: titleBlock })
 
-  const field = (label: string, key: keyof typeof titleBlock, placeholder = '') => (
-    <div className="grid grid-cols-5 gap-3 items-center">
-      <label className="col-span-2 text-xs text-slate-400 text-right">{label}</label>
-      <input
-        className="col-span-3 bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-accent"
-        value={titleBlock[key]}
-        placeholder={placeholder}
-        onChange={e => updateTitleBlock({ [key]: e.target.value })}
-      />
-    </div>
-  );
+  const onSubmit = (data: TitleBlock) => {
+    updateTitleBlock(data)
+    setShowTitleBlockModal(false)
+  }
+
+  const inp = "w-full rounded px-2 py-1.5 text-sm text-white outline-none focus:border-orange-500/50 transition-colors"
+  const inpStyle = {background:'#1f2937',border:'1px solid rgba(255,255,255,0.1)'}
+  const lbl = "text-xs text-slate-500 mb-1 block"
+
+  const fields: {key: keyof TitleBlock, label: string}[] = [
+    {key:'company',label:'Company'},
+    {key:'project',label:'Project Name'},
+    {key:'description',label:'Description'},
+    {key:'address',label:'Address'},
+    {key:'phone',label:'Phone'},
+    {key:'web',label:'Website'},
+    {key:'drawnBy',label:'Drawn By'},
+    {key:'checkedBy',label:'Checked By'},
+    {key:'date',label:'Date'},
+    {key:'scale',label:'Scale'},
+    {key:'dwgNo',label:'Drawing No.'},
+    {key:'revision',label:'Revision'},
+  ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1d2e] border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div className="relative flex flex-col rounded-xl overflow-hidden" style={{width:'540px',maxHeight:'90vh',background:'#111827',border:'1px solid rgba(255,255,255,0.1)'}}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{borderColor:'rgba(255,255,255,0.08)'}}>
           <div>
-            <div className="text-base font-semibold text-slate-100">Title Block</div>
-            <div className="text-xs text-slate-500">Drawing header information</div>
+            <div className="font-semibold text-white">Title Block</div>
+            <div className="text-xs text-slate-500 mt-0.5">Drawing information and metadata</div>
           </div>
-          <button
-            className="text-slate-500 hover:text-slate-200 transition-colors"
-            onClick={() => setShowTitleBlockModal(false)}
-          >
-            <X size={18} />
-          </button>
+          <button onClick={()=>setShowTitleBlockModal(false)} className="p-2 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-all"><X size={16}/></button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 space-y-3">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Company</div>
-          {field('Company Name', 'company', 'Your Company')}
-          {field('Address', 'address', '123 Main St')}
-          {field('Phone', 'phone', '(555) 000-0000')}
-          {field('Website', 'web', 'www.example.com')}
-
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-4 mb-2">Project</div>
-          {field('Project Name', 'project', 'Project Name')}
-          {field('Description', 'description', 'Brief description')}
-
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-4 mb-2">Drawing Info</div>
-          {field('Drawn By', 'drawnBy', 'Name')}
-          {field('Checked By', 'checkedBy', 'Name')}
-          {field('Date', 'date', new Date().toLocaleDateString())}
-          {field('Scale', 'scale', '1:1')}
-          {field('DWG No', 'dwgNo', 'DWG-001')}
-          {field('Revision', 'revision', 'A')}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-800">
-          <button
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
-            onClick={() => setShowTitleBlockModal(false)}
-          >
-            Close
-          </button>
-          <button
-            className="px-4 py-2 bg-accent hover:bg-orange-600 text-white text-sm font-semibold rounded transition-colors"
-            onClick={() => setShowTitleBlockModal(false)}
-          >
-            Save
-          </button>
-        </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="grid grid-cols-2 gap-4">
+              {fields.map(f => (
+                <div key={f.key}>
+                  <label className={lbl}>{f.label}</label>
+                  <input {...register(f.key)} className={inp} style={inpStyle} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 p-4 border-t" style={{borderColor:'rgba(255,255,255,0.08)'}}>
+            <button type="button" onClick={()=>setShowTitleBlockModal(false)}
+              className="flex-1 py-2 rounded text-sm text-slate-400 hover:text-white hover:bg-white/10 transition-all border" style={{borderColor:'rgba(255,255,255,0.1)'}}>
+              Cancel
+            </button>
+            <button type="submit"
+              className="flex-1 py-2 rounded text-sm font-semibold text-white transition-all hover:brightness-110"
+              style={{background:'#f97316'}}>
+              Save
+            </button>
+          </div>
+        </form>
       </div>
     </div>
-  );
+  )
 }

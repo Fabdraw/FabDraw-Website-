@@ -1,159 +1,121 @@
-import React, { useMemo } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useProjectStore } from '../store/projectStore';
-import { useUIStore } from '../store/uiStore';
-import { MATERIALS } from '../lib/materials';
-import { calcWeight, formatWeight, totalWeight } from '../lib/weights';
+import React from 'react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
+import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
+import { MATERIALS } from '../lib/materials'
+import { calcWeight, formatWeight, totalWeight } from '../lib/weights'
+import type { Piece } from '../types'
 
-const monoStyle = { fontFamily: "'JetBrains Mono', monospace" };
+interface BOMRow {
+  key: string
+  type: string
+  label: string
+  sizeLabel: string
+  thkLabel: string
+  material: string
+  length: number
+  qty: number
+  totalWeight: number
+  color: string
+  ids: string[]
+}
+
+function groupPieces(pieces: Piece[]): BOMRow[] {
+  const map = new Map<string, BOMRow>()
+  for (const p of pieces) {
+    const mat = MATERIALS[p.type]
+    const sz = mat.sizes[p.sizeIdx]?.label ?? ''
+    const thk = mat.thicknesses[p.thkIdx]?.label ?? ''
+    const key = `${p.type}|${p.sizeIdx}|${p.thkIdx}|${p.material}|${p.length}`
+    if (map.has(key)) {
+      const row = map.get(key)!
+      row.qty++
+      row.totalWeight += calcWeight(p)
+      row.ids.push(p.id)
+    } else {
+      map.set(key, {
+        key,
+        type: p.type,
+        label: mat.label,
+        sizeLabel: sz,
+        thkLabel: thk,
+        material: p.material === 'mild_steel' ? 'A36' : p.material === 'stainless' ? 'SS304' : '6061',
+        length: p.length,
+        qty: 1,
+        totalWeight: calcWeight(p),
+        color: mat.color,
+        ids: [p.id],
+      })
+    }
+  }
+  return Array.from(map.values())
+}
 
 export default function BOMPanel() {
-  const { pieces } = useProjectStore();
-  const { isBOMCollapsed, toggleBOM, selectedIds, setSelectedIds } = useUIStore();
-
-  const tw = useMemo(() => totalWeight(pieces), [pieces]);
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, { count: number; totalWeight: number; piece: typeof pieces[0]; ids: string[] }>();
-    for (const p of pieces) {
-      const key = `${p.type}|${p.width}|${p.height}|${p.wall}|${p.grade}|${Math.round(p.length * 100)}`;
-      const existing = map.get(key);
-      if (existing) {
-        existing.count++;
-        existing.totalWeight += calcWeight(p);
-        existing.ids.push(p.id);
-      } else {
-        map.set(key, { count: 1, totalWeight: calcWeight(p), piece: p, ids: [p.id] });
-      }
-    }
-    return Array.from(map.values());
-  }, [pieces]);
-
-  const headerStyle: React.CSSProperties = {
-    background: '#161b25',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
-  };
-
-  if (isBOMCollapsed) {
-    return (
-      <div
-        className="flex items-center gap-3 px-3 cursor-pointer"
-        style={{ ...headerStyle, height: '32px' }}
-        onClick={toggleBOM}
-      >
-        <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
-          BILL OF MATERIALS
-        </span>
-        <span
-          className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
-        >
-          {pieces.length}
-        </span>
-        <div className="flex-1" />
-        <ChevronUp size={12} style={{ color: '#475569' }} />
-      </div>
-    );
-  }
+  const { pieces } = useProjectStore()
+  const { isBOMCollapsed, toggleBOM, setSelectedIds } = useUIStore()
+  const rows = groupPieces(pieces)
+  const total = totalWeight(pieces)
 
   return (
-    <div className="flex flex-col" style={{ ...headerStyle, height: '160px' }}>
+    <div className="flex-shrink-0" style={{background:'#111827',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
       {/* Header */}
       <div
-        className="flex items-center gap-3 px-3 shrink-0 cursor-pointer"
-        style={{ height: '32px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        className="flex items-center justify-between px-3 cursor-pointer"
+        style={{height:'32px',background:'rgba(249,115,22,0.08)',borderBottom:'1px solid rgba(249,115,22,0.15)'}}
         onClick={toggleBOM}
       >
-        <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
-          BILL OF MATERIALS
-        </span>
-        <span
-          className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
-        >
-          {pieces.length}
-        </span>
-        <div className="flex-1" />
-        <span style={{ ...monoStyle, fontSize: '11px', color: '#f97316' }}>
-          {formatWeight(tw)}
-        </span>
-        <ChevronDown size={12} style={{ color: '#475569' }} />
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-orange-400">BILL OF MATERIALS</span>
+          <span className="text-xs text-slate-500">{pieces.length} pieces • {rows.length} line items • {formatWeight(total)} total</span>
+        </div>
+        {isBOMCollapsed ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-left" style={{ ...monoStyle, fontSize: '11px' }}>
-          <thead className="sticky top-0" style={{ background: '#161b25' }}>
-            <tr>
-              {['#','TYPE','SIZE','WALL','MATERIAL','LENGTHS','QTY','WEIGHT'].map(h => (
-                <th
-                  key={h}
-                  className="px-2 py-1"
-                  style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {grouped.map(({ count, totalWeight: tw2, piece, ids }, i) => {
-              const mat = MATERIALS[piece.type];
-              const isSelected = ids.some(id => selectedIds.includes(id));
-              const rowBg = isSelected
-                ? 'rgba(249,115,22,0.1)'
-                : i % 2 === 0
-                ? 'rgba(255,255,255,0.02)'
-                : 'transparent';
-              return (
-                <tr
-                  key={i}
-                  className="cursor-pointer"
-                  style={{ background: rowBg }}
-                  onClick={() => setSelectedIds(ids)}
-                >
-                  <td className="px-2 py-1" style={{ color: '#475569' }}>{i + 1}</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mat.label}</td>
-                  <td className="px-2 py-1" style={{ color: '#f1f5f9' }}>{piece.width}"×{piece.height}"</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{piece.wall}"</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{piece.grade.replace(/_/g, ' ')}</td>
-                  <td className="px-2 py-1" style={{ color: '#f1f5f9' }}>
-                    {Math.floor(piece.length / 12)}' {(piece.length % 12).toFixed(2).replace(/\.?0+$/, '')}"
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <span
-                      className="px-1.5 py-0.5 rounded"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: '#f1f5f9' }}
-                    >
-                      {count}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
-                    {formatWeight(tw2)}
-                  </td>
+      {!isBOMCollapsed && (
+        <div style={{height:'128px',overflowY:'auto'}}>
+          {rows.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-xs text-slate-600">No pieces in drawing</div>
+          ) : (
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
+              <thead>
+                <tr style={{background:'rgba(255,255,255,0.03)',position:'sticky',top:0}}>
+                  <th className="text-left px-3 py-1 text-slate-500 font-medium">Material</th>
+                  <th className="text-left px-2 py-1 text-slate-500 font-medium">Size</th>
+                  <th className="text-left px-2 py-1 text-slate-500 font-medium">Wall</th>
+                  <th className="text-left px-2 py-1 text-slate-500 font-medium">Grade</th>
+                  <th className="text-right px-2 py-1 text-slate-500 font-medium">Len"</th>
+                  <th className="text-right px-2 py-1 text-slate-500 font-medium">Qty</th>
+                  <th className="text-right px-3 py-1 text-slate-500 font-medium">Weight</th>
                 </tr>
-              );
-            })}
-            {pieces.length > 0 && (
-              <tr style={{ background: 'rgba(249,115,22,0.08)' }}>
-                <td colSpan={7} className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
-                  TOTAL
-                </td>
-                <td className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
-                  {formatWeight(tw)}
-                </td>
-              </tr>
-            )}
-            {pieces.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-4 text-center" style={{ color: '#475569' }}>
-                  Add pieces from the Library to start your BOM
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr
+                    key={r.key}
+                    className="hover:bg-white/5 cursor-pointer transition-colors"
+                    onClick={() => setSelectedIds(r.ids)}
+                    style={{borderBottom:'1px solid rgba(255,255,255,0.03)'}}
+                  >
+                    <td className="px-3 py-1 font-medium" style={{color:r.color}}>{r.label}</td>
+                    <td className="px-2 py-1 text-slate-400 font-mono">{r.sizeLabel}</td>
+                    <td className="px-2 py-1 text-slate-500 font-mono">{r.thkLabel}</td>
+                    <td className="px-2 py-1 text-slate-500">{r.material}</td>
+                    <td className="px-2 py-1 text-slate-400 font-mono text-right">{r.length}"</td>
+                    <td className="px-2 py-1 text-white font-semibold text-right">{r.qty}</td>
+                    <td className="px-3 py-1 text-slate-400 font-mono text-right">{formatWeight(r.totalWeight)}</td>
+                  </tr>
+                ))}
+                <tr style={{background:'rgba(249,115,22,0.06)',borderTop:'1px solid rgba(249,115,22,0.2)'}}>
+                  <td colSpan={5} className="px-3 py-1 text-orange-400 font-semibold">TOTAL</td>
+                  <td className="px-2 py-1 text-orange-400 font-bold text-right">{pieces.length}</td>
+                  <td className="px-3 py-1 text-orange-400 font-bold font-mono text-right">{formatWeight(total)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
-  );
+  )
 }

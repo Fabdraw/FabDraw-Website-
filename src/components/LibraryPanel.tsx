@@ -1,269 +1,213 @@
-import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import { useProjectStore } from '../store/projectStore';
-import { useUIStore } from '../store/uiStore';
-import { useHistoryStore } from '../store/historyStore';
-import { MATERIALS, parseSizeString } from '../lib/materials';
-import type { MaterialType, MaterialGrade, Piece } from '../types';
+import React, { useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
+import { useHistoryStore } from '../store/historyStore'
+import { MATERIALS, getSizeValue } from '../lib/materials'
+import type { MaterialType, MaterialGrade, Piece } from '../types'
 
-interface LibProps {
-  collapsed?: boolean;
-}
+const GROUPS = [
+  { label: 'STRUCTURAL TUBE', types: ['square_tube','round_tube','rect_tube','pipe'] as MaterialType[] },
+  { label: 'STRUCTURAL STEEL', types: ['angle','channel','ibeam'] as MaterialType[] },
+  { label: 'FLAT STOCK', types: ['flat_bar','sheet','plate'] as MaterialType[] },
+]
 
-const materialGroups = [
-  {
-    label: 'STRUCTURAL TUBE',
-    id: 'tube',
-    types: ['square_tube', 'round_tube', 'rect_tube', 'pipe'] as MaterialType[],
-  },
-  {
-    label: 'STRUCTURAL STEEL',
-    id: 'structural',
-    types: ['angle', 'channel', 'ibeam'] as MaterialType[],
-  },
-  {
-    label: 'FLAT STOCK',
-    id: 'flat',
-    types: ['flat_bar', 'sheet', 'plate'] as MaterialType[],
-  },
-];
+export default function LibraryPanel() {
+  const [selectedType, setSelectedType] = useState<MaterialType>('square_tube')
+  const [sizeIdx, setSizeIdx] = useState(5)
+  const [thkIdx, setThkIdx] = useState(1)
+  const [length, setLength] = useState(24)
+  const [matGrade, setMatGrade] = useState<MaterialGrade>('mild_steel')
+  const [customW, setCustomW] = useState(48)
+  const [customH, setCustomH] = useState(48)
+  const [angle, setAngle] = useState(0)
 
-const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#f1f5f9] text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-[#f97316] transition-colors';
-const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
+  const { pieces, connections, panX, panY, zoom } = useProjectStore()
+  const { setSelectedIds } = useUIStore()
+  const historyStore = useHistoryStore()
 
-export default function LibraryPanel({ collapsed }: LibProps) {
-  const { pieces, connections, addPiece, zoom, panX, panY } = useProjectStore();
-  const { setSelectedIds } = useUIStore();
-  const historyStore = useHistoryStore();
+  const mat = MATERIALS[selectedType]
 
-  const [selectedType, setSelectedType] = useState<MaterialType>('square_tube');
-  const [selectedSize, setSelectedSize] = useState<string>('2x2');
-  const [selectedWall, setSelectedWall] = useState<number>(0.125);
-  const [selectedGrade, setSelectedGrade] = useState<MaterialGrade>('mild_steel');
-  const [length, setLength] = useState<number>(48);
+  const handleTypeSelect = (t: MaterialType) => {
+    setSelectedType(t)
+    const m = MATERIALS[t]
+    setSizeIdx(m.defaultSizeIdx)
+    setThkIdx(m.defaultThkIdx)
+  }
 
-  const handleTypeSelect = (type: MaterialType) => {
-    setSelectedType(type);
-    const mat = MATERIALS[type];
-    setSelectedSize(mat.sizes[0]);
-    setSelectedWall(mat.walls[0]);
-  };
-
-  const handleAddPiece = () => {
-    const { width, height } = parseSizeString(selectedType, selectedSize);
-    const SCALE = 8;
-    const canvas = document.querySelector('canvas');
-    const cw = canvas?.offsetWidth ?? 800;
-    const ch = canvas?.offsetHeight ?? 600;
-    const wx = (cw / 2 - panX) / (zoom * SCALE);
-    const wy = (ch / 2 - panY) / (zoom * SCALE);
-
+  const handleAdd = () => {
+    const sv = getSizeValue(selectedType, sizeIdx)
     const newPiece: Piece = {
       id: crypto.randomUUID(),
       type: selectedType,
-      grade: selectedGrade,
-      width,
-      height,
-      wall: selectedWall,
+      sizeIdx,
+      thkIdx,
+      material: matGrade,
       length,
-      x: wx + (Math.random() - 0.5) * 3,
-      y: wy + (Math.random() - 0.5) * 3,
-      angle: 0,
-      orientation: 'horizontal',
-      zHeight: 48,
-      notes: '',
-      weldSymbol: '',
+      x: (window.innerWidth / 2 - panX) / (zoom * 8) + (Math.random()-0.5)*4,
+      y: (window.innerHeight / 2 - panY) / (zoom * 8) + (Math.random()-0.5)*4,
+      angle,
+      upright: false,
+      zOffset: 0,
+      customW: (selectedType==='sheet'||selectedType==='plate') ? customW : undefined,
+      customH: (selectedType==='sheet'||selectedType==='plate') ? customH : undefined,
       holes: [],
-    };
+      note: '',
+      weldSymbol: '',
+    }
+    historyStore.push({pieces, connections})
+    useProjectStore.getState().addPiece(newPiece)
+    setSelectedIds([newPiece.id])
+  }
 
-    historyStore.push({ pieces, connections });
-    addPiece(newPiece);
-    setSelectedIds([newPiece.id]);
-  };
+  // ft/in display
+  const ft = Math.floor(length/12)
+  const inch = length%12
+  const lenLabel = ft>0 ? `${ft}'-${inch}"` : `${inch}"`
 
-  if (collapsed) return null;
-
-  const mat = MATERIALS[selectedType];
-
-  const feetInches = (inches: number) => {
-    const ft = Math.floor(inches / 12);
-    const inPart = (inches % 12).toFixed(2).replace(/\.?0+$/, '');
-    return ft > 0 ? `${ft}'-${inPart}"` : `${inPart}"`;
-  };
+  const gradePill = (g: MaterialGrade, label: string) => (
+    <button
+      key={g}
+      onClick={() => setMatGrade(g)}
+      className="flex-1 py-1 rounded text-xs font-medium transition-all"
+      style={{
+        background: matGrade===g ? 'rgba(249,115,22,0.2)' : 'rgba(255,255,255,0.05)',
+        color: matGrade===g ? '#f97316' : '#94a3b8',
+        border: matGrade===g ? '1px solid rgba(249,115,22,0.4)' : '1px solid transparent',
+      }}
+    >{label}</button>
+  )
 
   return (
-    <div
-      className="flex flex-col h-full shrink-0 overflow-hidden"
-      style={{
-        width: '240px',
-        background: '#161b25',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
-      }}
-    >
-      {/* Material list */}
-      <div className="flex-1 overflow-y-auto">
-        {materialGroups.map(group => (
-          <div key={group.id}>
-            <div
-              style={{
-                fontSize: '9px',
-                letterSpacing: '2px',
-                textTransform: 'uppercase',
-                color: '#475569',
-                padding: '16px 12px 8px',
-              }}
-            >
-              {group.label}
-            </div>
-            {group.types.map(type => {
-              const m = MATERIALS[type];
-              const isSelected = selectedType === type;
+    <div className="flex flex-col flex-shrink-0" style={{width:'200px',background:'#111827',borderRight:'1px solid rgba(255,255,255,0.06)',overflow:'hidden'}}>
+      {/* Material type list */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {GROUPS.map(grp => (
+          <div key={grp.label}>
+            <div className="px-3 pt-3 pb-1" style={{fontSize:'9px',color:'#475569',letterSpacing:'0.08em',fontWeight:600}}>{grp.label}</div>
+            {grp.types.map(t => {
+              const m = MATERIALS[t]
+              const active = selectedType === t
               return (
                 <button
-                  key={type}
-                  onClick={() => handleTypeSelect(type)}
-                  className="panel-item w-full flex items-center gap-2 px-3"
+                  key={t}
+                  onClick={() => handleTypeSelect(t)}
+                  className="w-full flex items-center gap-2 px-3 py-2 transition-all text-left"
                   style={{
-                    height: '40px',
-                    background: isSelected ? 'rgba(249,115,22,0.06)' : 'transparent',
-                    borderLeft: isSelected ? '2px solid #f97316' : '2px solid transparent',
-                    color: isSelected ? '#f97316' : '#94a3b8',
-                    fontSize: '12px',
-                    textAlign: 'left',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
-                  }}
-                  onMouseLeave={e => {
-                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    background: active ? 'rgba(249,115,22,0.1)' : 'transparent',
+                    borderLeft: active ? '2px solid #f97316' : '2px solid transparent',
                   }}
                 >
-                  <span
-                    className="shrink-0"
-                    dangerouslySetInnerHTML={{ __html: m.svgIcon }}
-                  />
-                  <span className="truncate">{m.label}</span>
+                  <span dangerouslySetInnerHTML={{__html: m.svgIcon}} style={{flexShrink:0,display:'flex'}} />
+                  <span className="text-xs font-medium" style={{color: active ? '#f97316' : '#94a3b8'}}>{m.label}</span>
                 </button>
-              );
+              )
             })}
           </div>
         ))}
       </div>
 
-      {/* Configuration card */}
-      <div
-        className="shrink-0 space-y-2.5"
-        style={{
-          padding: '12px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        {/* SVG preview */}
-        <div
-          className="flex items-center justify-center"
-          style={{
-            height: '40px',
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '6px',
-            border: '1px solid rgba(255,255,255,0.06)',
-          }}
-          dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
-        />
-
+      {/* Config section */}
+      <div className="flex-shrink-0 border-t p-3 flex flex-col gap-2" style={{borderColor:'rgba(255,255,255,0.06)',background:'#0d1117'}}>
         {/* Size */}
         <div>
-          <label className={labelCls}>Size</label>
+          <div className="text-xs text-slate-500 mb-1">Size</div>
           <select
-            className={inputCls}
-            value={selectedSize}
-            onChange={e => setSelectedSize(e.target.value)}
+            value={sizeIdx}
+            onChange={e => setSizeIdx(Number(e.target.value))}
+            className="w-full rounded px-2 py-1 text-xs text-white outline-none"
+            style={{background:'#1f2937',border:'1px solid rgba(255,255,255,0.1)'}}
           >
-            {mat.sizes.map(s => (
-              <option key={s} value={s}>{s}"</option>
-            ))}
+            {mat.sizes.map((s,i) => <option key={i} value={i}>{s.label}</option>)}
           </select>
         </div>
 
+        {(selectedType==='sheet'||selectedType==='plate') && (
+          <div className="flex gap-1">
+            <div className="flex-1">
+              <div className="text-xs text-slate-500 mb-1">W"</div>
+              <input type="number" value={customW} onChange={e=>setCustomW(Number(e.target.value))} min={1}
+                className="w-full rounded px-2 py-1 text-xs text-white outline-none"
+                style={{background:'#1f2937',border:'1px solid rgba(255,255,255,0.1)'}} />
+            </div>
+            <div className="flex-1">
+              <div className="text-xs text-slate-500 mb-1">H"</div>
+              <input type="number" value={customH} onChange={e=>setCustomH(Number(e.target.value))} min={1}
+                className="w-full rounded px-2 py-1 text-xs text-white outline-none"
+                style={{background:'#1f2937',border:'1px solid rgba(255,255,255,0.1)'}} />
+            </div>
+          </div>
+        )}
+
         {/* Wall */}
         <div>
-          <label className={labelCls}>Wall Thickness</label>
+          <div className="text-xs text-slate-500 mb-1">Wall / Thickness</div>
           <select
-            className={inputCls}
-            value={selectedWall}
-            onChange={e => setSelectedWall(parseFloat(e.target.value))}
+            value={thkIdx}
+            onChange={e => setThkIdx(Number(e.target.value))}
+            className="w-full rounded px-2 py-1 text-xs text-white outline-none"
+            style={{background:'#1f2937',border:'1px solid rgba(255,255,255,0.1)'}}
           >
-            {mat.walls.map(w => (
-              <option key={w} value={w}>{w}"</option>
-            ))}
+            {mat.thicknesses.map((t,i) => <option key={i} value={i}>{t.label}</option>)}
           </select>
         </div>
 
         {/* Length */}
         <div>
-          <label className={labelCls}>Length (inches)</label>
-          <input
-            type="number"
-            className={inputCls}
-            value={length}
-            min={0.1}
-            step={0.25}
-            onChange={e => setLength(parseFloat(e.target.value) || 1)}
-          />
-          <div
-            className="mt-0.5"
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '10px',
-              color: '#475569',
-            }}
-          >
-            {feetInches(length)}
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs text-slate-500">Length</span>
+            <span className="text-xs font-mono text-orange-400">{lenLabel}</span>
           </div>
-        </div>
-
-        {/* Grade pills */}
-        <div>
-          <label className={labelCls}>Grade</label>
-          <div className="flex gap-1">
-            {([
-              { key: 'mild_steel' as MaterialGrade, label: 'Mild' },
-              { key: 'stainless' as MaterialGrade, label: 'SS' },
-              { key: 'aluminum' as MaterialGrade, label: 'Alum' },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setSelectedGrade(key)}
-                className="flex-1 py-1 rounded-md text-[11px] font-medium panel-item"
+          <input
+            type="range" min={1} max={240} value={length}
+            onChange={e => setLength(Number(e.target.value))}
+            className="w-full accent-orange-500"
+          />
+          <div className="flex gap-1 mt-1">
+            {[12,24,48,96].map(l => (
+              <button key={l} onClick={()=>setLength(l)}
+                className="flex-1 py-0.5 rounded text-xs transition-all"
                 style={{
-                  background: selectedGrade === key ? '#f97316' : 'rgba(255,255,255,0.04)',
-                  color: selectedGrade === key ? '#fff' : '#94a3b8',
-                  border: selectedGrade === key ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                {label}
+                  background: length===l ? 'rgba(249,115,22,0.2)' : 'rgba(255,255,255,0.05)',
+                  color: length===l ? '#f97316' : '#64748b',
+                  fontSize:'10px',
+                }}>
+                {l<12?`${l}"`:`${l/12}'`}
               </button>
             ))}
           </div>
         </div>
 
+        {/* Angle */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs text-slate-500">Angle</span>
+            <span className="text-xs font-mono text-slate-400">{angle}°</span>
+          </div>
+          <input type="range" min={-90} max={90} value={angle}
+            onChange={e=>setAngle(Number(e.target.value))} className="w-full accent-orange-500" />
+        </div>
+
+        {/* Material grade */}
+        <div>
+          <div className="text-xs text-slate-500 mb-1">Material</div>
+          <div className="flex gap-1">
+            {gradePill('mild_steel','Mild')}
+            {gradePill('stainless','SS')}
+            {gradePill('aluminum','Alum')}
+          </div>
+        </div>
+
         {/* Add button */}
         <button
-          onClick={handleAddPiece}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-white text-[13px] font-medium"
-          style={{
-            background: 'linear-gradient(135deg, #f97316, #ea580c)',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
-          }}
+          onClick={handleAdd}
+          className="flex items-center justify-center gap-2 py-2 rounded font-semibold text-sm transition-all hover:brightness-110 active:scale-95"
+          style={{background:'#f97316',color:'white'}}
         >
-          <Plus size={14} />
+          <Plus size={16} />
           Add to Drawing
         </button>
       </div>
     </div>
-  );
+  )
 }

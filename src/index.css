@@ -1,65 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
-  --color-canvas: #0d1117;
-  --color-accent: #f97316;
-  --font-family-sans: 'Inter', system-ui, sans-serif;
-  --font-family-mono: 'JetBrains Mono', Consolas, monospace;
-}
-
-:root {
-  --bg: #0f1117;
-  --canvas-bg: #0d1117;
-  --panel-bg: #161b25;
-  --panel-border: rgba(255,255,255,0.06);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
-  --accent: #f97316;
-  --accent-glow: rgba(249,115,22,0.15);
-  --accent-subtle: rgba(249,115,22,0.06);
-  --blue: #3b82f6;
-  --green: #22c55e;
-  --input-bg: rgba(255,255,255,0.04);
-  --input-border: rgba(255,255,255,0.08);
-  --divider: rgba(255,255,255,0.06);
-}
-
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #0f1117;
-  color: #f1f5f9;
+  background: #0a0d14;
+  color: #f8fafc;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
-  margin: 0;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #161b25; }
-::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-.canvas-select { cursor: default; }
-.canvas-pan { cursor: grab; }
-.canvas-pan:active { cursor: grabbing; }
-.canvas-hole { cursor: crosshair; }
+#root { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button { opacity: 1; }
+.canvas-pan { cursor: grab !important; }
+.canvas-pan:active { cursor: grabbing !important; }
+.canvas-hole { cursor: crosshair !important; }
+.canvas-select { cursor: default !important; }
 
-#root { width: 100%; height: 100vh; display: flex; flex-direction: column; }
+input[type=number]::-webkit-inner-spin-button { opacity: 1; }
 
-@keyframes snap-pulse {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.5); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-.snap-pulse { animation: snap-pulse 0.6s ease infinite; }
-
-.panel-item { transition: background 80ms ease, color 80ms ease; }
-button { transition: transform 80ms ease, background 80ms ease; }
-button:active { transform: scale(0.97); }
+.font-mono { font-family: 'JetBrains Mono', Consolas, monospace; }

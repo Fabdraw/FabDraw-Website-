@@ -1,54 +1,52 @@
-import { create } from 'zustand';
-import type { Piece } from '../types';
+import { create } from 'zustand'
+import type { Piece } from '../types'
 
-export type Mode = 'select' | 'pan' | 'hole_add';
-export type ActiveView = '2d' | '3d';
-export type ActiveRightTab = 'props' | 'holes' | 'notes';
+export type Mode = 'select' | 'pan'
+export type ActiveView = '2d' | '3d'
+export type RightTab = 'props' | 'holes' | 'notes'
 
-interface HolePreview {
-  pieceId: string;
-  fromStart: number;
-  x: number;
-  y: number;
-}
-
-interface ContextMenu {
-  x: number;
-  y: number;
-  type: 'piece' | 'connection' | 'canvas';
-  pieceId?: string;
-  connectionId?: string;
+interface ContextMenuState {
+  x: number; y: number
+  type: 'piece' | 'canvas' | 'connection'
+  id?: string
 }
 
 interface UIState {
-  mode: Mode;
-  selectedIds: string[];
-  selectedConnectionId: string | null;
-  activeView: ActiveView;
-  activeRightTab: ActiveRightTab;
-  isBOMCollapsed: boolean;
-  clipboard: Piece[];
-  holeAddMode: boolean;
-  holePreview: HolePreview | null;
-  showTitleBlockModal: boolean;
-  showAIModal: boolean;
-  contextMenu: ContextMenu | null;
-  snapPreview: { x: number; y: number } | null;
+  mode: Mode
+  selectedIds: string[]
+  selectedConnectionId: string | null
+  activeView: ActiveView
+  rightTab: RightTab
+  isBOMCollapsed: boolean
+  clipboard: Piece[]
+  holeAddMode: boolean
+  holePreview: {pieceId:string;posInches:number;x:number;y:number} | null
+  showTitleBlockModal: boolean
+  showAIModal: boolean
+  showPhotoModal: boolean
+  showCostCalc: boolean
+  showCommandPalette: boolean
+  contextMenu: ContextMenuState | null
+  snapPreview: {x:number;y:number;label:string} | null
 
-  setMode: (mode: Mode) => void;
-  setSelectedIds: (ids: string[]) => void;
-  toggleSelectedId: (id: string) => void;
-  setSelectedConnectionId: (id: string | null) => void;
-  setActiveView: (view: ActiveView) => void;
-  setActiveRightTab: (tab: ActiveRightTab) => void;
-  toggleBOM: () => void;
-  setClipboard: (pieces: Piece[]) => void;
-  setHoleAddMode: (v: boolean) => void;
-  setHolePreview: (h: HolePreview | null) => void;
-  setShowTitleBlockModal: (v: boolean) => void;
-  setShowAIModal: (v: boolean) => void;
-  setContextMenu: (m: ContextMenu | null) => void;
-  setSnapPreview: (p: { x: number; y: number } | null) => void;
+  setMode: (m:Mode) => void
+  setSelectedIds: (ids:string[]) => void
+  addSelectedId: (id:string) => void
+  toggleSelectedId: (id:string) => void
+  setSelectedConnectionId: (id:string|null) => void
+  setActiveView: (v:ActiveView) => void
+  setRightTab: (t:RightTab) => void
+  toggleBOM: () => void
+  setClipboard: (p:Piece[]) => void
+  setHoleAddMode: (v:boolean) => void
+  setHolePreview: (h:UIState['holePreview']) => void
+  setShowTitleBlockModal: (v:boolean) => void
+  setShowAIModal: (v:boolean) => void
+  setShowPhotoModal: (v:boolean) => void
+  setShowCostCalc: (v:boolean) => void
+  setShowCommandPalette: (v:boolean) => void
+  setContextMenu: (m:ContextMenuState|null) => void
+  setSnapPreview: (s:UIState['snapPreview']) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -56,32 +54,37 @@ export const useUIStore = create<UIState>((set) => ({
   selectedIds: [],
   selectedConnectionId: null,
   activeView: '2d',
-  activeRightTab: 'props',
+  rightTab: 'props',
   isBOMCollapsed: false,
   clipboard: [],
   holeAddMode: false,
   holePreview: null,
   showTitleBlockModal: false,
   showAIModal: false,
+  showPhotoModal: false,
+  showCostCalc: false,
+  showCommandPalette: false,
   contextMenu: null,
   snapPreview: null,
 
-  setMode: (mode) => set({ mode }),
-  setSelectedIds: (ids) => set({ selectedIds: ids }),
-  toggleSelectedId: (id) => set(s => ({
-    selectedIds: s.selectedIds.includes(id)
-      ? s.selectedIds.filter(x => x !== id)
-      : [...s.selectedIds, id]
+  setMode: m => set({mode:m}),
+  setSelectedIds: ids => set({selectedIds:ids}),
+  addSelectedId: id => set(s => ({selectedIds:[...s.selectedIds,id]})),
+  toggleSelectedId: id => set(s => ({
+    selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter(x=>x!==id) : [...s.selectedIds,id]
   })),
-  setSelectedConnectionId: (id) => set({ selectedConnectionId: id }),
-  setActiveView: (activeView) => set({ activeView }),
-  setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
-  toggleBOM: () => set(s => ({ isBOMCollapsed: !s.isBOMCollapsed })),
-  setClipboard: (clipboard) => set({ clipboard }),
-  setHoleAddMode: (holeAddMode) => set({ holeAddMode }),
-  setHolePreview: (holePreview) => set({ holePreview }),
-  setShowTitleBlockModal: (showTitleBlockModal) => set({ showTitleBlockModal }),
-  setShowAIModal: (showAIModal) => set({ showAIModal }),
-  setContextMenu: (contextMenu) => set({ contextMenu }),
-  setSnapPreview: (snapPreview) => set({ snapPreview }),
-}));
+  setSelectedConnectionId: id => set({selectedConnectionId:id}),
+  setActiveView: v => set({activeView:v}),
+  setRightTab: t => set({rightTab:t}),
+  toggleBOM: () => set(s=>({isBOMCollapsed:!s.isBOMCollapsed})),
+  setClipboard: p => set({clipboard:p}),
+  setHoleAddMode: v => set({holeAddMode:v}),
+  setHolePreview: h => set({holePreview:h}),
+  setShowTitleBlockModal: v => set({showTitleBlockModal:v}),
+  setShowAIModal: v => set({showAIModal:v}),
+  setShowPhotoModal: v => set({showPhotoModal:v}),
+  setShowCostCalc: v => set({showCostCalc:v}),
+  setShowCommandPalette: v => set({showCommandPalette:v}),
+  setContextMenu: m => set({contextMenu:m}),
+  setSnapPreview: s => set({snapPreview:s}),
+}))

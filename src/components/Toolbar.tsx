@@ -1,301 +1,141 @@
-import React, { useState } from 'react';
-import {
-  MousePointer2, Hand, Undo2, Redo2,
-  Download, Trash2, Copy, Clipboard, LayoutGrid, Sparkles,
-  ZoomIn, ZoomOut, Maximize2, Box, Check, Save
-} from 'lucide-react';
-import { useProjectStore } from '../store/projectStore';
-import { useUIStore } from '../store/uiStore';
-import { useHistoryStore } from '../store/historyStore';
-import { exportPDF } from '../lib/pdfExport';
+import React from 'react'
+import { Undo2, Redo2, Copy, Clipboard, Trash2, MousePointer2, Hand, ZoomIn, ZoomOut, FileText, Download, Sparkles } from 'lucide-react'
+import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
+import { useHistoryStore } from '../store/historyStore'
+import { toast } from 'sonner'
 
-interface ToolbarProps {
-  onExportJSON: () => void;
-  onImportJSON: () => void;
-}
-
-export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
-  const { pieces, connections, zoom, panX, panY, setZoom, setPan, deletePieces, setPieces, setConnections, titleBlock, name, setName } = useProjectStore();
-  const { mode, setMode, selectedIds, setSelectedIds, clipboard, setClipboard, holeAddMode, setHoleAddMode, activeView, setActiveView, setShowTitleBlockModal, setShowAIModal } = useUIStore();
-  const { canUndo, canRedo, undo, redo, push } = useHistoryStore();
-  const [exporting, setExporting] = useState(false);
-  const [editingName, setEditingName] = useState(false);
+export default function Toolbar() {
+  const { name, setName, pieces, connections, zoom, panX, panY, setPanZoom, setPieces, setConnections } = useProjectStore()
+  const { mode, setMode, selectedIds, setSelectedIds, setShowTitleBlockModal, setShowAIModal, clipboard, setClipboard } = useUIStore()
+  const historyStore = useHistoryStore()
 
   const handleUndo = () => {
-    const entry = undo();
-    if (entry) {
-      setPieces(entry.pieces);
-      setConnections(entry.connections);
-    }
-  };
-
+    const snap = historyStore.undo()
+    if (snap) { setPieces(snap.pieces); setConnections(snap.connections) }
+  }
   const handleRedo = () => {
-    const entry = redo();
-    if (entry) {
-      setPieces(entry.pieces);
-      setConnections(entry.connections);
-    }
-  };
-
-  const handleDelete = () => {
-    if (selectedIds.length === 0) return;
-    push({ pieces, connections });
-    deletePieces(selectedIds);
-    setSelectedIds([]);
-  };
-
+    const snap = historyStore.redo()
+    if (snap) { setPieces(snap.pieces); setConnections(snap.connections) }
+  }
   const handleCopy = () => {
-    const selected = pieces.filter(p => selectedIds.includes(p.id));
-    setClipboard(selected);
-  };
-
+    const sel = pieces.filter(p => selectedIds.includes(p.id))
+    setClipboard(sel)
+    if (sel.length) toast.success(`Copied ${sel.length} piece${sel.length>1?'s':''}`)
+  }
   const handlePaste = () => {
-    if (clipboard.length === 0) return;
-    push({ pieces, connections });
-    const newPieces = clipboard.map(p => ({
-      ...p,
-      id: crypto.randomUUID(),
-      x: p.x + 2,
-      y: p.y + 2,
-    }));
-    newPieces.forEach(p => useProjectStore.getState().addPiece(p));
-    setSelectedIds(newPieces.map(p => p.id));
-  };
-
-  const handleFitView = () => {
-    if (pieces.length === 0) {
-      setZoom(1);
-      setPan(200, 200);
-      return;
+    if (clipboard.length) {
+      historyStore.push({pieces, connections})
+      const newPieces = clipboard.map(p => ({...p, id: crypto.randomUUID(), x: p.x+4, y: p.y+4}))
+      newPieces.forEach(p => useProjectStore.getState().addPiece(p))
+      setSelectedIds(newPieces.map(p => p.id))
+      toast.success(`Pasted ${newPieces.length} piece${newPieces.length>1?'s':''}`)
     }
-    const canvas = document.querySelector('canvas');
-    if (!canvas) return;
-    const W = canvas.offsetWidth;
-    const H = canvas.offsetHeight;
-    const SCALE = 8;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of pieces) {
-      minX = Math.min(minX, p.x - p.length / 2);
-      minY = Math.min(minY, p.y - p.height / 2);
-      maxX = Math.max(maxX, p.x + p.length / 2);
-      maxY = Math.max(maxY, p.y + p.height / 2);
+  }
+  const handleDelete = () => {
+    if (selectedIds.length) {
+      historyStore.push({pieces, connections})
+      useProjectStore.getState().deletePieces(selectedIds)
+      setSelectedIds([])
     }
-    const pad = 5;
-    const bw = (maxX - minX + pad * 2);
-    const bh = (maxY - minY + pad * 2);
-    const scaleX = W / (bw * SCALE);
-    const scaleY = H / (bh * SCALE);
-    const newZoom = Math.max(0.05, Math.min(8, Math.min(scaleX, scaleY)));
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    setPan(W / 2 - cx * newZoom * SCALE, H / 2 - cy * newZoom * SCALE);
-    setZoom(newZoom);
-  };
+  }
+  const handleZoomIn = () => {
+    const newZ = Math.min(8, zoom * 1.25)
+    setPanZoom(panX, panY, newZ)
+  }
+  const handleZoomOut = () => {
+    const newZ = Math.max(0.1, zoom * 0.8)
+    setPanZoom(panX, panY, newZ)
+  }
+  const handleFit = () => {
+    setPanZoom(240, 120, 1)
+  }
 
-  const handleExportPDF = async () => {
-    setExporting(true);
-    try {
-      const url = exportPDF(pieces, titleBlock, name);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${name.replace(/\s+/g, '_')}_drawing.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Button style helpers
-  const btn = 'flex items-center justify-center w-[30px] h-[30px] rounded-md transition-colors focus:outline-none text-[#475569] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#94a3b8]';
-  const btnActive = 'flex items-center justify-center w-[30px] h-[30px] rounded-md focus:outline-none bg-[rgba(249,115,22,0.15)] text-[#f97316]';
-  const btnDisabled = 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#2d3748] cursor-not-allowed';
-
-  const Divider = () => <div className="w-px h-5 mx-2" style={{ background: 'rgba(255,255,255,0.08)' }} />;
+  const btnBase = 'flex items-center justify-center rounded transition-all duration-150 cursor-pointer select-none'
+  const iconBtn = `${btnBase} w-8 h-8 hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-30`
+  const modeBtn = (active: boolean) => `${btnBase} w-8 h-8 ${active ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'hover:bg-white/10 text-slate-400 hover:text-white'}`
 
   return (
-    <div
-      className="flex items-center gap-1 px-3 select-none shrink-0"
-      style={{
-        height: '48px',
-        background: '#0f1117',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-      }}
-    >
-      {/* Logo + project name */}
-      <div className="flex items-center gap-2 mr-2">
-        <div
-          className="w-2 h-2 rounded-sm shrink-0"
-          style={{ background: '#f97316' }}
-        />
-        <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.1em', color: '#f1f5f9' }}>
-          FABDRAW
-        </span>
+    <div className="flex items-center gap-1 px-3" style={{height:'48px',background:'#111827',borderBottom:'1px solid rgba(255,255,255,0.08)',flexShrink:0}}>
+      {/* Logo */}
+      <div className="flex items-center gap-2 mr-3">
+        <div className="w-7 h-7 rounded flex items-center justify-center text-sm font-bold" style={{background:'linear-gradient(135deg,#f97316,#ea580c)',color:'white'}}>F</div>
+        <span className="font-semibold text-sm text-white hidden sm:block">FabDraw</span>
       </div>
 
+      <div style={{width:'1px',height:'28px',background:'rgba(255,255,255,0.08)',margin:'0 4px'}} />
+
+      {/* Project name */}
       <input
-        className="focus:outline-none bg-transparent border-0 border-b border-transparent focus:border-[#f97316] text-[#f1f5f9] text-[13px] w-32 transition-colors"
-        style={{ borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent' }}
         value={name}
-        onChange={e => setName?.(e.target.value)}
-        onFocus={() => setEditingName(true)}
-        onBlur={() => setEditingName(false)}
-        title="Project name"
+        onChange={e => setName(e.target.value)}
+        className="bg-transparent text-sm text-slate-300 font-medium outline-none border border-transparent hover:border-white/10 focus:border-orange-500/40 rounded px-2 py-1 transition-all"
+        style={{minWidth:'120px',maxWidth:'200px'}}
       />
 
-      {/* Save indicator */}
-      <div className="w-1.5 h-1.5 rounded-full ml-1 shrink-0" style={{ background: '#22c55e' }} title="Saved" />
-
-      <Divider />
+      <div style={{width:'1px',height:'28px',background:'rgba(255,255,255,0.08)',margin:'0 4px'}} />
 
       {/* Undo/Redo */}
-      <button
-        className={canUndo ? btn : btnDisabled}
-        onClick={handleUndo}
-        disabled={!canUndo}
-        title="Undo (Ctrl+Z)"
-      >
-        <Undo2 size={15} />
-      </button>
-      <button
-        className={canRedo ? btn : btnDisabled}
-        onClick={handleRedo}
-        disabled={!canRedo}
-        title="Redo (Ctrl+Shift+Z)"
-      >
-        <Redo2 size={15} />
-      </button>
+      <button className={iconBtn} onClick={handleUndo} disabled={!historyStore.canUndo} title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
+      <button className={iconBtn} onClick={handleRedo} disabled={!historyStore.canRedo} title="Redo (Ctrl+Y)"><Redo2 size={15} /></button>
 
-      <Divider />
+      <div style={{width:'1px',height:'28px',background:'rgba(255,255,255,0.08)',margin:'0 4px'}} />
 
       {/* Copy/Paste/Delete */}
-      <button
-        className={selectedIds.length > 0 ? btn : btnDisabled}
-        onClick={handleCopy}
-        disabled={selectedIds.length === 0}
-        title="Copy (Ctrl+C)"
-      >
-        <Copy size={15} />
-      </button>
-      <button
-        className={clipboard.length > 0 ? btn : btnDisabled}
-        onClick={handlePaste}
-        disabled={clipboard.length === 0}
-        title="Paste (Ctrl+V)"
-      >
-        <Clipboard size={15} />
-      </button>
-      <button
-        className={selectedIds.length > 0 ? 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-colors' : btnDisabled}
-        onClick={handleDelete}
-        disabled={selectedIds.length === 0}
-        title="Delete (Del)"
-      >
-        <Trash2 size={15} />
-      </button>
+      <button className={iconBtn} onClick={handleCopy} disabled={!selectedIds.length} title="Copy (Ctrl+C)"><Copy size={15} /></button>
+      <button className={iconBtn} onClick={handlePaste} disabled={!clipboard.length} title="Paste (Ctrl+V)"><Clipboard size={15} /></button>
+      <button className={iconBtn} onClick={handleDelete} disabled={!selectedIds.length} title="Delete (Del)"><Trash2 size={15} /></button>
 
-      <Divider />
+      <div style={{width:'1px',height:'28px',background:'rgba(255,255,255,0.08)',margin:'0 4px'}} />
 
-      {/* Select / Pan */}
-      <button
-        className={mode === 'select' && !holeAddMode ? btnActive : btn}
-        onClick={() => { setMode('select'); setHoleAddMode(false); }}
-        title="Select (V)"
-      >
-        <MousePointer2 size={15} />
-      </button>
-      <button
-        className={mode === 'pan' ? btnActive : btn}
-        onClick={() => setMode('pan')}
-        title="Pan (Space/H)"
-      >
-        <Hand size={15} />
-      </button>
+      {/* Mode */}
+      <button className={modeBtn(mode==='select')} onClick={()=>setMode('select')} title="Select (V)"><MousePointer2 size={15} /></button>
+      <button className={modeBtn(mode==='pan')} onClick={()=>setMode('pan')} title="Pan (H)"><Hand size={15} /></button>
 
-      <Divider />
+      <div style={{width:'1px',height:'28px',background:'rgba(255,255,255,0.08)',margin:'0 4px'}} />
 
       {/* Zoom */}
-      <button className={btn} onClick={() => { const nz = Math.max(0.05, zoom * 0.8); setZoom(nz); }} title="Zoom Out (-)">
-        <ZoomOut size={15} />
-      </button>
-      <span
-        className="text-center tabular-nums"
-        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', color: '#94a3b8', width: '42px' }}
-      >
-        {(zoom * 100).toFixed(0)}%
-      </span>
-      <button className={btn} onClick={() => { const nz = Math.min(10, zoom * 1.25); setZoom(nz); }} title="Zoom In (+)">
-        <ZoomIn size={15} />
-      </button>
-      <button className={btn} onClick={handleFitView} title="Fit View (F)">
-        <Maximize2 size={15} />
-      </button>
-
-      <Divider />
-
-      {/* 2D / 3D toggle */}
+      <button className={iconBtn} onClick={handleZoomOut} title="Zoom Out"><ZoomOut size={15} /></button>
       <button
-        className={activeView === '2d' ? btnActive : btn}
-        onClick={() => setActiveView('2d')}
-        title="2D View"
-        style={{ fontSize: '11px', fontWeight: 700, width: '30px', height: '30px' }}
+        className="text-xs font-mono text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-white/10 cursor-pointer transition-all"
+        onClick={handleFit}
+        title="Reset zoom"
+        style={{minWidth:'46px',textAlign:'center'}}
       >
-        2D
+        {Math.round(zoom*100)}%
       </button>
-      <button
-        className={activeView === '3d' ? btnActive : btn}
-        onClick={() => setActiveView('3d')}
-        title="3D View"
-        style={{ fontSize: '11px', fontWeight: 700, width: '30px', height: '30px' }}
-      >
-        3D
-      </button>
+      <button className={iconBtn} onClick={handleZoomIn} title="Zoom In"><ZoomIn size={15} /></button>
 
-      <Divider />
-
-      {/* Title Block */}
-      <button
-        className={btn}
-        onClick={() => setShowTitleBlockModal(true)}
-        title="Edit Title Block"
-      >
-        <LayoutGrid size={15} />
-      </button>
-
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Export PDF */}
+      {/* AI */}
       <button
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white text-xs font-medium"
-        style={{
-          background: 'linear-gradient(135deg, #f97316, #ea580c)',
-          fontSize: '12px',
-          opacity: exporting ? 0.5 : 1,
-        }}
-        onClick={handleExportPDF}
-        disabled={exporting}
-        title="Export PDF"
-      >
-        <Download size={13} />
-        {exporting ? 'Exporting...' : 'Export PDF'}
-      </button>
-
-      {/* AI button */}
-      <button
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
-        style={{
-          border: '1px solid #f97316',
-          color: '#f97316',
-          background: 'transparent',
-          fontSize: '12px',
-        }}
-        onClick={() => setShowAIModal(true)}
+        className={`${btnBase} px-3 h-8 gap-2 text-sm font-medium rounded`}
+        style={{background:'linear-gradient(135deg,#7c3aed,#6d28d9)',color:'white'}}
+        onClick={()=>setShowAIModal(true)}
         title="AI Generator"
       >
-        <Sparkles size={13} />
-        AI
+        <Sparkles size={14} />
+        <span className="hidden sm:block">AI</span>
+      </button>
+
+      <button
+        className={`${btnBase} ml-1 px-2 h-8 gap-1 text-sm text-slate-400 hover:text-white hover:bg-white/10 rounded`}
+        onClick={()=>setShowTitleBlockModal(true)}
+        title="Title Block"
+      >
+        <FileText size={14} />
+      </button>
+
+      <button
+        className={`${btnBase} ml-1 px-3 h-8 gap-2 text-sm font-semibold rounded`}
+        style={{background:'#f97316',color:'white'}}
+        onClick={()=>toast.info('PDF export coming soon')}
+        title="Export PDF"
+      >
+        <Download size={14} />
+        <span className="hidden sm:block">Export</span>
       </button>
     </div>
-  );
+  )
 }
