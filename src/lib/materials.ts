@@ -110,7 +110,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'square_tube',
     label: 'Square Tube',
-    color: '#4a7ab5',
+    color: '#5b8fd4',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -122,7 +122,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'round_tube',
     label: 'Round Tube',
-    color: '#5a8ec8',
+    color: '#6b9fe0',
     isRound: true,
     isCustomSize: false,
     layer: 'default',
@@ -134,7 +134,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'rect_tube',
     label: 'Rect Tube',
-    color: '#4a7ab5',
+    color: '#5b8fd4',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -156,7 +156,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'pipe',
     label: 'Pipe',
-    color: '#607080',
+    color: '#7090a8',
     isRound: true,
     isCustomSize: false,
     layer: 'default',
@@ -183,7 +183,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'angle',
     label: 'Angle',
-    color: '#4a8060',
+    color: '#5a9870',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -204,7 +204,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'channel',
     label: 'Channel',
-    color: '#605090',
+    color: '#7868b8',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -227,7 +227,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'ibeam',
     label: 'I-Beam',
-    color: '#405878',
+    color: '#5878a8',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -247,7 +247,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'flat_bar',
     label: 'Flat Bar',
-    color: '#806840',
+    color: '#a09050',
     isRound: false,
     isCustomSize: false,
     layer: 'default',
@@ -269,7 +269,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'sheet',
     label: 'Sheet',
-    color: '#786050',
+    color: '#988060',
     isRound: false,
     isCustomSize: true,
     layer: 'top',
@@ -283,7 +283,7 @@ export const MATERIALS: MaterialConfig[] = [
   {
     id: 'plate',
     label: 'Plate',
-    color: '#685040',
+    color: '#887050',
     isRound: false,
     isCustomSize: true,
     layer: 'top',

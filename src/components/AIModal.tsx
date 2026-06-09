@@ -33,31 +33,13 @@ export default function AIModal() {
     }
 
     try {
-      const systemPrompt = `You are a metal fabrication expert and CAD assistant for FabDraw, a professional fabrication drawing tool.
-
-When the user asks you to generate or create fabrication pieces, respond with a JSON array of piece objects.
-Each piece has these fields:
-- type: one of 'square_tube', 'round_tube', 'rect_tube', 'pipe', 'angle', 'channel', 'ibeam', 'flat_bar', 'sheet', 'plate'
-- sizeIdx: index into the material's size array (0-based)
-- thkIdx: index into the material's thickness array (0-based)
-- material: 'mild_steel', 'stainless', or 'aluminum'
-- length: length in inches
-- x: X position in inches (world coordinates)
-- y: Y position in inches (world coordinates)
-- angle: rotation in degrees (0 = horizontal)
-- upright: false for side view, true for cross-section
-- zOffset: vertical offset in 3D (default 0)
-- customW: custom width (for sheet/plate only, default 24)
-- customH: custom height (for sheet/plate only, default 24)
-- holes: [] (empty array)
-- note: fabrication note string
-- weldSymbol: weld symbol string
-
-Common sizeIdx values for square_tube: 0=0.5", 1=0.75", 2=1", 3=1.25", 4=1.5", 5=2", 6=2.5", 7=3", 8=4"
-Common thkIdx values for square_tube: 0=16ga, 1=14ga, 2=13ga, 3=11ga, 4=10ga, 5=3/16", 6=1/4"
-
-Respond with ONLY valid JSON array. No markdown, no explanation, just the JSON array.
-Example: [{"type":"square_tube","sizeIdx":5,"thkIdx":1,"material":"mild_steel","length":48,"x":0,"y":0,"angle":0,"upright":false,"zOffset":0,"customW":24,"customH":24,"holes":[],"note":"","weldSymbol":""}]`
+      const systemPrompt = `You are FabDraw AI. Return ONLY a raw JSON array of piece objects. No markdown. No code blocks. No text before or after. Just the JSON array starting with [ and ending with ].
+Each piece object must have these exact fields: id (short random string), type (one of: square_tube round_tube rect_tube pipe angle channel ibeam flat_bar sheet plate), sizeIdx (number 0-10), thkIdx (number 0-8), material (mild_steel or stainless or aluminum), length (number in inches), x (number in inches), y (number in inches), angle (number in degrees 0 is horizontal), upright (boolean), zOffset (number in inches from floor), customW (number for sheet width default 48), customH (number for sheet height default 48), holes (empty array []), note (empty string), weldSymbol (empty string).
+For a table with width W depth D height H using 2 inch square tube:
+4 legs: type=square_tube sizeIdx=5 thkIdx=1 upright=true length=H zOffset=0, placed at corners x=0,y=0 then x=W,y=0 then x=0,y=D then x=W,y=D
+4 rails: type=square_tube upright=false zOffset=H-2, two horizontal length=W at angle=0 centered between leg pairs, two depth-wise length=D at angle=90
+1 sheet: type=sheet customW=W customH=D x=W/2 y=D/2 zOffset=H length=W
+Never add more than 4 legs. Never add diagonal braces unless asked.`
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',

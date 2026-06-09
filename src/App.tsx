@@ -77,7 +77,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0a0d14' }}>
-      <Toolbar />
+      <Toolbar stageRef={stageRef as React.RefObject<Konva.Stage>} />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: 'row' }}>
         <LibraryPanel />

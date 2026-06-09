@@ -3,9 +3,16 @@ import { Save, Undo2, Redo2, MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, Fi
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
+import { exportPDF } from '../lib/pdfExport'
 import { toast } from 'sonner'
+import type { RefObject } from 'react'
+import type Konva from 'konva'
 
-export default function Toolbar() {
+interface ToolbarProps {
+  stageRef?: RefObject<Konva.Stage>
+}
+
+export default function Toolbar({ stageRef }: ToolbarProps) {
   const { project, setProjectName, setPanZoom } = useProjectStore()
   const {
     mode, setMode, activeView, setActiveView,
@@ -153,7 +160,15 @@ export default function Toolbar() {
       </button>
 
       <button
-        onClick={() => toast.info('Use Export PDF from toolbar')}
+        onClick={async () => {
+          try {
+            await exportPDF(project, stageRef ?? { current: null })
+            toast.success('PDF exported')
+          } catch (e) {
+            toast.error('PDF export failed')
+            console.error(e)
+          }
+        }}
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 30, borderRadius: 5, background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4, flexShrink: 0 }}
       >
         <Download size={12} />
