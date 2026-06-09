@@ -206,7 +206,7 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
           const r = Math.max(3, hole.diameter / 2 * SCALE * localZoom)
           return (
             <React.Fragment key={hole.id}>
-              <Circle x={hx} y={0} radius={r} fill="rgba(0,0,0,0.9)" stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} />
+              <Circle x={hx} y={0} radius={r} fill="rgba(0,0,0,0.95)" stroke="rgba(255,255,255,0.9)" strokeWidth={2} />
               <Text x={hx - 4} y={-4} text={String(idx + 1)} fontSize={7} fill="rgba(255,255,255,0.7)" />
             </React.Fragment>
           )

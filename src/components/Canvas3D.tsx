@@ -10,7 +10,7 @@ export default function Canvas3D() {
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const animFrameRef = useRef<number>(0)
-  const orbitRef = useRef({ theta: 45, phi: 35, radius: 60, target: new THREE.Vector3(0, 0, 0) })
+  const orbitRef = useRef({ theta: 45, phi: 30, radius: 80, target: new THREE.Vector3(0, 10, 0) })
   const mouseRef = useRef({ down: false, x: 0, y: 0, button: 0 })
 
   useEffect(() => {
