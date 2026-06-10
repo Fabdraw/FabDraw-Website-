@@ -187,6 +187,24 @@ export default function Canvas3D() {
           edges.position.copy(mesh.position)
           edges.userData.isPiece = true
           scene.add(edges)
+
+          // Render holes as dark cylinders
+          for (const hole of p.holes) {
+            const r = hole.diameter / 2
+            const holeMat = new THREE.MeshPhongMaterial({ color: 0x111111 })
+            const holeGeo = new THREE.CylinderGeometry(r, r, vizH + 0.5, 12)
+            const holeMesh = new THREE.Mesh(holeGeo, holeMat)
+            // Hole position in local space (along piece axis)
+            const localX = hole.posInches - p.length / 2
+            const rad = -p.angle * Math.PI / 180
+            const worldX = p.x + localX * Math.cos(rad)
+            const worldY = p.zOffset + vizH / 2
+            const worldZ = p.y - localX * Math.sin(rad)
+            holeMesh.position.set(worldX, worldY, worldZ)
+            holeMesh.rotation.y = rad
+            holeMesh.userData.isPiece = true
+            scene.add(holeMesh)
+          }
         }
       }
     }
