@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, memo } from 'react'
 import { Plus, ChevronDown } from 'lucide-react'
 import { MATERIALS, getSizeValue, getMaterial, SHEET_SIZE_PRESETS } from '../lib/materials'
 import { useProjectStore } from '../store/projectStore'
@@ -13,7 +13,7 @@ const GRADES: { value: MaterialGrade; label: string }[] = [
   { value: 'aluminum', label: 'Aluminum' },
 ]
 
-export default function LibraryPanel() {
+function LibraryPanel() {
   const { project, addPiece } = useProjectStore()
   const { setSelectedIds } = useUIStore()
   const { push } = useHistoryStore()
@@ -238,3 +238,5 @@ export default function LibraryPanel() {
     </div>
   )
 }
+
+export default memo(LibraryPanel)

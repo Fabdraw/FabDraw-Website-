@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
@@ -6,7 +6,7 @@ import { getMaterial, getSizeLabel, getWallLabel, getSizeValue, getWall } from '
 import { calcWeight } from '../lib/weights'
 import { toFeetInches } from '../lib/geometry'
 
-export default function BOMPanel() {
+function BOMPanel() {
   const { project } = useProjectStore()
   const { isBOMCollapsed, toggleBOM, setSelectedIds } = useUIStore()
 
@@ -119,3 +119,5 @@ export default function BOMPanel() {
     </div>
   )
 }
+
+export default memo(BOMPanel)

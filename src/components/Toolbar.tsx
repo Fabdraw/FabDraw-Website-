@@ -56,11 +56,15 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
   )
 
   return (
-    <div style={{ height: 48, background: '#111827', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 2, flexShrink: 0 }}>
+    <div style={{ height: 52, background: '#0f1117', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 2, flexShrink: 0 }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8, flexShrink: 0 }}>
-        <div style={{ width: 20, height: 20, background: '#f97316', borderRadius: 3 }} />
-        <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: '-0.03em', color: '#f1f5f9' }}>FABDRAW</span>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="2" y="2" width="16" height="2" fill="#f97316" />
+          <rect x="2" y="2" width="2" height="16" fill="#f97316" />
+          <rect x="2" y="16" width="10" height="2" fill="#f97316" />
+        </svg>
+        <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.5px', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>FABDRAW</span>
       </div>
       {sep()}
 
@@ -129,24 +133,24 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
       </button>
       {sep()}
 
-      {/* View toggle */}
-      <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', borderRadius: 6, padding: 2, gap: 2, flexShrink: 0 }}>
+      {/* View toggle - pill style */}
+      <div style={{ display: 'flex', borderRadius: 999, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
         <button
           onClick={() => setActiveView('2d')}
+          title="2D View"
           style={{
-            padding: '3px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
-            background: activeView === '2d' ? 'rgba(249,115,22,0.2)' : 'transparent',
-            color: activeView === '2d' ? '#f97316' : '#64748b',
-            transition: 'all 150ms'
+            padding: '0 12px', height: 28, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+            background: activeView === '2d' ? '#f97316' : 'transparent',
+            color: activeView === '2d' ? '#ffffff' : '#475569',
           }}
         >2D</button>
         <button
           onClick={() => setActiveView('3d')}
+          title="3D View"
           style={{
-            padding: '3px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
-            background: activeView === '3d' ? 'rgba(249,115,22,0.2)' : 'transparent',
-            color: activeView === '3d' ? '#f97316' : '#64748b',
-            transition: 'all 150ms'
+            padding: '0 12px', height: 28, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+            background: activeView === '3d' ? '#f97316' : 'transparent',
+            color: activeView === '3d' ? '#ffffff' : '#475569',
           }}
         >3D</button>
       </div>
@@ -176,7 +180,7 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
             console.error(e)
           }
         }}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 30, borderRadius: 5, background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4, flexShrink: 0 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 34, borderRadius: 6, background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginLeft: 4, flexShrink: 0, boxShadow: '0 0 20px rgba(249,115,22,0.3)' }}
       >
         <Download size={12} />
         Export PDF
