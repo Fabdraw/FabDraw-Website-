@@ -40,11 +40,19 @@ function BOMPanel() {
   }
 
   return (
-    <div style={{ background: '#0d1117', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+    <div style={{ background: '#0f1117', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
       {/* Header */}
       <div
         onClick={toggleBOM}
-        style={{ height: 32, display: 'flex', alignItems: 'center', padding: '0 12px', cursor: 'pointer', borderBottom: isBOMCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)', userSelect: 'none' }}
+        style={{
+          height: 32,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          cursor: 'pointer',
+          borderBottom: isBOMCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)',
+          userSelect: 'none',
+        }}
       >
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bill of Materials</span>
@@ -67,9 +75,9 @@ function BOMPanel() {
       {!isBOMCollapsed && (
         <div style={{ maxHeight: 160, overflowY: 'auto' }}>
           {/* Column headers */}
-          <div style={{ ...cols, borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ ...cols, borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.4)' }}>
             {['#', 'TYPE', 'SIZE', 'WALL', 'GRADE', 'LENGTH', 'QTY', 'WEIGHT'].map(h => (
-              <div key={h} style={{ ...cellStyle, fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+              <div key={h} style={{ ...cellStyle, fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '1px' }}>{h}</div>
             ))}
           </div>
 
@@ -86,9 +94,14 @@ function BOMPanel() {
               <div
                 key={key}
                 onClick={() => setSelectedIds(pieces.map(pc => pc.id))}
-                style={{ ...cols, background: rowIdx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)', cursor: 'pointer', transition: 'background 100ms' }}
+                style={{
+                  ...cols,
+                  background: rowIdx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                  cursor: 'pointer',
+                  transition: 'background 100ms',
+                }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.05)')}
-                onMouseLeave={e => (e.currentTarget.style.background = rowIdx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)')}
+                onMouseLeave={e => (e.currentTarget.style.background = rowIdx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)')}
               >
                 <div style={{ ...cellStyle, color: '#475569' }}>{rowIdx + 1}</div>
                 <div style={{ ...cellStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -104,10 +117,28 @@ function BOMPanel() {
                 <div style={{ ...cellStyle, color: '#64748b' }}>{p.material.replace('_', ' ')}</div>
                 <div style={{ ...cellStyle, color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>{lengths}</div>
                 <div style={{ ...cellStyle, color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{pieces.length}</div>
-                <div style={{ ...cellStyle, color: '#f97316', fontFamily: 'JetBrains Mono, monospace' }}>{rowWeight.toFixed(2)} lb</div>
+                <div style={{ ...cellStyle, color: '#f97316', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>{rowWeight.toFixed(2)} lb</div>
               </div>
             )
           })}
+
+          {/* Total row */}
+          {project.pieces.length > 0 && (
+            <div style={{
+              ...cols,
+              background: 'rgba(249,115,22,0.08)',
+              borderTop: '1px solid rgba(249,115,22,0.15)',
+            }}>
+              <div style={{ ...cellStyle, color: '#475569' }} />
+              <div style={{ ...cellStyle, color: '#f97316', fontWeight: 700, fontSize: 11 }}>TOTAL</div>
+              <div style={{ ...cellStyle }} />
+              <div style={{ ...cellStyle }} />
+              <div style={{ ...cellStyle }} />
+              <div style={{ ...cellStyle }} />
+              <div style={{ ...cellStyle, color: '#f97316', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>{project.pieces.length}</div>
+              <div style={{ ...cellStyle, color: '#f97316', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>{totalWeight.toFixed(2)} lb</div>
+            </div>
+          )}
 
           {project.pieces.length === 0 && (
             <div style={{ padding: '16px 0', textAlign: 'center', color: '#334155', fontSize: 12 }}>
