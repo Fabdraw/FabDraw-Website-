@@ -88,6 +88,7 @@ Never add more than 4 legs. Never add diagonal braces unless asked.`
           customW: p.customW ?? 24,
           customH: p.customH ?? 24,
           holes: p.holes ?? [],
+          bendLines: p.bendLines ?? [],
           note: p.note ?? '',
           weldSymbol: p.weldSymbol ?? '',
         })

@@ -61,12 +61,13 @@ export default function LibraryPanel() {
       customW,
       customH,
       holes: [],
+      bendLines: [],
       note: '',
       weldSymbol: '',
     })
 
     setSelectedIds([id])
-    push({ pieces: [...project.pieces, { id, type: selectedType, sizeIdx, thkIdx, material: grade, length, x: wx, y: wy, angle, upright, zOffset: 0, customW, customH, holes: [], note: '', weldSymbol: '' }], connections: project.connections })
+    push({ pieces: [...project.pieces, { id, type: selectedType, sizeIdx, thkIdx, material: grade, length, x: wx, y: wy, angle, upright, zOffset: 0, customW, customH, holes: [], bendLines: [], note: '', weldSymbol: '' }], connections: project.connections })
     toast.success(`Added ${mat.label} to drawing`)
   }
 

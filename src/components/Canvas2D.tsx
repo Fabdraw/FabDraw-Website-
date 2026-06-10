@@ -236,6 +236,17 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
           )
         })}
 
+        {/* Bend Lines */}
+        {(p.bendLines ?? []).map(bend => {
+          const bx = (bend.posInches - p.length / 2) * SCALE * localZoom
+          return (
+            <React.Fragment key={bend.id}>
+              <Line points={[bx, -hw, bx, hw]} stroke="#a78bfa" strokeWidth={2} dash={[4, 3]} listening={false} />
+              <Text x={bx + 2} y={-hw + 2} text={`${bend.angle}°`} fontSize={8} fill="#a78bfa" listening={false} />
+            </React.Fragment>
+          )
+        })}
+
         {/* Label */}
         {halfLen > 35 && (
           <Text

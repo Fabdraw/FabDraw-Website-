@@ -10,6 +10,13 @@ export interface Hole {
   height?: number
 }
 
+export interface BendLine {
+  id: string
+  posInches: number
+  angle: number
+  direction: 'up' | 'down'
+}
+
 export interface Piece {
   id: string
   type: MaterialType
@@ -25,6 +32,7 @@ export interface Piece {
   customW: number
   customH: number
   holes: Hole[]
+  bendLines: BendLine[]
   note: string
   weldSymbol: string
 }

@@ -30,6 +30,7 @@ export default function CommandPalette() {
       customW: mat.defaultCustomW ?? 24,
       customH: mat.defaultCustomH ?? 24,
       holes: [],
+      bendLines: [],
       note: '',
       weldSymbol: '',
     })

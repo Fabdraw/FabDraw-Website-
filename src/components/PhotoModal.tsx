@@ -105,6 +105,7 @@ Return ONLY a JSON array, no markdown, no explanation.`,
           customW: p.customW ?? 24,
           customH: p.customH ?? 24,
           holes: [],
+          bendLines: [],
           note: p.note ?? '',
           weldSymbol: '',
         })

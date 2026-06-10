@@ -1,12 +1,12 @@
-import React from 'react'
-import { Trash2, Copy, RotateCcw, Plus, X } from 'lucide-react'
+import React, { memo } from 'react'
+import { Trash2, Copy, Plus, X } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { getMaterial, getSizeLabel, getWallLabel, MATERIALS } from '../lib/materials'
 import { calcWeight } from '../lib/weights'
 import { getSizeValue, getWall } from '../lib/materials'
-import type { MaterialType, MaterialGrade, JointType, Piece } from '../types'
+import type { MaterialType, MaterialGrade, JointType, Piece, BendLine } from '../types'
 import { v4 as uuid } from 'uuid'
 import { toast } from 'sonner'
 
@@ -25,7 +25,7 @@ const JOINT_TYPES: { value: JointType; label: string }[] = [
   { value: 'flanged', label: 'Flanged' },
 ]
 
-export default function PropertiesPanel() {
+function PropertiesPanel() {
   const { project, updatePiece, deletePieces, addPiece, updateConnectionType } = useProjectStore()
   const { selectedIds, setSelectedIds, activeRightTab, setActiveRightTab, selectedConnectionId } = useUIStore()
   const { push } = useHistoryStore()
@@ -50,9 +50,29 @@ export default function PropertiesPanel() {
     toast.success(`Deleted ${selectedIds.length} piece(s)`)
   }
 
+  function addBendLine() {
+    if (!selectedPiece) return
+    const newBend: BendLine = { id: uuid(), posInches: selectedPiece.length / 2, angle: 90, direction: 'up' }
+    updatePiece(selectedPiece.id, { bendLines: [...(selectedPiece.bendLines ?? []), newBend] })
+  }
+
+  function removeBendLine(bendId: string) {
+    if (!selectedPiece) return
+    updatePiece(selectedPiece.id, { bendLines: (selectedPiece.bendLines ?? []).filter(b => b.id !== bendId) })
+  }
+
+  function parseFraction(val: string): number {
+    const trimmed = val.trim()
+    const mixed = trimmed.match(/^(\d+)-(\d+)\/(\d+)$/)
+    if (mixed) return parseInt(mixed[1]) + parseInt(mixed[2]) / parseInt(mixed[3])
+    const frac = trimmed.match(/^(\d+)\/(\d+)$/)
+    if (frac) return parseInt(frac[1]) / parseInt(frac[2])
+    return parseFloat(trimmed) || 0
+  }
+
   function handleDuplicate() {
     if (!selectedPiece) return
-    const id = addPiece({ ...selectedPiece, x: selectedPiece.x + 5, y: selectedPiece.y + 5, holes: [] })
+    const id = addPiece({ ...selectedPiece, x: selectedPiece.x + 5, y: selectedPiece.y + 5, holes: [], bendLines: [] })
     setSelectedIds([id])
     toast.success('Duplicated')
   }
@@ -212,7 +232,15 @@ export default function PropertiesPanel() {
             {!mat.isCustomSize && (
               <div>
                 <label style={labelStyle}>Length (in)</label>
-                <input type="number" value={selectedPiece.length} onChange={e => upd('length', Math.max(0.5, Number(e.target.value)))} style={inputStyle} min={0.5} step={0.5} />
+                <input
+                  type="text"
+                  defaultValue={selectedPiece.length}
+                  key={selectedPiece.id + '-length'}
+                  onBlur={e => upd('length', Math.max(0.5, parseFraction(e.target.value)))}
+                  onKeyDown={e => { if (e.key === 'Enter') upd('length', Math.max(0.5, parseFraction((e.target as HTMLInputElement).value))) }}
+                  style={inputStyle}
+                  placeholder="e.g. 24 or 34-1/2"
+                />
               </div>
             )}
 
@@ -334,7 +362,7 @@ export default function PropertiesPanel() {
             <textarea
               value={selectedPiece.note}
               onChange={e => upd('note', e.target.value)}
-              rows={6}
+              rows={4}
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
               placeholder="Add notes, tolerances, finish requirements..."
             />
@@ -348,13 +376,68 @@ export default function PropertiesPanel() {
                 placeholder="e.g. 1/4 fillet weld all around"
               />
             </div>
-            <div style={{ marginTop: 12, padding: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)' }}>
-              <div style={{ fontSize: 10, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Info</div>
-              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
-                <div>Type: <span style={{ color: '#94a3b8' }}>{getMaterial(selectedPiece.type).label}</span></div>
-                <div>Grade: <span style={{ color: '#94a3b8' }}>{selectedPiece.material.replace('_', ' ')}</span></div>
-                <div>Holes: <span style={{ color: '#94a3b8' }}>{selectedPiece.holes.length}</span></div>
+            {/* Bend Lines */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bend Lines ({(selectedPiece.bendLines ?? []).length})</span>
+                <button onClick={addBendLine} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 4, border: '1px solid rgba(249,115,22,0.3)', background: 'rgba(249,115,22,0.1)', color: '#f97316', fontSize: 11, cursor: 'pointer' }}>
+                  <Plus size={10} /> Add
+                </button>
               </div>
+              {(selectedPiece.bendLines ?? []).map((bend, idx) => (
+                <div key={bend.id} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 5, padding: 8, marginBottom: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: '#f97316', fontWeight: 600 }}>Bend #{idx + 1}</span>
+                    <button onClick={() => removeBendLine(bend.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2 }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                    <div>
+                      <label style={{ ...labelStyle, marginBottom: 2 }}>Pos (in)</label>
+                      <input
+                        type="number"
+                        value={bend.posInches}
+                        onChange={e => {
+                          const bends = (selectedPiece.bendLines ?? []).map(b => b.id === bend.id ? { ...b, posInches: Number(e.target.value) } : b)
+                          updatePiece(selectedPiece.id, { bendLines: bends })
+                        }}
+                        style={{ ...inputStyle, padding: '3px 6px' }}
+                        step={0.25}
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, marginBottom: 2 }}>Angle</label>
+                      <input
+                        type="number"
+                        value={bend.angle}
+                        onChange={e => {
+                          const bends = (selectedPiece.bendLines ?? []).map(b => b.id === bend.id ? { ...b, angle: Number(e.target.value) } : b)
+                          updatePiece(selectedPiece.id, { bendLines: bends })
+                        }}
+                        style={{ ...inputStyle, padding: '3px 6px' }}
+                        min={1}
+                        max={180}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, marginBottom: 2 }}>Dir</label>
+                      <select
+                        value={bend.direction}
+                        onChange={e => {
+                          const bends = (selectedPiece.bendLines ?? []).map(b => b.id === bend.id ? { ...b, direction: e.target.value as 'up' | 'down' } : b)
+                          updatePiece(selectedPiece.id, { bendLines: bends })
+                        }}
+                        style={{ ...inputStyle, padding: '3px 6px', cursor: 'pointer' }}
+                      >
+                        <option value="up">Up</option>
+                        <option value="down">Down</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -362,3 +445,5 @@ export default function PropertiesPanel() {
     </div>
   )
 }
+
+export default memo(PropertiesPanel)
