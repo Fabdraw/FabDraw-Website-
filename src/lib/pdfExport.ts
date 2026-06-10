@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf'
 import type { Project } from '../types'
 import type { RefObject } from 'react'
+import { getSizeValue, getWall } from './materials'
+import { calcWeight } from './weights'
 
 export async function exportPDF(project: Project, stageRef: RefObject<any>) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
@@ -154,7 +156,9 @@ export async function exportPDF(project: Project, stageRef: RefObject<any>) {
   for (const [, pieces] of groups) {
     const p = pieces[0]
     const lengths = pieces.map(pc => `${pc.length}"`).join(', ')
-    const w = 0 // weight calculated elsewhere
+    const sv = getSizeValue(p.type, p.sizeIdx)
+    const wall = getWall(p.type, p.thkIdx)
+    const w = pieces.reduce((sum, pc) => sum + calcWeight(pc, sv, wall), 0)
 
     if (isAlt) {
       doc.setFillColor(20, 25, 36)
