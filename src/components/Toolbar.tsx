@@ -1,5 +1,5 @@
 import React from 'react'
-import { Save, Undo2, Redo2, MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, FileText, Download, Sparkles, Camera, DollarSign } from 'lucide-react'
+import { Save, Undo2, Redo2, MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, FileText, Download, Sparkles, Camera, DollarSign, PenLine } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -16,7 +16,8 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
   const { project, setProjectName, setPanZoom } = useProjectStore()
   const {
     mode, setMode, activeView, setActiveView,
-    setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowCostCalculator
+    setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowCostCalculator,
+    clearSketch
   } = useUIStore()
   const { canUndo, canRedo, undo, redo } = useHistoryStore()
 
@@ -104,6 +105,12 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
       </button>
       <button style={btnStyle(mode === 'pan')} title="Pan (H)" onClick={() => setMode('pan')}>
         <Hand size={14} />
+      </button>
+      <button style={btnStyle(mode === 'sketch')} title="Sketch (S)" onClick={() => {
+        if (mode === 'sketch') { clearSketch(); setMode('select') }
+        else setMode('sketch')
+      }}>
+        <PenLine size={14} />
       </button>
       {sep()}
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppMode = 'select' | 'pan'
+export type AppMode = 'select' | 'pan' | 'sketch'
 export type RightTab = 'props' | 'holes' | 'notes'
 export type ActiveView = '2d' | '3d'
 
@@ -36,6 +36,8 @@ interface UIStore {
   showCostCalculator: boolean
   showCommandPalette: boolean
   contextMenu: ContextMenu | null
+  sketchMode: boolean
+  sketchPoints: { x: number; y: number }[]
 
   setMode: (mode: AppMode) => void
   setSelectedIds: (ids: string[]) => void
@@ -54,6 +56,9 @@ interface UIStore {
   setShowCostCalculator: (v: boolean) => void
   setShowCommandPalette: (v: boolean) => void
   setContextMenu: (menu: ContextMenu | null) => void
+  setSketchMode: (v: boolean) => void
+  addSketchPoint: (x: number, y: number) => void
+  clearSketch: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -74,6 +79,8 @@ export const useUIStore = create<UIStore>((set) => ({
   showCostCalculator: false,
   showCommandPalette: false,
   contextMenu: null,
+  sketchMode: false,
+  sketchPoints: [],
 
   setMode: (mode) => set({ mode }),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
@@ -96,4 +103,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setShowCostCalculator: (v) => set({ showCostCalculator: v }),
   setShowCommandPalette: (v) => set({ showCommandPalette: v }),
   setContextMenu: (menu) => set({ contextMenu: menu }),
+  setSketchMode: (v) => set({ sketchMode: v }),
+  addSketchPoint: (x, y) => set(s => ({ sketchPoints: [...s.sketchPoints, { x, y }] })),
+  clearSketch: () => set({ sketchPoints: [], sketchMode: false }),
 }))

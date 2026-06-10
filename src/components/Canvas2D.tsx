@@ -9,6 +9,19 @@ import { SCALE, worldToCanvas, canvasToWorld, getVisualHeight, getWallPx, getSna
 import { getMaterial, getSizeValue, getWall } from '../lib/materials'
 import type { Piece } from '../types'
 
+const PIECE_COLORS: Record<string, string> = {
+  square_tube: '#4d8fd4',
+  round_tube: '#5ba3e8',
+  rect_tube: '#4d8fd4',
+  pipe: '#6b8fa8',
+  angle: '#4a9068',
+  channel: '#7060b8',
+  ibeam: '#4870a8',
+  flat_bar: '#a89040',
+  sheet: '#a07860',
+  plate: '#906850',
+}
+
 interface Props {
   stageRef: React.RefObject<Konva.Stage>
   containerRef: React.RefObject<HTMLDivElement>
@@ -18,7 +31,8 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
   const { project, updatePiece, removeConnectionsForPiece, addConnection, setPanZoom } = useProjectStore()
   const {
     mode, selectedIds, setSelectedIds, toggleSelectedId,
-    snapPreview, setSnapPreview, isDragging, setIsDragging, setContextMenu
+    snapPreview, setSnapPreview, isDragging, setIsDragging, setContextMenu,
+    sketchMode, sketchPoints, addSketchPoint, clearSketch
   } = useUIStore()
   const { push } = useHistoryStore()
   const [size, setSize] = useState({ w: 800, h: 600 })
@@ -37,6 +51,16 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
     return () => ro.disconnect()
   }, [containerRef])
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && sketchMode) {
+        clearSketch()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [sketchMode, clearSketch])
+
   const getSV = useCallback((p: Piece) => {
     return getSizeValue(p.type, p.sizeIdx)
   }, [])
@@ -52,7 +76,7 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
   }, [localZoom])
 
   function getPieceColor(p: Piece) {
-    return getMaterial(p.type).color
+    return PIECE_COLORS[p.type] ?? '#4d8fd4'
   }
 
   function renderPiece(p: Piece, isSelected: boolean) {
@@ -143,16 +167,16 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
         {/* Body shapes */}
         {(t === 'square_tube' || t === 'rect_tube') && (
           <>
-            <Rect x={-halfLen} y={-hw} width={halfLen * 2} height={vh} fill={color} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
+            <Rect x={-halfLen} y={-hw} width={halfLen * 2} height={vh} fill={color} opacity={1} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
             {halfLen * 2 - wallPx * 2 > 0 && vh - wallPx * 2 > 0 && (
-              <Rect x={-halfLen + wallPx} y={-hw + wallPx} width={halfLen * 2 - wallPx * 2} height={vh - wallPx * 2} fill="rgba(0,0,0,0.65)" />
+              <Rect x={-halfLen + wallPx} y={-hw + wallPx} width={halfLen * 2 - wallPx * 2} height={vh - wallPx * 2} fill="rgba(0,0,0,0.7)" />
             )}
             <Rect x={-halfLen} y={-hw} width={halfLen * 2} height={vh * 0.38} fill="rgba(255,255,255,0.09)" listening={false} />
           </>
         )}
         {(t === 'round_tube' || t === 'pipe') && (
           <>
-            <Rect x={-halfLen} y={-hw} width={halfLen * 2} height={vh} fill={color} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} cornerRadius={hw} />
+            <Rect x={-halfLen} y={-hw} width={halfLen * 2} height={vh} fill={color} opacity={1} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} cornerRadius={hw} />
             {halfLen * 2 - wallPx * 2 > 0 && vh - wallPx * 2 > 0 && (
               <Rect x={-halfLen + wallPx} y={-hw + wallPx} width={halfLen * 2 - wallPx * 2} height={vh - wallPx * 2} fill="rgba(0,0,0,0.6)" cornerRadius={Math.max(0, hw - wallPx)} />
             )}
@@ -253,12 +277,12 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
     for (let x = localPan.x % minorSpacing; x < size.w; x += minorSpacing) {
       const worldX = (x - localPan.x) / (SCALE * localZoom)
       const isMajor = Math.abs(Math.round(worldX / 12) * 12 - worldX) < 0.01
-      lines.push(<Line key={`gx${x}`} points={[x, 0, x, size.h]} stroke={isMajor ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'} strokeWidth={0.5} listening={false} />)
+      lines.push(<Line key={`gx${x}`} points={[x, 0, x, size.h]} stroke={isMajor ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)'} strokeWidth={0.5} listening={false} />)
     }
     for (let y = localPan.y % minorSpacing; y < size.h; y += minorSpacing) {
       const worldY = (y - localPan.y) / (SCALE * localZoom)
       const isMajor = Math.abs(Math.round(worldY / 12) * 12 - worldY) < 0.01
-      lines.push(<Line key={`gy${y}`} points={[0, y, size.w, y]} stroke={isMajor ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'} strokeWidth={0.5} listening={false} />)
+      lines.push(<Line key={`gy${y}`} points={[0, y, size.w, y]} stroke={isMajor ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)'} strokeWidth={0.5} listening={false} />)
     }
 
     // Origin cross
@@ -332,6 +356,14 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
   }
 
   function handleMouseDown(e: KonvaEventObject<MouseEvent>) {
+    if (mode === 'sketch' && e.evt.button === 0 && e.target === e.target.getStage()) {
+      const stage = stageRef.current
+      if (!stage) return
+      const pos = stage.getPointerPosition()!
+      const [wx, wy] = canvasToWorld(pos.x, pos.y, localPan.x, localPan.y, localZoom)
+      addSketchPoint(wx, wy)
+      return
+    }
     if (mode === 'pan' || e.evt.button === 1) {
       isPanning.current = true
       panStart.current = { x: e.evt.clientX, y: e.evt.clientY, panX: localPan.x, panY: localPan.y }
@@ -375,7 +407,7 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
             setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, pieceId: null, connectionId: null })
           }
         }}
-        style={{ cursor: mode === 'pan' ? 'grab' : 'default' }}
+        style={{ cursor: mode === 'sketch' ? 'crosshair' : mode === 'pan' ? 'grab' : 'default' }}
       >
         <Layer>
           <Rect x={0} y={0} width={size.w} height={size.h} fill="#0d1117" />
@@ -403,6 +435,26 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
               <Text x={snapPreview.x + 14} y={snapPreview.y - 8} text={snapPreview.label} fill={snapPreview.color} fontSize={10} fontFamily="JetBrains Mono, monospace" listening={false} />
             </>
           )}
+
+          {/* Sketch mode lines and dots */}
+          {sketchMode && sketchPoints.length >= 2 && (
+            <Line
+              points={sketchPoints.flatMap(pt => {
+                const [cx, cy] = worldToCanvas(pt.x, pt.y, localPan.x, localPan.y, localZoom)
+                return [cx, cy]
+              })}
+              stroke="#f97316"
+              strokeWidth={2}
+              dash={[4, 3]}
+              listening={false}
+            />
+          )}
+          {sketchMode && sketchPoints.map((pt, i) => {
+            const [cx, cy] = worldToCanvas(pt.x, pt.y, localPan.x, localPan.y, localZoom)
+            return (
+              <Circle key={i} x={cx} y={cy} radius={4} fill="#f97316" listening={false} />
+            )
+          })}
         </Layer>
       </Stage>
 
