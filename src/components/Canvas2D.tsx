@@ -7,7 +7,7 @@ import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { SCALE, worldToCanvas, canvasToWorld, getVisualHeight, getWallPx, getSnapPoints, findSnap, toFeetInches } from '../lib/geometry'
 import { getMaterial, getSizeValue, getWall } from '../lib/materials'
-import type { Piece } from '../types'
+import type { Piece, Connection } from '../types'
 
 const PIECE_COLORS: Record<string, string> = {
   square_tube: '#4d8fd4',
@@ -351,6 +351,53 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
     )
   }
 
+  function renderConnection(conn: Connection) {
+    const pieceA = project.pieces.find(p => p.id === conn.p1)
+    const pieceB = project.pieces.find(p => p.id === conn.p2)
+    if (!pieceA || !pieceB) return null
+
+    const svA = getSV(pieceA)
+    const ptsA = getSnapPoints(pieceA, svA, localPan.x, localPan.y, localZoom)
+    const spA = ptsA.find(p => p.endpoint === conn.e1)
+
+    if (!spA) return null
+
+    const JOINT_COLORS: Record<string, string> = {
+      butt_weld: '#f97316',
+      miter_weld: '#fb923c',
+      fillet_weld: '#fdba74',
+      cope_cut: '#60a5fa',
+      bolted: '#4ade80',
+      flanged: '#a78bfa',
+    }
+    const color = JOINT_COLORS[conn.type] ?? '#f97316'
+
+    return (
+      <React.Fragment key={`conn-${conn.id}`}>
+        <Circle
+          x={spA.x}
+          y={spA.y}
+          radius={6}
+          fill={color}
+          opacity={0.85}
+          stroke="rgba(0,0,0,0.5)"
+          strokeWidth={1}
+          listening={false}
+        />
+        <Text
+          x={spA.x + 8}
+          y={spA.y - 6}
+          text={conn.type.replace('_', ' ')}
+          fontSize={8}
+          fill={color}
+          fontFamily="JetBrains Mono, monospace"
+          listening={false}
+          opacity={0.8}
+        />
+      </React.Fragment>
+    )
+  }
+
   function handleWheel(e: KonvaEventObject<WheelEvent>) {
     e.evt.preventDefault()
     const stage = stageRef.current
@@ -428,6 +475,7 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
         <Layer>
           {project.pieces.map(p => renderPiece(p, selectedIds.includes(p.id)))}
           {!isDragging && project.pieces.map(p => !p.upright && renderDimension(p))}
+          {project.connections.map(c => renderConnection(c))}
         </Layer>
 
         <Layer>
