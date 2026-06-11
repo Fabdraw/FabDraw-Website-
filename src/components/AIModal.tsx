@@ -13,7 +13,7 @@ const EXAMPLE_PROMPTS = [
 ]
 
 export default function AIModal() {
-  const { project, addPiece } = useProjectStore()
+  const { project, addPiece, setPanZoom } = useProjectStore()
   const { setShowAIModal } = useUIStore()
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
@@ -95,6 +95,24 @@ Never add more than 4 legs. Never add diagonal braces unless asked.`
         added++
       }
 
+      // Auto-fit view to show generated pieces
+      const allPieces = [...project.pieces, ...pieces.map((p: Record<string, unknown>) => ({ ...p, x: (p.x as number) ?? 0, y: (p.y as number) ?? 0, length: (p.length as number) ?? 24 }))]
+      if (allPieces.length > 0) {
+        const canvas = document.querySelector('canvas')
+        const W = canvas ? canvas.offsetWidth : 800, H = canvas ? canvas.offsetHeight : 600
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const pc of allPieces) {
+          const hlen = (pc.length as number) / 2
+          minX = Math.min(minX, (pc.x as number) - hlen); maxX = Math.max(maxX, (pc.x as number) + hlen)
+          minY = Math.min(minY, (pc.y as number) - 5); maxY = Math.max(maxY, (pc.y as number) + 5)
+        }
+        const pw = maxX - minX + 10, ph = maxY - minY + 10
+        const SCALE = 8
+        const z = Math.max(0.05, Math.min(4, Math.min((W * 0.8) / (pw * SCALE), (H * 0.8) / (ph * SCALE))))
+        const panX = W / 2 - ((minX + maxX) / 2) * z * SCALE
+        const panY = H / 2 - ((minY + maxY) / 2) * z * SCALE
+        setPanZoom(panX, panY, z)
+      }
       toast.success(`AI added ${added} piece${added !== 1 ? 's' : ''} to drawing`)
       setShowAIModal(false)
     } catch (e) {

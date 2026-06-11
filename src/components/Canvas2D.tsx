@@ -76,6 +76,8 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
   }, [localZoom])
 
   function getPieceColor(p: Piece) {
+    if (p.material === 'stainless') return '#9ca3af'
+    if (p.material === 'aluminum') return '#93c5fd'
     return PIECE_COLORS[p.type] ?? '#4d8fd4'
   }
 
@@ -147,6 +149,11 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
           const tempP = { ...p, x: wx, y: wy }
           const snap = findSnap(tempP, project.pieces, localPan.x, localPan.y, localZoom, getSV)
           if (snap) { wx = snap.wx; wy = snap.wy }
+          else {
+            const GRID = 0.5
+            wx = Math.round(wx / GRID) * GRID
+            wy = Math.round(wy / GRID) * GRID
+          }
           updatePiece(p.id, { x: wx, y: wy })
           if (snap) {
             addConnection({ p1: p.id, e1: snap.dragEndpoint, p2: snap.snapPoint.pieceId, e2: snap.snapPoint.endpoint, type: 'butt_weld' })
@@ -265,16 +272,19 @@ export default function Canvas2D({ stageRef, containerRef }: Props) {
 
         {/* Selection outline */}
         {isSelected && (
-          <Rect
-            x={-halfLen - 3}
-            y={-hw - 3}
-            width={halfLen * 2 + 6}
-            height={vh + 6}
-            stroke="#f97316"
-            strokeWidth={2}
-            dash={[4, 3]}
-            fill="transparent"
-          />
+          <>
+            <Rect x={-halfLen - 6} y={-hw - 6} width={halfLen * 2 + 12} height={vh + 12} stroke="rgba(249,115,22,0.2)" strokeWidth={8} fill="transparent" listening={false} />
+            <Rect
+              x={-halfLen - 3}
+              y={-hw - 3}
+              width={halfLen * 2 + 6}
+              height={vh + 6}
+              stroke="#f97316"
+              strokeWidth={2.5}
+              dash={[5, 3]}
+              fill="transparent"
+            />
+          </>
         )}
       </Group>
     )

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Save, Undo2, Redo2, MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, FileText, Download, Sparkles, Camera, DollarSign, PenLine } from 'lucide-react'
+import { Save, FolderOpen, Undo2, Redo2, MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, FileText, Download, Sparkles, Camera, DollarSign, PenLine } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -13,7 +13,7 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ stageRef }: ToolbarProps) {
-  const { project, setProjectName, setPanZoom } = useProjectStore()
+  const { project, setProjectName, setPanZoom, updateTitleBlock } = useProjectStore()
   const {
     mode, setMode, activeView, setActiveView,
     setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowCostCalculator,
@@ -22,6 +22,46 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
   const { canUndo, canRedo, undo, redo } = useHistoryStore()
 
   const zoom = project.zoom
+
+  function handleSave() {
+    const data = JSON.stringify(project, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(project.name || 'fabdraw').replace(/\s+/g, '_')}.fabdraw.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Project saved')
+  }
+
+  function handleLoad() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,.fabdraw.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string)
+          if (data.name) setProjectName(data.name)
+          if (data.pieces) useProjectStore.setState(s => ({ project: { ...s.project, pieces: data.pieces } }))
+          if (data.connections) useProjectStore.setState(s => ({ project: { ...s.project, connections: data.connections } }))
+          if (data.titleBlock) updateTitleBlock(data.titleBlock)
+          if (data.panX !== undefined && data.panY !== undefined && data.zoom !== undefined) {
+            setPanZoom(data.panX, data.panY, data.zoom)
+          }
+          toast.success('Project loaded')
+        } catch {
+          toast.error('Failed to load project')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
 
   function handleUndo() {
     const snap = undo()
@@ -78,9 +118,12 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
       />
       {sep()}
 
-      {/* Save */}
-      <button style={btnStyle()} title="Save (Ctrl+S)" onClick={() => toast.success('Saved to local storage')}>
+      {/* Save / Load */}
+      <button style={btnStyle()} title="Save Project (.fabdraw.json)" onClick={handleSave}>
         <Save size={14} />
+      </button>
+      <button style={btnStyle()} title="Load Project" onClick={handleLoad}>
+        <FolderOpen size={14} />
       </button>
       {sep()}
 
