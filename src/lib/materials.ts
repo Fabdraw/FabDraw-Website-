@@ -1,4 +1,13 @@
-import type { MaterialDef, MaterialType } from '../types';
+import type { MemberType } from '../types';
+
+export interface MaterialDef {
+  type: MemberType;
+  label: string;
+  sizes: string[];
+  walls: number[];
+  color: string;
+  svgIcon: string;
+}
 
 export const SHEET_GAUGES: { gauge: string; mild: number; stainless: number; aluminum: number }[] = [
   { gauge: '30ga', mild: 0.0120, stainless: 0.0125, aluminum: 0.0100 },
@@ -24,7 +33,7 @@ export const SHEET_GAUGES: { gauge: string; mild: number; stainless: number; alu
 
 export const SHEET_PRESETS = ['36x48','36x96','48x48','48x96','48x120','48x144','60x120','72x96','72x144','Custom'];
 
-export const MATERIALS: Record<MaterialType, MaterialDef> = {
+export const MATERIALS: Record<MemberType, MaterialDef> = {
   square_tube: {
     type: 'square_tube',
     label: 'Square Tube',
@@ -91,8 +100,8 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
       <rect x="4" y="14" width="24" height="4" fill="rgba(122,173,111,0.3)" stroke="rgba(148,163,184,0.8)" stroke-width="1.5"/>
     </svg>`,
   },
-  ibeam: {
-    type: 'ibeam',
+  i_beam: {
+    type: 'i_beam',
     label: 'I-Beam',
     sizes: ['W4x13', 'W5x16', 'W6x20', 'W8x24', 'W10x33', 'W12x40', 'W14x48', 'W16x57'],
     walls: [0.230, 0.240, 0.250, 0.245, 0.290, 0.295, 0.285, 0.295],
@@ -139,8 +148,10 @@ export const MATERIALS: Record<MaterialType, MaterialDef> = {
   },
 };
 
-export const parseSizeString = (type: MaterialType, sizeStr: string): { width: number; height: number } => {
+export const parseSizeString = (type: MemberType, sizeStr: string): { width: number; height: number } => {
   if (type === 'square_tube') {
+    const parts = sizeStr.split('x');
+    if (parts.length === 2) return { width: parseFloat(parts[0]), height: parseFloat(parts[1]) };
     const v = parseFloat(sizeStr);
     return { width: v, height: v };
   }
@@ -162,7 +173,7 @@ export const parseSizeString = (type: MaterialType, sizeStr: string): { width: n
     const d = match ? parseFloat(match[1]) : 4;
     return { width: d * 0.6, height: d };
   }
-  if (type === 'ibeam') {
+  if (type === 'i_beam') {
     const match = sizeStr.match(/W(\d+)/);
     const d = match ? parseFloat(match[1]) : 6;
     return { width: d * 0.6, height: d };

@@ -1,100 +1,90 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Piece, Connection, TitleBlock } from '../types';
+import type { Member, Connection, Project, TitleBlock } from '../types';
+import { DEFAULT_TITLE_BLOCK } from '../types';
 
-const defaultTitleBlock: TitleBlock = {
-  company: 'FabDraw Engineering',
-  address: '123 Industrial Ave, Suite 100',
-  phone: '(555) 123-4567',
-  web: 'www.fabdraw.io',
-  project: 'New Project',
-  description: '',
-  drawnBy: '',
-  checkedBy: '',
-  date: new Date().toLocaleDateString(),
-  scale: '1:1',
-  dwgNo: 'DWG-001',
-  revision: 'A',
+const defaultProject: Project = {
+  id: crypto.randomUUID(),
+  name: 'Untitled Project',
+  members: [],
+  connections: [],
+  titleBlock: { ...DEFAULT_TITLE_BLOCK },
 };
 
 interface ProjectState {
-  name: string;
-  pieces: Piece[];
-  connections: Connection[];
-  titleBlock: TitleBlock;
-  zoom: number;
-  panX: number;
-  panY: number;
-  savedAt: number | null;
+  project: Project;
 
-  setName: (name: string) => void;
-  addPiece: (piece: Piece) => void;
-  updatePiece: (id: string, updates: Partial<Piece>) => void;
-  deletePieces: (ids: string[]) => void;
-  setPieces: (pieces: Piece[]) => void;
-  addConnection: (conn: Connection) => void;
-  updateConnectionType: (id: string, type: string) => void;
-  removeConnectionsForPiece: (pieceId: string) => void;
-  removeConnection: (id: string) => void;
-  setConnections: (conns: Connection[]) => void;
-  updateTitleBlock: (tb: Partial<TitleBlock>) => void;
-  setZoom: (zoom: number) => void;
-  setPan: (x: number, y: number) => void;
-  markSaved: () => void;
-  clearProject: () => void;
+  addMember: (m: Omit<Member, 'id'>) => void;
+  updateMember: (id: string, patch: Partial<Member>) => void;
+  deleteMembers: (ids: string[]) => void;
+  addConnection: (c: Omit<Connection, 'id'>) => void;
+  deleteConnection: (id: string) => void;
+  setProject: (p: Project) => void;
+  setProjectName: (name: string) => void;
+  updateTitleBlock: (patch: Partial<TitleBlock>) => void;
 }
 
 export const useProjectStore = create<ProjectState>()(
   persist(
     (set) => ({
-      name: 'Untitled Project',
-      pieces: [],
-      connections: [],
-      titleBlock: defaultTitleBlock,
-      zoom: 1,
-      panX: 200,
-      panY: 200,
-      savedAt: null,
+      project: defaultProject,
 
-      setName: (name) => set({ name }),
-      addPiece: (piece) => set(s => ({ pieces: [...s.pieces, piece] })),
-      updatePiece: (id, updates) => set(s => ({
-        pieces: s.pieces.map(p => p.id === id ? { ...p, ...updates } : p)
-      })),
-      deletePieces: (ids) => set(s => ({
-        pieces: s.pieces.filter(p => !ids.includes(p.id)),
-        connections: s.connections.filter(c => !ids.includes(c.pieceAId) && !ids.includes(c.pieceBId)),
-      })),
-      setPieces: (pieces) => set({ pieces }),
-      addConnection: (conn) => set(s => {
-        const exists = s.connections.some(
-          c => (c.pieceAId === conn.pieceAId && c.pieceBId === conn.pieceBId &&
-            c.snapPointA === conn.snapPointA && c.snapPointB === conn.snapPointB)
-        );
-        if (exists) return s;
-        return { connections: [...s.connections, conn] };
-      }),
-      updateConnectionType: (id, type) => set(s => ({
-        connections: s.connections.map(c => c.id === id ? { ...c, type: type as any } : c)
-      })),
-      removeConnectionsForPiece: (pieceId) => set(s => ({
-        connections: s.connections.filter(c => c.pieceAId !== pieceId && c.pieceBId !== pieceId)
-      })),
-      removeConnection: (id) => set(s => ({
-        connections: s.connections.filter(c => c.id !== id)
-      })),
-      setConnections: (connections) => set({ connections }),
-      updateTitleBlock: (tb) => set(s => ({ titleBlock: { ...s.titleBlock, ...tb } })),
-      setZoom: (zoom) => set({ zoom }),
-      setPan: (panX, panY) => set({ panX, panY }),
-      markSaved: () => set({ savedAt: Date.now() }),
-      clearProject: () => set({
-        pieces: [],
-        connections: [],
-        name: 'Untitled Project',
-        titleBlock: defaultTitleBlock,
-      }),
+      addMember: (m) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            members: [...s.project.members, { ...m, id: crypto.randomUUID() }],
+          },
+        })),
+
+      updateMember: (id, patch) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            members: s.project.members.map((m) =>
+              m.id === id ? { ...m, ...patch } : m
+            ),
+          },
+        })),
+
+      deleteMembers: (ids) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            members: s.project.members.filter((m) => !ids.includes(m.id)),
+            connections: s.project.connections.filter(
+              (c) => !ids.includes(c.memberAId) && !ids.includes(c.memberBId)
+            ),
+          },
+        })),
+
+      addConnection: (c) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            connections: [
+              ...s.project.connections,
+              { ...c, id: crypto.randomUUID() },
+            ],
+          },
+        })),
+
+      deleteConnection: (id) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            connections: s.project.connections.filter((c) => c.id !== id),
+          },
+        })),
+
+      setProject: (p) => set({ project: p }),
+
+      setProjectName: (name) =>
+        set((s) => ({ project: { ...s.project, name } })),
+
+      updateTitleBlock: (patch) =>
+        set((s) => ({ project: { ...s.project, titleBlock: { ...s.project.titleBlock, ...patch } } })),
     }),
-    { name: 'fabdraw-project' }
+    { name: 'fabdraw-v2' }
   )
 );

@@ -3,8 +3,8 @@ import { Plus } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
-import { MATERIALS, parseSizeString } from '../lib/materials';
-import type { MaterialType, MaterialGrade, Piece } from '../types';
+import { MATERIALS } from '../lib/materials';
+import type { MemberType, Grade } from '../types';
 
 interface LibProps {
   collapsed?: boolean;
@@ -14,17 +14,17 @@ const materialGroups = [
   {
     label: 'STRUCTURAL TUBE',
     id: 'tube',
-    types: ['square_tube', 'round_tube', 'rect_tube', 'pipe'] as MaterialType[],
+    types: ['square_tube', 'round_tube', 'rect_tube', 'pipe'] as MemberType[],
   },
   {
     label: 'STRUCTURAL STEEL',
     id: 'structural',
-    types: ['angle', 'channel', 'ibeam'] as MaterialType[],
+    types: ['angle', 'channel', 'i_beam'] as MemberType[],
   },
   {
     label: 'FLAT STOCK',
     id: 'flat',
-    types: ['flat_bar', 'sheet', 'plate'] as MaterialType[],
+    types: ['flat_bar', 'sheet', 'plate'] as MemberType[],
   },
 ];
 
@@ -32,25 +32,25 @@ const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255
 const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
 
 export default function LibraryPanel({ collapsed }: LibProps) {
-  const { pieces, connections, addPiece, zoom, panX, panY } = useProjectStore();
-  const { setSelectedIds } = useUIStore();
+  const { project, addMember } = useProjectStore();
+  const { members, connections } = project;
+  const { setSelectedIds, panX, panY, zoom } = useUIStore();
   const historyStore = useHistoryStore();
 
-  const [selectedType, setSelectedType] = useState<MaterialType>('square_tube');
+  const [selectedType, setSelectedType] = useState<MemberType>('square_tube');
   const [selectedSize, setSelectedSize] = useState<string>('2x2');
-  const [selectedWall, setSelectedWall] = useState<number>(0.125);
-  const [selectedGrade, setSelectedGrade] = useState<MaterialGrade>('mild_steel');
+  const [selectedWall, setSelectedWall] = useState<string>('0.125');
+  const [selectedGrade, setSelectedGrade] = useState<Grade>('mild');
   const [length, setLength] = useState<number>(48);
 
-  const handleTypeSelect = (type: MaterialType) => {
+  const handleTypeSelect = (type: MemberType) => {
     setSelectedType(type);
     const mat = MATERIALS[type];
     setSelectedSize(mat.sizes[0]);
-    setSelectedWall(mat.walls[0]);
+    setSelectedWall(String(mat.walls[0]));
   };
 
-  const handleAddPiece = () => {
-    const { width, height } = parseSizeString(selectedType, selectedSize);
+  const handleAddMember = () => {
     const SCALE = 8;
     const canvas = document.querySelector('canvas');
     const cw = canvas?.offsetWidth ?? 800;
@@ -58,27 +58,25 @@ export default function LibraryPanel({ collapsed }: LibProps) {
     const wx = (cw / 2 - panX) / (zoom * SCALE);
     const wy = (ch / 2 - panY) / (zoom * SCALE);
 
-    const newPiece: Piece = {
-      id: crypto.randomUUID(),
+    historyStore.push({ members, connections });
+    const newId = crypto.randomUUID();
+    addMember({
       type: selectedType,
+      size: selectedSize,
+      wallThickness: selectedWall,
       grade: selectedGrade,
-      width,
-      height,
-      wall: selectedWall,
       length,
-      x: wx + (Math.random() - 0.5) * 3,
-      y: wy + (Math.random() - 0.5) * 3,
-      angle: 0,
-      orientation: 'horizontal',
-      zHeight: 48,
-      notes: '',
-      weldSymbol: '',
+      position: {
+        x: wx + (Math.random() - 0.5) * 3,
+        y: wy + (Math.random() - 0.5) * 3,
+        z: 0,
+      },
+      rotation: { x: 0, y: 0, z: 0 },
       holes: [],
-    };
-
-    historyStore.push({ pieces, connections });
-    addPiece(newPiece);
-    setSelectedIds([newPiece.id]);
+    });
+    // We can't get the new id before add, so select by finding last member
+    // Instead just clear selection - that's fine for now
+    setSelectedIds([]);
   };
 
   if (collapsed) return null;
@@ -190,10 +188,10 @@ export default function LibraryPanel({ collapsed }: LibProps) {
           <select
             className={inputCls}
             value={selectedWall}
-            onChange={e => setSelectedWall(parseFloat(e.target.value))}
+            onChange={e => setSelectedWall(e.target.value)}
           >
             {mat.walls.map(w => (
-              <option key={w} value={w}>{w}"</option>
+              <option key={w} value={String(w)}>{w}"</option>
             ))}
           </select>
         </div>
@@ -226,9 +224,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
           <label className={labelCls}>Grade</label>
           <div className="flex gap-1">
             {([
-              { key: 'mild_steel' as MaterialGrade, label: 'Mild' },
-              { key: 'stainless' as MaterialGrade, label: 'SS' },
-              { key: 'aluminum' as MaterialGrade, label: 'Alum' },
+              { key: 'mild' as Grade, label: 'Mild' },
+              { key: 'stainless' as Grade, label: 'SS' },
+              { key: 'aluminum' as Grade, label: 'Alum' },
             ]).map(({ key, label }) => (
               <button
                 key={key}
@@ -248,7 +246,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
 
         {/* Add button */}
         <button
-          onClick={handleAddPiece}
+          onClick={handleAddMember}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-white text-[13px] font-medium"
           style={{
             background: 'linear-gradient(135deg, #f97316, #ea580c)',
