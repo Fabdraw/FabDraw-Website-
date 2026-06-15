@@ -1,15 +1,12 @@
-import React, { useState } from 'react'
-import { MousePointer2, Hand, Undo2, Redo2, Download, Trash2, Copy, Clipboard, LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import React, { useRef, useState } from 'react'
+import { MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard, LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2, Save, FolderOpen, FileText } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
+import { exportPDF } from '../lib/pdfExport'
+import type { Project } from '../types'
 
-interface ToolbarProps {
-  onExportJSON: () => void
-  onImportJSON: () => void
-}
-
-export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
+export default function Toolbar() {
   const { project, setProjectName, deleteMembers, addMember, setProject } = useProjectStore()
   const { members, connections } = project
   const {
@@ -17,10 +14,11 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
     clipboard, setClipboard,
     activeView, setActiveView,
     setShowTitleBlockModal, setShowAIModal, setShowPhotoModal,
-    zoom, setZoom, panX, panY, setPan,
+    zoom, setZoom, setPan,
   } = useUIStore()
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore()
   const [editingName, setEditingName] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUndo = () => {
     const entry = undo()
@@ -61,6 +59,43 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
     setZoom(nz)
   }
 
+  const handleSave = () => {
+    const data = JSON.stringify(project, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name.replace(/\s+/g, '_')}.fabdraw.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleLoad = () => fileInputRef.current?.click()
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string) as Project
+        if (!data.members || !Array.isArray(data.members)) throw new Error('Invalid .fabdraw file')
+        if (members.length > 0 && !window.confirm('Replace current project with loaded file?')) return
+        push({ members, connections })
+        setProject(data)
+      } catch (err) {
+        alert(`Failed to load file: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleExportPDF = () => {
+    const url = exportPDF(members, project.titleBlock, project.name)
+    window.open(url, '_blank')
+  }
+
   const btn = 'flex items-center justify-center w-[30px] h-[30px] rounded-md transition-colors focus:outline-none text-[#475569] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#94a3b8]'
   const btnA = 'flex items-center justify-center w-[30px] h-[30px] rounded-md focus:outline-none bg-[rgba(249,115,22,0.15)] text-[#f97316]'
   const btnD = 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#2d3748] cursor-not-allowed'
@@ -93,20 +128,21 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
       <button className={mode === 'select' ? btnA : btn} onClick={() => setMode('select')} title="Select"><MousePointer2 size={15} /></button>
       <button className={mode === 'pan' ? btnA : btn} onClick={() => setMode('pan')} title="Pan"><Hand size={15} /></button>
       <Div />
-      <button className={btn} onClick={() => setZoom(Math.max(0.05, zoom * 0.8))}><ZoomOut size={15} /></button>
+      <button className={btn} onClick={() => setZoom(Math.max(0.05, zoom * 0.8))} title="Zoom Out"><ZoomOut size={15} /></button>
       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', color: '#94a3b8', width: '42px', textAlign: 'center' }}>
         {(zoom * 100).toFixed(0)}%
       </span>
-      <button className={btn} onClick={() => setZoom(Math.min(10, zoom * 1.25))}><ZoomIn size={15} /></button>
-      <button className={btn} onClick={handleFitView}><Maximize2 size={15} /></button>
+      <button className={btn} onClick={() => setZoom(Math.min(10, zoom * 1.25))} title="Zoom In"><ZoomIn size={15} /></button>
+      <button className={btn} onClick={handleFitView} title="Fit View"><Maximize2 size={15} /></button>
       <Div />
       <button className={activeView === '2d' ? btnA : btn} onClick={() => setActiveView('2d')} style={{ fontSize: '11px', fontWeight: 700 }}>2D</button>
       <button className={activeView === '3d' ? btnA : btn} onClick={() => setActiveView('3d')} style={{ fontSize: '11px', fontWeight: 700 }}>3D</button>
       <Div />
       <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block"><LayoutGrid size={15} /></button>
       <div className="flex-1" />
-      <button className={btn} onClick={onImportJSON} title="Import"><Download size={15} style={{ transform: 'rotate(180deg)' }} /></button>
-      <button className={btn} onClick={onExportJSON} title="Export JSON"><Download size={15} /></button>
+      <button className={btn} onClick={handleSave} title="Save (.fabdraw.json)"><Save size={15} /></button>
+      <button className={btn} onClick={handleLoad} title="Load (.fabdraw.json)"><FolderOpen size={15} /></button>
+      <button className={btn} onClick={handleExportPDF} title="Export PDF"><FileText size={15} /></button>
       <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
         style={{ border: '1px solid #f97316', color: '#f97316', background: 'transparent' }}
         onClick={() => setShowAIModal(true)}>
@@ -117,6 +153,7 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
         onClick={() => setShowPhotoModal(true)}>
         <Camera size={13} /> Photo
       </button>
+      <input ref={fileInputRef} type="file" accept=".json,.fabdraw.json" className="hidden" onChange={handleFileChange} />
     </div>
   )
 }

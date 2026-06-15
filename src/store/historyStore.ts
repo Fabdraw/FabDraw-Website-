@@ -39,7 +39,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       const newFuture = [entry, ...state.future];
       return { past: newPast, future: newFuture, canUndo: newPast.length > 0, canRedo: true };
     });
-    return past.length >= 2 ? past[past.length - 2] : null;
+    return entry;
   },
 
   redo: () => {

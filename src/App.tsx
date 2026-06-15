@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect } from 'react';
 import Toolbar from './components/Toolbar';
 import LibraryPanel from './components/LibraryPanel';
 import Canvas2D from './components/Canvas2D';
@@ -14,17 +14,15 @@ import { useUIStore } from './store/uiStore';
 import { useHistoryStore } from './store/historyStore';
 
 export default function App() {
-  const { project, setProject, setProjectName, addMember, deleteMembers } = useProjectStore();
+  const { project, setProject, addMember, deleteMembers } = useProjectStore();
   const { members, connections } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
     showTitleBlockModal, showAIModal, showPhotoModal, setContextMenu,
     clipboard, setClipboard,
-    zoom, setZoom, panX, panY, setPan,
+    zoom, setZoom, setPan,
   } = useUIStore();
   const { undo, redo, push } = useHistoryStore();
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -117,44 +115,9 @@ export default function App() {
     setMode, setSelectedIds, setZoom, setPan, setClipboard, setContextMenu,
     undo, redo, push, addMember, deleteMembers, setProject, project]);
 
-  const handleExportJSON = useCallback(() => {
-    const data = JSON.stringify(project, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${project.name.replace(/\s+/g, '_')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [project]);
-
-  const handleImportJSON = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const data = JSON.parse(ev.target?.result as string);
-          push({ members, connections });
-          setProject({ ...project, ...data });
-        } catch {
-          alert('Invalid JSON file');
-        }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
-    },
-    [members, connections, push, setProject, project]
-  );
-
   return (
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
-      <Toolbar onExportJSON={handleExportJSON} onImportJSON={handleImportJSON} />
+      <Toolbar />
 
       <div className="flex flex-1 min-h-0">
         <LibraryPanel />
@@ -182,14 +145,6 @@ export default function App() {
       {showAIModal && <AIGeneratorModal />}
       {showPhotoModal && <PhotoModal />}
       <ContextMenu />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        className="hidden"
-        onChange={handleFileChange}
-      />
     </div>
   );
 }

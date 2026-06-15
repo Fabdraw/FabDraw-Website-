@@ -191,6 +191,13 @@ export function exportPDF(
         pts[0].x, pts[0].y, [1, 1], 'FD', true
       );
 
+      // Dimension label above member
+      const labelAngle = -(m.rotation.y % 180);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(40, 40, 40);
+      doc.text(inchesToFtIn(m.length), cx, cy - vizH / 2 - 4, { align: 'center', angle: labelAngle });
+
       for (const hole of m.holes) {
         const t = hole.positionAlongMember / m.length;
         const hx = cx - cos * hw + cos * (m.length * t * scale);
