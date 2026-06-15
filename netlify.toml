@@ -5,6 +5,12 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[context.branch-deploy]
+  command = "npm run build"
+
+[context.deploy-preview]
+  command = "npm run build"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

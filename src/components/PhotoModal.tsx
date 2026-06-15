@@ -111,7 +111,7 @@ export default function PhotoModal() {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-5',
+          model: (import.meta as unknown as { env: Record<string, string> }).env.VITE_ANTHROPIC_MODEL || 'claude-sonnet-4-6',
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages: [{
