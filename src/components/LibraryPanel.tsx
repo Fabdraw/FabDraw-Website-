@@ -5,6 +5,7 @@ import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
 import { MATERIALS } from '../lib/materials';
 import type { MemberType, Grade } from '../types';
+import { inputCls, labelCls } from '../styles/tokens';
 
 interface LibProps {
   collapsed?: boolean;
@@ -28,8 +29,6 @@ const materialGroups = [
   },
 ];
 
-const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#f1f5f9] text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-[#f97316] transition-colors';
-const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
 
 export default function LibraryPanel({ collapsed }: LibProps) {
   const { project, addMember } = useProjectStore();
@@ -93,9 +92,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
     <div
       className="flex flex-col h-full shrink-0 overflow-hidden"
       style={{
-        width: '240px',
-        background: '#161b25',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        width: '220px',
+        background: '#1a1d27',
+        borderRight: '1px solid #2e3350',
       }}
     >
       {/* Material list */}
@@ -153,7 +152,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
         className="shrink-0 space-y-2.5"
         style={{
           padding: '12px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderTop: '1px solid #2e3350',
         }}
       >
         {/* SVG preview */}
@@ -161,9 +160,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
           className="flex items-center justify-center"
           style={{
             height: '40px',
-            background: 'rgba(255,255,255,0.03)',
+            background: '#21253a',
             borderRadius: '6px',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid #2e3350',
           }}
           dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
         />
@@ -233,9 +232,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                 onClick={() => setSelectedGrade(key)}
                 className="flex-1 py-1 rounded-md text-[11px] font-medium panel-item"
                 style={{
-                  background: selectedGrade === key ? '#f97316' : 'rgba(255,255,255,0.04)',
-                  color: selectedGrade === key ? '#fff' : '#94a3b8',
-                  border: selectedGrade === key ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                  background: selectedGrade === key ? 'rgba(249,115,22,0.15)' : 'transparent',
+                  color: selectedGrade === key ? '#f97316' : '#64748b',
+                  border: selectedGrade === key ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2e3350',
                 }}
               >
                 {label}

@@ -126,7 +126,7 @@ export default function App() {
           <div className="flex-1 relative min-h-0">
             {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
 
-            <div className="absolute bottom-2 right-2 bg-[#1a1d2e]/90 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3">
+            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
               <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
               <span>{members.length} members</span>
               {selectedIds.length > 0 && (

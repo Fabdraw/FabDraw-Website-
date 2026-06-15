@@ -6,6 +6,7 @@ import { useHistoryStore } from '../store/historyStore';
 import { MATERIALS } from '../lib/materials';
 import { calcWeight, formatWeight } from '../lib/weights';
 import type { Grade, Hole } from '../types';
+import { inputCls, labelCls } from '../styles/tokens';
 
 const GRADE_LABELS: Record<Grade, string> = {
   mild: 'Mild Steel',
@@ -13,8 +14,6 @@ const GRADE_LABELS: Record<Grade, string> = {
   aluminum: 'Aluminum',
 };
 
-const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#f1f5f9] text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-[#f97316] transition-colors';
-const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
 
 export default function PropertiesPanel() {
   const { project, updateMember, deleteMembers, deleteConnection } = useProjectStore();
@@ -46,8 +45,8 @@ export default function PropertiesPanel() {
 
   const panelStyle = {
     width: '240px',
-    background: '#161b25',
-    borderLeft: '1px solid rgba(255,255,255,0.06)',
+    background: '#1a1d27',
+    borderLeft: '1px solid #2e3350',
   };
 
   if (selectedIds.length === 0 && !selectedConn) {
@@ -89,11 +88,11 @@ export default function PropertiesPanel() {
     return (
       <div className="shrink-0 p-3 space-y-2" style={panelStyle}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>Connection</div>
-        <div className="rounded-md p-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
           <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER A</div>
           <div>{mA ? MATERIALS[mA.type].label : '—'}</div>
         </div>
-        <div className="rounded-md p-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
           <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER B</div>
           <div>{mB ? MATERIALS[mB.type].label : '—'}</div>
         </div>
@@ -145,7 +144,7 @@ export default function PropertiesPanel() {
   return (
     <div className="shrink-0 flex flex-col" style={panelStyle}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #2e3350' }}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
           {mat.label}
         </div>
@@ -162,7 +161,7 @@ export default function PropertiesPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #2e3350' }}>
         {tabs.map(t => (
           <button
             key={t.id}
@@ -281,7 +280,7 @@ export default function PropertiesPanel() {
             {/* Weight */}
             <div
               className="flex items-center justify-between px-2 py-2 rounded-md"
-              style={{ background: 'rgba(255,255,255,0.03)' }}
+              style={{ background: '#21253a' }}
             >
               <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
                 WEIGHT
@@ -328,7 +327,7 @@ export default function PropertiesPanel() {
             )}
 
             {(selectedMember.holes || []).map((hole, i) => (
-              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#21253a' }}>
                 <div className="flex items-center justify-between">
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hole {i + 1}</span>
                   <button

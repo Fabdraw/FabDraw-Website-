@@ -11,19 +11,22 @@
 :root {
   --bg: #0f1117;
   --canvas-bg: #0d1117;
-  --panel-bg: #161b25;
-  --panel-border: rgba(255,255,255,0.06);
+  --panel-bg: #1a1d27;
+  --panel-bg-raised: #21253a;
+  --panel-border: #2e3350;
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #475569;
   --accent: #f97316;
+  --accent-hover: #ea6c0a;
   --accent-glow: rgba(249,115,22,0.15);
   --accent-subtle: rgba(249,115,22,0.06);
   --blue: #3b82f6;
   --green: #22c55e;
-  --input-bg: rgba(255,255,255,0.04);
-  --input-border: rgba(255,255,255,0.08);
-  --divider: rgba(255,255,255,0.06);
+  --error: #ef4444;
+  --input-bg: #21253a;
+  --input-border: #2e3350;
+  --divider: #2e3350;
 }
 
 * { box-sizing: border-box; }
@@ -37,10 +40,12 @@ body {
   margin: 0;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #161b25; }
-::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #1a1d27; }
+::-webkit-scrollbar-thumb { background: #2e3350; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3d4466; }
+
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23475569'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px !important; }
 
 .canvas-select { cursor: default; }
 .canvas-pan { cursor: grab; }

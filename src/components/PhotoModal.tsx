@@ -170,10 +170,10 @@ export default function PhotoModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1d2e] border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg mx-4 max-h-[90vh] flex flex-col rounded-xl shadow-2xl" style={{ background: '#1a1d27', border: '1px solid #2e3350' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #2e3350' }}>
           <div className="flex items-center gap-2">
             <Camera size={18} className="text-teal-400" />
             <div>
@@ -190,8 +190,10 @@ export default function PhotoModal() {
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Drop zone */}
           <div
-            className="border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:border-teal-500 transition-colors"
-            style={{ minHeight: 140 }}
+            className="border-2 border-dashed rounded-xl cursor-pointer transition-colors"
+            style={{ borderColor: '#2e3350', minHeight: 140 }}
+            onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.borderColor = '#14b8a6')}
+            onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = '#2e3350')}
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
@@ -223,7 +225,7 @@ export default function PhotoModal() {
           </button>
 
           {result && generated.length > 0 && (
-            <div className="bg-slate-900 rounded-lg p-3 space-y-2">
+            <div className="rounded-lg p-3 space-y-2" style={{ background: '#0f1117', border: '1px solid #2e3350' }}>
               <div className="text-xs text-teal-400 font-medium">{result}</div>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {generated.map((m, i) => (

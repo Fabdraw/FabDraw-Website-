@@ -31,8 +31,8 @@ export default function BOMPanel() {
   }, [members]);
 
   const headerStyle: React.CSSProperties = {
-    background: '#161b25',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
+    background: '#1a1d27',
+    borderTop: '1px solid #2e3350',
   };
 
   if (isBOMCollapsed) {
@@ -62,7 +62,7 @@ export default function BOMPanel() {
       {/* Header */}
       <div
         className="flex items-center gap-3 px-3 shrink-0 cursor-pointer"
-        style={{ height: '32px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{ height: '32px', borderBottom: '1px solid #2e3350' }}
         onClick={toggleBOM}
       >
         <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
@@ -84,7 +84,7 @@ export default function BOMPanel() {
       {/* Table */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left" style={{ ...monoStyle, fontSize: '11px' }}>
-          <thead className="sticky top-0" style={{ background: '#161b25' }}>
+          <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
             <tr>
               {['#','TYPE','SIZE','WALL','GRADE','LENGTH','QTY','WEIGHT'].map(h => (
                 <th
@@ -124,7 +124,7 @@ export default function BOMPanel() {
                   <td className="px-2 py-1 text-center">
                     <span
                       className="px-1.5 py-0.5 rounded"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: '#f1f5f9' }}
+                      style={{ background: '#2e3350', color: '#f1f5f9' }}
                     >
                       {count}
                     </span>

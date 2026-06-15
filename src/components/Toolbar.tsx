@@ -1,5 +1,9 @@
 import React, { useRef, useState } from 'react'
-import { MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard, LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2, Save, FolderOpen, FileText } from 'lucide-react'
+import {
+  MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
+  LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
+  Save, FolderOpen, FileText,
+} from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -38,7 +42,10 @@ export default function Toolbar() {
   const handlePaste = () => {
     if (clipboard.length === 0) return
     push({ members, connections })
-    const newMembers = clipboard.map(m => ({ ...m, id: crypto.randomUUID(), position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } }))
+    const newMembers = clipboard.map(m => ({
+      ...m, id: crypto.randomUUID(),
+      position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
+    }))
     newMembers.forEach(m => addMember(m))
     setSelectedIds(newMembers.map(m => m.id))
   }
@@ -84,7 +91,7 @@ export default function Toolbar() {
         push({ members, connections })
         setProject(data)
       } catch (err) {
-        alert(`Failed to load file: ${err instanceof Error ? err.message : String(err)}`)
+        alert(`Failed to load: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     reader.readAsText(file)
@@ -96,63 +103,163 @@ export default function Toolbar() {
     window.open(url, '_blank')
   }
 
-  const btn = 'flex items-center justify-center w-[30px] h-[30px] rounded-md transition-colors focus:outline-none text-[#475569] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#94a3b8]'
-  const btnA = 'flex items-center justify-center w-[30px] h-[30px] rounded-md focus:outline-none bg-[rgba(249,115,22,0.15)] text-[#f97316]'
-  const btnD = 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#2d3748] cursor-not-allowed'
-  const Div = () => <div className="w-px h-5 mx-2" style={{ background: 'rgba(255,255,255,0.08)' }} />
+  // Button variants
+  const base = 'flex items-center justify-center w-7 h-7 rounded transition-colors focus:outline-none'
+  const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
+  const btnActive = `${base} bg-orange-500/15 text-orange-400`
+  const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
+  const div = <div className="w-px h-4 mx-1.5 bg-[#2e3350] shrink-0" />
 
   return (
-    <div className="flex items-center gap-1 px-3 select-none shrink-0"
-      style={{ height: '48px', background: '#0f1117', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 mr-2">
-        <div className="w-2 h-2 rounded-sm shrink-0" style={{ background: '#f97316' }} />
-        <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.1em', color: '#f1f5f9' }}>FABDRAW</span>
+    <div
+      className="flex items-center gap-0.5 px-3 select-none shrink-0"
+      style={{ height: '44px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-2 mr-3 shrink-0">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect width="8" height="8" rx="1.5" fill="#f97316" />
+          <rect x="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
+          <rect y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
+          <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".25" />
+        </svg>
+        <span className="text-sm font-bold tracking-widest text-slate-100">FABDRAW</span>
       </div>
+
+      {/* Project name */}
       <input
-        className="focus:outline-none bg-transparent text-[#f1f5f9] text-[13px] w-32"
-        style={{ border: 'none', borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent' }}
+        className="bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
+        style={{
+          border: 'none',
+          borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent',
+          transition: 'border-color 150ms',
+        }}
         value={project.name}
         onChange={e => setProjectName(e.target.value)}
         onFocus={() => setEditingName(true)}
         onBlur={() => setEditingName(false)}
       />
-      <Div />
-      <button className={canUndo ? btn : btnD} onClick={handleUndo} disabled={!canUndo} title="Undo"><Undo2 size={15} /></button>
-      <button className={canRedo ? btn : btnD} onClick={handleRedo} disabled={!canRedo} title="Redo"><Redo2 size={15} /></button>
-      <Div />
-      <button className={selectedIds.length > 0 ? btn : btnD} onClick={handleCopy} disabled={!selectedIds.length} title="Copy"><Copy size={15} /></button>
-      <button className={clipboard.length > 0 ? btn : btnD} onClick={handlePaste} disabled={!clipboard.length} title="Paste"><Clipboard size={15} /></button>
-      <button className={selectedIds.length > 0 ? 'flex items-center justify-center w-[30px] h-[30px] rounded-md text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)]' : btnD}
-        onClick={handleDelete} disabled={!selectedIds.length} title="Delete"><Trash2 size={15} /></button>
-      <Div />
-      <button className={mode === 'select' ? btnA : btn} onClick={() => setMode('select')} title="Select"><MousePointer2 size={15} /></button>
-      <button className={mode === 'pan' ? btnA : btn} onClick={() => setMode('pan')} title="Pan"><Hand size={15} /></button>
-      <Div />
-      <button className={btn} onClick={() => setZoom(Math.max(0.05, zoom * 0.8))} title="Zoom Out"><ZoomOut size={15} /></button>
-      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', color: '#94a3b8', width: '42px', textAlign: 'center' }}>
+
+      {div}
+
+      {/* Undo / Redo */}
+      <button className={canUndo ? btn : btnDisabled} onClick={handleUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+        <Undo2 size={14} />
+      </button>
+      <button className={canRedo ? btn : btnDisabled} onClick={handleRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
+        <Redo2 size={14} />
+      </button>
+
+      {div}
+
+      {/* Edit */}
+      <button className={selectedIds.length > 0 ? btn : btnDisabled} onClick={handleCopy} disabled={!selectedIds.length} title="Copy (Ctrl+C)">
+        <Copy size={14} />
+      </button>
+      <button className={clipboard.length > 0 ? btn : btnDisabled} onClick={handlePaste} disabled={!clipboard.length} title="Paste (Ctrl+V)">
+        <Clipboard size={14} />
+      </button>
+      <button
+        className={selectedIds.length > 0
+          ? `${base} text-red-400 hover:bg-red-500/10`
+          : btnDisabled}
+        onClick={handleDelete}
+        disabled={!selectedIds.length}
+        title="Delete (Del)"
+      >
+        <Trash2 size={14} />
+      </button>
+
+      {div}
+
+      {/* Mode */}
+      <button className={mode === 'select' ? btnActive : btn} onClick={() => setMode('select')} title="Select (V)">
+        <MousePointer2 size={14} />
+      </button>
+      <button className={mode === 'pan' ? btnActive : btn} onClick={() => setMode('pan')} title="Pan (H / Space)">
+        <Hand size={14} />
+      </button>
+
+      {div}
+
+      {/* Zoom */}
+      <button className={btn} onClick={() => setZoom(Math.max(0.05, zoom * 0.8))} title="Zoom Out (-)">
+        <ZoomOut size={14} />
+      </button>
+      <span
+        className="text-slate-500 text-xs tabular-nums w-10 text-center"
+        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}
+      >
         {(zoom * 100).toFixed(0)}%
       </span>
-      <button className={btn} onClick={() => setZoom(Math.min(10, zoom * 1.25))} title="Zoom In"><ZoomIn size={15} /></button>
-      <button className={btn} onClick={handleFitView} title="Fit View"><Maximize2 size={15} /></button>
-      <Div />
-      <button className={activeView === '2d' ? btnA : btn} onClick={() => setActiveView('2d')} style={{ fontSize: '11px', fontWeight: 700 }}>2D</button>
-      <button className={activeView === '3d' ? btnA : btn} onClick={() => setActiveView('3d')} style={{ fontSize: '11px', fontWeight: 700 }}>3D</button>
-      <Div />
-      <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block"><LayoutGrid size={15} /></button>
+      <button className={btn} onClick={() => setZoom(Math.min(10, zoom * 1.25))} title="Zoom In (+)">
+        <ZoomIn size={14} />
+      </button>
+      <button className={btn} onClick={handleFitView} title="Fit View">
+        <Maximize2 size={14} />
+      </button>
+
+      {div}
+
+      {/* View */}
+      <button
+        className={activeView === '2d' ? btnActive : btn}
+        onClick={() => setActiveView('2d')}
+        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+      >
+        2D
+      </button>
+      <button
+        className={activeView === '3d' ? btnActive : btn}
+        onClick={() => setActiveView('3d')}
+        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+      >
+        3D
+      </button>
+
+      {div}
+
+      {/* Title block */}
+      <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block">
+        <LayoutGrid size={14} />
+      </button>
+
+      {/* Spacer */}
       <div className="flex-1" />
-      <button className={btn} onClick={handleSave} title="Save (.fabdraw.json)"><Save size={15} /></button>
-      <button className={btn} onClick={handleLoad} title="Load (.fabdraw.json)"><FolderOpen size={15} /></button>
-      <button className={btn} onClick={handleExportPDF} title="Export PDF"><FileText size={15} /></button>
-      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
-        style={{ border: '1px solid #f97316', color: '#f97316', background: 'transparent' }}
-        onClick={() => setShowAIModal(true)}>
-        <Sparkles size={13} /> AI
+
+      {/* File ops */}
+      <button className={btn} onClick={handleSave} title="Save (.fabdraw.json)">
+        <Save size={14} />
       </button>
-      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
-        style={{ border: '1px solid #14b8a6', color: '#14b8a6', background: 'transparent' }}
-        onClick={() => setShowPhotoModal(true)}>
-        <Camera size={13} /> Photo
+      <button className={btn} onClick={handleLoad} title="Load (.fabdraw.json)">
+        <FolderOpen size={14} />
       </button>
+      <button className={btn} onClick={handleExportPDF} title="Export PDF">
+        <FileText size={14} />
+      </button>
+
+      {div}
+
+      {/* AI */}
+      <button
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10"
+        style={{ border: '1px solid #f97316', color: '#f97316' }}
+        onClick={() => setShowAIModal(true)}
+      >
+        <Sparkles size={12} />
+        AI
+      </button>
+
+      {/* Photo */}
+      <button
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ml-1 transition-colors hover:bg-teal-500/10"
+        style={{ border: '1px solid #14b8a6', color: '#14b8a6' }}
+        onClick={() => setShowPhotoModal(true)}
+      >
+        <Camera size={12} />
+        Photo
+      </button>
+
       <input ref={fileInputRef} type="file" accept=".json,.fabdraw.json" className="hidden" onChange={handleFileChange} />
     </div>
   )

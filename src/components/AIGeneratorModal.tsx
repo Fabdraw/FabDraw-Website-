@@ -157,10 +157,10 @@ export default function AIGeneratorModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1d2e] border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg mx-4 rounded-xl shadow-2xl flex flex-col" style={{ background: '#1a1d27', border: '1px solid #2e3350' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #2e3350' }}>
           <div className="flex items-center gap-2">
             <Sparkles size={18} className="text-purple-400" />
             <div>
@@ -178,7 +178,10 @@ export default function AIGeneratorModal() {
           <div>
             <label className="text-xs text-slate-500 block mb-1.5">Describe your structure</label>
             <textarea
-              className="flex-1 w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-500 resize-none h-24"
+              className="flex-1 w-full text-slate-200 text-sm rounded-lg px-3 py-2.5 focus:outline-none resize-none h-24 transition-colors"
+          style={{ background: '#0f1117', border: '1px solid #2e3350' }}
+          onFocus={e => (e.target.style.borderColor = '#f97316')}
+          onBlur={e => (e.target.style.borderColor = '#2e3350')}
               placeholder="e.g. A 6x4 foot welding table frame with 2x2 square tube legs..."
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
@@ -193,7 +196,10 @@ export default function AIGeneratorModal() {
               {EXAMPLES.map((ex, i) => (
                 <button
                   key={i}
-                  className="w-full text-left text-xs text-slate-400 hover:text-slate-200 bg-slate-900 hover:bg-slate-800 rounded px-3 py-1.5 transition-colors"
+                  className="w-full text-left text-xs text-slate-400 hover:text-slate-200 rounded px-3 py-1.5 transition-colors"
+                  style={{ background: '#21253a' }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = '#2a2f4a')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '#21253a')}
                   onClick={() => setPrompt(ex)}
                 >
                   {ex}
@@ -203,7 +209,10 @@ export default function AIGeneratorModal() {
           </div>
 
           <button
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40"
+          style={{ background: '#f97316' }}
+          onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a' }}
+          onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '#f97316')}
             onClick={handleGenerate}
             disabled={loading || !prompt.trim()}
           >
@@ -212,7 +221,7 @@ export default function AIGeneratorModal() {
           </button>
 
           {result && (
-            <div className="bg-slate-900 rounded-lg p-3">
+            <div className="rounded-lg p-3" style={{ background: '#0f1117', border: '1px solid #2e3350' }}>
               <div className="text-xs text-slate-300 mb-2">{result}</div>
               {generated.length > 0 && (
                 <>
@@ -226,7 +235,8 @@ export default function AIGeneratorModal() {
                     ))}
                   </div>
                   <button
-                    className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded transition-colors"
+                    className="w-full py-1.5 text-slate-200 text-xs rounded transition-colors"
+                  style={{ background: '#21253a' }}
                     onClick={handleAddToDrawing}
                   >
                     Add to Drawing
