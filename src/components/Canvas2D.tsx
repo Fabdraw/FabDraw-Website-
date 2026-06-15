@@ -1,774 +1,477 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { useProjectStore } from '../store/projectStore';
-import { useUIStore } from '../store/uiStore';
-import { useHistoryStore } from '../store/historyStore';
-import {
-  worldToCanvas, canvasToWorld, getSnapPoints, getVisualHeight,
-  findSnap, applySnapToPiece, hitTestPiece, snapHolePosition,
-  getPieceEndpoints, SCALE, getAngleRad
-} from '../lib/geometry';
-import { MATERIALS } from '../lib/materials';
-import type { Piece, Connection, Hole } from '../types';
+import React, { useRef, useCallback, useEffect, useState } from 'react'
+import { Stage, Layer, Group, Rect, Circle, Line, Text, Ellipse } from 'react-konva'
+import type Konva from 'konva'
+import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
+import { useHistoryStore } from '../store/historyStore'
+import { parseSizeString } from '../lib/materials'
+import type { Member, Connection } from '../types'
 
-const SNAP_RADIUS = 20; // px
+const SCALE = 8 // pixels per inch
 
-let dragOffsetX = 0;
-let dragOffsetY = 0;
+// Canvas coordinate conversions
+function wx2cx(wx: number, zoom: number, panX: number) { return wx * zoom * SCALE + panX }
+function wy2cy(wy: number, zoom: number, panY: number) { return wy * zoom * SCALE + panY }
+function cx2wx(cx: number, zoom: number, panX: number) { return (cx - panX) / (zoom * SCALE) }
+function cy2wy(cy: number, zoom: number, panY: number) { return (cy - panY) / (zoom * SCALE) }
 
-export default function Canvas2D() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { pieces, connections, zoom, panX, panY, setZoom, setPan, addPiece, updatePiece, addConnection, setPieces, setConnections } = useProjectStore();
-  const { mode, selectedIds, setSelectedIds, toggleSelectedId, setContextMenu, setHolePreview, holePreview, holeAddMode } = useUIStore();
-  const historyStore = useHistoryStore();
+const GRADE_COLOR: Record<string, string> = {
+  mild: '#4a90d9',
+  stainless: '#a8b8c8',
+  aluminum: '#c8d8e8',
+}
 
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0, px: 0, py: 0 });
-  const [selBox, setSelBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const [selBoxStart, setSelBoxStart] = useState<{ cx: number; cy: number } | null>(null);
-  const [snapHighlight, setSnapHighlight] = useState<{ x: number; y: number } | null>(null);
-  const [rotating, setRotating] = useState<string | null>(null);
-  const [rotateStart, setRotateStart] = useState({ angle: 0, mx: 0, my: 0 });
-  const animFrameRef = useRef<number>(0);
-  const piecesRef = useRef(pieces);
-  const connectionsRef = useRef(connections);
-  const zoomRef = useRef(zoom);
-  const panXRef = useRef(panX);
-  const panYRef = useRef(panY);
-  const draggingRef = useRef<string | null>(null);
-  const snapRef = useRef<{ x: number; y: number } | null>(null);
+function getMemberColor(m: Member, selected: boolean): string {
+  const base = GRADE_COLOR[m.grade] ?? '#4a90d9'
+  if (selected) return '#f97316'
+  return base
+}
 
-  useEffect(() => { piecesRef.current = pieces; }, [pieces]);
-  useEffect(() => { connectionsRef.current = connections; }, [connections]);
-  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
-  useEffect(() => { panXRef.current = panX; }, [panX]);
-  useEffect(() => { panYRef.current = panY; }, [panY]);
-  useEffect(() => { draggingRef.current = dragging; }, [dragging]);
+function isUpright(m: Member) { return Math.abs(m.rotation.x) >= 45 }
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+// Draw the cross-section shape for a member (centered at 0,0, along X axis)
+function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected: boolean }) {
+  const { width, height } = parseSizeString(m.type, m.size)
+  const wall = parseFloat(m.wallThickness) || 0.12
+  const S = zoom * SCALE
+  const len = m.length * S
+  const w = width * S   // visual height (perpendicular to length)
+  const h = height * S  // visual height
+  const wt = Math.max(wall * S, 1)
+  const color = getMemberColor(m, selected)
+  const stroke = selected ? '#f97316' : color
+  const strokeW = selected ? 2 : 1.5
 
-    const W = canvas.width;
-    const H = canvas.height;
-    const z = zoomRef.current;
-    const px = panXRef.current;
-    const py = panYRef.current;
-    const ps = piecesRef.current;
-    const cs = connectionsRef.current;
+  // Upright: render as small square/circle overhead view
+  if (isUpright(m)) {
+    return (
+      <Group>
+        <Rect x={-w / 2} y={-w / 2} width={w} height={w} fill={color + '33'} stroke={stroke} strokeWidth={strokeW} cornerRadius={2} />
+        <Rect x={-w / 2 + wt} y={-w / 2 + wt} width={w - wt * 2} height={w - wt * 2} fill='rgba(0,0,0,0.5)' listening={false} />
+      </Group>
+    )
+  }
 
-    ctx.clearRect(0, 0, W, H);
+  const hw = len / 2
 
-    // Background
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, W, H);
-
-    // Grid - minor lines
-    const gridInches = z >= 1.5 ? 1 : z >= 0.5 ? 6 : 12;
-    const gridPx = gridInches * z * SCALE;
-    const startX = ((px % gridPx) + gridPx) % gridPx;
-    const startY = ((py % gridPx) + gridPx) % gridPx;
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 0.5;
-    for (let x = startX; x < W; x += gridPx) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  switch (m.type) {
+    case 'square_tube':
+    case 'rect_tube': {
+      const ih = Math.max(h - wt * 2, 2)
+      const iw = Math.max(w - wt * 2, 2)
+      return (
+        <Group>
+          <Rect x={-hw} y={-h / 2} width={len} height={h} fill={color + '55'} stroke={stroke} strokeWidth={strokeW} />
+          <Rect x={-hw + wt} y={-h / 2 + wt} width={Math.max(len - wt * 2, 2)} height={ih} fill='rgba(0,0,0,0.4)' listening={false} />
+        </Group>
+      )
     }
-    for (let y = startY; y < H; y += gridPx) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    case 'round_tube':
+    case 'pipe': {
+      const r = w / 2
+      const ir = Math.max(r - wt, 2)
+      return (
+        <Group>
+          <Ellipse radiusX={hw} radiusY={r} fill={color + '55'} stroke={stroke} strokeWidth={strokeW} />
+          <Ellipse radiusX={Math.max(hw - wt, 2)} radiusY={ir} fill='rgba(0,0,0,0.4)' listening={false} />
+        </Group>
+      )
     }
-
-    // Major grid every 10 units
-    const majorPx = 10 * gridInches * z * SCALE;
-    const majorStartX = ((px % majorPx) + majorPx) % majorPx;
-    const majorStartY = ((py % majorPx) + majorPx) % majorPx;
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    for (let x = majorStartX; x < W; x += majorPx) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    case 'i_beam': {
+      const fw = w   // flange width (visual height)
+      const fh = wt * 1.5
+      const webH = fw - fh * 2
+      return (
+        <Group>
+          {/* Top flange */}
+          <Rect x={-hw} y={-fw / 2} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+          {/* Bottom flange */}
+          <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+          {/* Web */}
+          <Rect x={-hw} y={-webH / 2} width={len} height={webH} fill={color + '44'} stroke={stroke} strokeWidth={strokeW} />
+        </Group>
+      )
     }
-    for (let y = majorStartY; y < H; y += majorPx) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    case 'channel': {
+      const fw = w
+      const fh = wt * 1.5
+      return (
+        <Group>
+          {/* Top flange */}
+          <Rect x={-hw} y={-fw / 2} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+          {/* Bottom flange */}
+          <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+          {/* Web (left side) */}
+          <Rect x={-hw} y={-fw / 2} width={wt} height={fw} fill={color + '66'} stroke={stroke} strokeWidth={strokeW} />
+        </Group>
+      )
     }
-
-    // Origin crosshair - orange at 30% opacity, 20px lines
-    const [ox, oy] = worldToCanvas(0, 0, z, px, py);
-    ctx.strokeStyle = 'rgba(249,115,22,0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ox - 20, oy); ctx.lineTo(ox + 20, oy); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(ox, oy - 20); ctx.lineTo(ox, oy + 20); ctx.stroke();
-
-    // Draw connections
-    for (const conn of cs) {
-      const pA = ps.find(p => p.id === conn.pieceAId);
-      const pB = ps.find(p => p.id === conn.pieceBId);
-      if (!pA || !pB) continue;
-      const spA = getSnapPoints(pA).find(sp => sp.id === conn.snapPointA);
-      const spB = getSnapPoints(pB).find(sp => sp.id === conn.snapPointB);
-      if (!spA || !spB) continue;
-      const [ax, ay] = worldToCanvas(spA.x, spA.y, z, px, py);
-      const [bx, by] = worldToCanvas(spB.x, spB.y, z, px, py);
-      ctx.strokeStyle = '#c94010';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(bx, by);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // Label
-      const mx = (ax + bx) / 2;
-      const my = (ay + by) / 2;
-      ctx.fillStyle = '#c94010';
-      ctx.font = '9px JetBrains Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(conn.type, mx, my - 4);
+    case 'angle': {
+      const fw = w
+      const fh = wt * 1.5
+      return (
+        <Group>
+          {/* Horizontal leg */}
+          <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+          {/* Vertical leg */}
+          <Rect x={-hw} y={-fw / 2} width={wt} height={fw} fill={color + '66'} stroke={stroke} strokeWidth={strokeW} />
+        </Group>
+      )
     }
+    case 'flat_bar':
+    case 'sheet':
+    case 'plate':
+    default:
+      return (
+        <Rect x={-hw} y={-h / 2} width={len} height={h} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
+      )
+  }
+}
 
-    // Draw pieces
-    for (const piece of ps) {
-      const isSelected = useUIStore.getState().selectedIds.includes(piece.id);
-      const mat = MATERIALS[piece.type];
-      const rad = getAngleRad(piece);
+function MemberNode({
+  m,
+  zoom,
+  panX,
+  panY,
+  selected,
+  onSelect,
+  onContextMenu,
+  onDragEnd,
+}: {
+  m: Member
+  zoom: number
+  panX: number
+  panY: number
+  selected: boolean
+  onSelect: (id: string, shift: boolean) => void
+  onContextMenu: (id: string, x: number, y: number) => void
+  onDragEnd: (id: string, cx: number, cy: number) => void
+}) {
+  const cx = wx2cx(m.position.x, zoom, panX)
+  const cy = wy2cy(m.position.y, zoom, panY)
+  const angle = m.rotation.y
 
-      ctx.save();
-
-      if (piece.orientation === 'upright') {
-        const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
-        const sizePx = Math.max(8, piece.width * z * SCALE);
-        const half = sizePx / 2;
-        const wallPx = piece.wall * z * SCALE;
-
-        if (piece.type === 'round_tube' || piece.type === 'pipe') {
-          // Outer circle
-          ctx.beginPath();
-          ctx.arc(cx2, cy2, half, 0, Math.PI * 2);
-          ctx.fillStyle = mat.color + 'cc';
-          ctx.fill();
-          ctx.strokeStyle = isSelected ? '#fff' : mat.color;
-          ctx.lineWidth = isSelected ? 2.5 : 1.5;
-          ctx.stroke();
-          // Inner hollow
-          const innerR = half - wallPx;
-          if (innerR > 2) {
-            ctx.beginPath();
-            ctx.arc(cx2, cy2, innerR, 0, Math.PI * 2);
-            ctx.fillStyle = '#0d1117';
-            ctx.fill();
-            ctx.strokeStyle = mat.color + '66';
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        } else {
-          // Square/rect: outer box
-          ctx.fillStyle = mat.color + 'cc';
-          ctx.fillRect(cx2 - half, cy2 - half, sizePx, sizePx);
-          ctx.strokeStyle = isSelected ? '#fff' : mat.color;
-          ctx.lineWidth = isSelected ? 2.5 : 1.5;
-          ctx.strokeRect(cx2 - half, cy2 - half, sizePx, sizePx);
-          // Inner hollow for tubes
-          if ((piece.type === 'square_tube' || piece.type === 'rect_tube') && wallPx > 0 && (half - wallPx) > 2) {
-            ctx.clearRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
-            ctx.fillStyle = '#0d111755';
-            ctx.fillRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
-            ctx.strokeStyle = mat.color + '44';
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(cx2 - half + wallPx, cy2 - half + wallPx, sizePx - wallPx * 2, sizePx - wallPx * 2);
-          }
-        }
-
-        // Upward arrow above cross-section
-        const arrowY = cy2 - half - 4;
-        const arrowSize = Math.max(5, 6 * z);
-        ctx.strokeStyle = mat.color + 'aa';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(cx2, arrowY - arrowSize);
-        ctx.lineTo(cx2, arrowY);
-        ctx.moveTo(cx2 - arrowSize * 0.5, arrowY - arrowSize * 0.5);
-        ctx.lineTo(cx2, arrowY - arrowSize);
-        ctx.lineTo(cx2 + arrowSize * 0.5, arrowY - arrowSize * 0.5);
-        ctx.stroke();
-
-        // Height label
-        if (z > 0.3) {
-          ctx.fillStyle = '#e2e8f0';
-          ctx.font = `bold ${Math.max(8, 9 * z)}px JetBrains Mono, monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(`${piece.length}"`, cx2, arrowY - arrowSize - 2);
-        }
-
-        ctx.restore();
-        continue;
-      }
-
-      const [cx2, cy2] = worldToCanvas(piece.x, piece.y, z, px, py);
-      const halfLen = piece.length / 2 * z * SCALE;
-      // Visual height: tubeSize * SCALE * zoom, minimum 8px for tubes/bars
-      const rawVh = getVisualHeight(piece) * z * SCALE;
-      const isRound = piece.type === 'round_tube' || piece.type === 'pipe';
-      const isTube = piece.type === 'square_tube' || piece.type === 'rect_tube' || isRound;
-      const vh = isTube ? Math.max(8, rawVh) : Math.max(4, rawVh);
-
-      ctx.translate(cx2, cy2);
-      ctx.rotate(rad);
-
-      const color = mat.color;
-
-      // Shape drawing
-      if (piece.type === 'square_tube' || piece.type === 'rect_tube') {
-        // Wall thickness: at least 20% of visual height so hollow is clearly visible
-        const wallPx = Math.max(Math.ceil(vh * 0.20), Math.max(2, piece.wall * z * SCALE));
-        const innerW = halfLen * 2 - wallPx * 2;
-        const innerH = vh - wallPx * 2;
-        // Outer body — solid piece colour, clearly visible on dark canvas
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        // Inner hollow — dark fill so walls read as solid metal
-        if (innerW > 0 && innerH > 0) {
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(-halfLen + wallPx, -vh / 2 + wallPx, innerW, innerH);
-        }
-        // Top highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh * 0.38);
-        // Border
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
-      } else if (piece.type === 'round_tube' || piece.type === 'pipe') {
-        const wallPx = Math.max(Math.ceil(vh * 0.20), Math.max(2, piece.wall * z * SCALE));
-        const radius = vh / 2;
-
-        // Helper to draw a capsule path
-        const capsule = (x: number, y: number, w: number, h: number, r: number) => {
-          const cr = Math.min(r, w / 2, h / 2);
-          ctx.beginPath();
-          ctx.moveTo(x + cr, y);
-          ctx.lineTo(x + w - cr, y);
-          ctx.arc(x + w - cr, y + cr, cr, -Math.PI / 2, Math.PI / 2);
-          ctx.lineTo(x + cr, y + h);
-          ctx.arc(x + cr, y + cr, cr, Math.PI / 2, -Math.PI / 2);
-          ctx.closePath();
-        };
-
-        // Outer body
-        ctx.fillStyle = color;
-        capsule(-halfLen, -radius, halfLen * 2, vh, radius);
-        ctx.fill();
-
-        // Inner hollow
-        const innerR = Math.max(1, radius - wallPx);
-        const innerLen = halfLen * 2 - wallPx * 2;
-        if (innerLen > 0 && innerR > 1) {
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          capsule(-halfLen + wallPx, -innerR, innerLen, innerR * 2, innerR);
-          ctx.fill();
-        }
-
-        // Top highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        capsule(-halfLen, -radius, halfLen * 2, radius * 0.45, radius * 0.4);
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        capsule(-halfLen, -radius, halfLen * 2, vh, radius);
-        ctx.stroke();
-      } else if (piece.type === 'angle') {
-        const legThickPx = Math.max(3, piece.wall * z * SCALE * 2);
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, vh / 2 - legThickPx, halfLen * 2, legThickPx);
-        ctx.fillRect(-halfLen, -vh / 2, legThickPx, vh);
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.beginPath();
-        ctx.moveTo(-halfLen, -vh / 2);
-        ctx.lineTo(-halfLen + legThickPx, -vh / 2);
-        ctx.lineTo(-halfLen + legThickPx, vh / 2 - legThickPx);
-        ctx.lineTo(halfLen, vh / 2 - legThickPx);
-        ctx.lineTo(halfLen, vh / 2);
-        ctx.lineTo(-halfLen, vh / 2);
-        ctx.closePath();
-        ctx.stroke();
-      } else if (piece.type === 'channel') {
-        const flangeH = Math.max(4, vh * 0.28);
-        const webW = Math.max(4, vh * 0.2);
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
-        ctx.fillRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
-        ctx.fillRect(-halfLen, -vh / 2, webW, vh);
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
-        ctx.strokeRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
-        ctx.strokeRect(-halfLen, -vh / 2, webW, vh);
-      } else if (piece.type === 'ibeam') {
-        const flangeH = Math.max(4, vh * 0.25);
-        const webThick = Math.max(3, vh * 0.12);
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
-        ctx.fillRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
-        ctx.fillRect(-halfLen, -webThick / 2, halfLen * 2, webThick);
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, flangeH);
-        ctx.strokeRect(-halfLen, vh / 2 - flangeH, halfLen * 2, flangeH);
-        ctx.strokeRect(-halfLen, -webThick / 2, halfLen * 2, webThick);
-      } else if (piece.type === 'flat_bar') {
-        // Flat bar visual height: bar width (the wider face) at 30%, min 6px
-        const flatVh = Math.max(6, piece.width * z * SCALE * 0.30);
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh);
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.fillRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh * 0.3);
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1;
-        ctx.strokeRect(-halfLen, -flatVh / 2, halfLen * 2, flatVh);
-      } else if (piece.type === 'sheet') {
-        ctx.globalAlpha = 0.7;
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        ctx.globalAlpha = 1.0;
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 0.5;
-        const hatchSpacing = 3 * z * SCALE;
-        for (let x = -halfLen; x < halfLen; x += hatchSpacing) {
-          ctx.beginPath();
-          ctx.moveTo(x, -vh / 2);
-          ctx.lineTo(x, vh / 2);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
-      } else if (piece.type === 'plate') {
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-        ctx.lineWidth = 0.5;
-        const spacing = Math.max(4, z * SCALE);
-        for (let x = -halfLen; x < halfLen; x += spacing) {
-          ctx.beginPath(); ctx.moveTo(x, -vh / 2); ctx.lineTo(x, vh / 2); ctx.stroke();
-        }
-        for (let y = -vh / 2; y < vh / 2; y += spacing) {
-          ctx.beginPath(); ctx.moveTo(-halfLen, y); ctx.lineTo(halfLen, y); ctx.stroke();
-        }
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 2;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
-      } else {
-        ctx.fillStyle = color;
-        ctx.fillRect(-halfLen, -vh / 2, halfLen * 2, vh);
-        ctx.strokeStyle = isSelected ? '#ffffff' : color;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.strokeRect(-halfLen, -vh / 2, halfLen * 2, vh);
-      }
-
-      // Dimension label — only when piece is long enough to fit text legibly
-      if (z > 0.4 && halfLen > 40) {
-        ctx.fillStyle = 'rgba(241,245,249,0.75)';
-        ctx.font = `9px "JetBrains Mono", monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const label = `${piece.length}"`;
-        ctx.fillText(label, 0, 0);
-      }
-
-      ctx.restore();
-
-      // Holes on piece
-      if (piece.holes && piece.holes.length > 0) {
-        const { sx, sy, ex, ey } = getPieceEndpoints(piece);
-        for (let hi = 0; hi < piece.holes.length; hi++) {
-          const hole = piece.holes[hi];
-          const t2 = hole.fromStart / piece.length;
-          const hwx = sx + (ex - sx) * t2;
-          const hwy = sy + (ey - sy) * t2;
-          const [hcx, hcy] = worldToCanvas(hwx, hwy, z, px, py);
-          const hr = Math.max(3, (hole.diameter / 2) * z * SCALE);
-          ctx.save();
-          ctx.translate(hcx, hcy);
-          ctx.fillStyle = '#000000';
-          ctx.beginPath();
-          ctx.arc(0, 0, hr, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${Math.max(8, hr * 0.9)}px "JetBrains Mono", monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(hi + 1), 0, 0);
-          ctx.restore();
-        }
-      }
-
-      // Snap points (only for selected)
-      if (isSelected && z > 0.3) {
-        const snapPts = getSnapPoints(piece);
-        for (const sp of snapPts) {
-          const [spx, spy] = worldToCanvas(sp.x, sp.y, z, px, py);
-          ctx.beginPath();
-          ctx.arc(spx, spy, 5, 0, Math.PI * 2);
-          ctx.fillStyle = sp.color;
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff88';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
-      }
-    }
-
-    // CORNER CAPS - filled squares at connection points between horizontal pieces
-    for (const conn of cs) {
-      const pieceA = ps.find(p => p.id === conn.pieceAId);
-      const pieceB = ps.find(p => p.id === conn.pieceBId);
-      if (!pieceA || !pieceB) continue;
-      if (pieceA.type === 'sheet' || pieceB.type === 'sheet') continue;
-      if (pieceA.orientation === 'upright' || pieceB.orientation === 'upright') continue;
-
-      const snapPtsA = getSnapPoints(pieceA);
-      const sp = snapPtsA.find(s => s.id === conn.snapPointA);
-      if (!sp) continue;
-
-      const [cx2, cy2] = worldToCanvas(sp.x, sp.y, z, px, py);
-      const capH = Math.max(getVisualHeight(pieceA), getVisualHeight(pieceB));
-      const capSizePx = (capH + 0.1) * z * SCALE;
-
-      const dominantPiece = getVisualHeight(pieceA) >= getVisualHeight(pieceB) ? pieceA : pieceB;
-      const capMat = MATERIALS[dominantPiece.type];
-      ctx.fillStyle = capMat.color;
-      ctx.fillRect(cx2 - capSizePx / 2, cy2 - capSizePx / 2, capSizePx, capSizePx);
-      ctx.strokeStyle = capMat.color;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cx2 - capSizePx / 2, cy2 - capSizePx / 2, capSizePx, capSizePx);
-    }
-
-    // Snap highlight - accent color circle + crosshair
-    const sh = snapRef.current;
-    if (sh) {
-      const [shx, shy] = worldToCanvas(sh.x, sh.y, z, px, py);
-      ctx.beginPath();
-      ctx.arc(shx, shy, 6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(249,115,22,0.8)';
-      ctx.fill();
-      // Crosshair lines 20px
-      ctx.strokeStyle = 'rgba(249,115,22,0.8)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(shx - 20, shy); ctx.lineTo(shx + 20, shy);
-      ctx.moveTo(shx, shy - 20); ctx.lineTo(shx, shy + 20);
-      ctx.stroke();
-    }
-
-    // Hole preview
-    if (holePreview) {
-      const piece = ps.find(p => p.id === holePreview.pieceId);
-      if (piece) {
-        const { sx, sy, ex, ey } = getPieceEndpoints(piece);
-        const t2 = holePreview.fromStart / piece.length;
-        const hwx = sx + (ex - sx) * t2;
-        const hwy = sy + (ey - sy) * t2;
-        const [hpx, hpy] = worldToCanvas(hwx, hwy, z, px, py);
-        ctx.save();
-        ctx.translate(hpx, hpy);
-        ctx.fillStyle = 'rgba(59,130,246,0.3)';
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#3b82f6';
-        ctx.font = '9px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText('ADD HOLE', 0, 13);
-        ctx.restore();
-      }
-    }
-
-    // Selection box
-    if (selBox) {
-      const sx = Math.min(selBox.x1, selBox.x2);
-      const sy = Math.min(selBox.y1, selBox.y2);
-      const sw = Math.abs(selBox.x2 - selBox.x1);
-      const sh2 = Math.abs(selBox.y2 - selBox.y1);
-      ctx.fillStyle = 'rgba(201, 64, 16, 0.1)';
-      ctx.fillRect(sx, sy, sw, sh2);
-      ctx.strokeStyle = '#c94010';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
-      ctx.strokeRect(sx, sy, sw, sh2);
-      ctx.setLineDash([]);
-    }
-
-    animFrameRef.current = requestAnimationFrame(draw);
-  }, [holePreview, selBox]);
-
-  useEffect(() => {
-    animFrameRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [draw]);
-
-  // Resize canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ro = new ResizeObserver(() => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    });
-    ro.observe(canvas);
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    return () => ro.disconnect();
-  }, []);
-
-  const getWorldPos = useCallback((e: React.MouseEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    return canvasToWorld(cx, cy, zoomRef.current, panXRef.current, panYRef.current);
-  }, []);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 2) return;
-
-    const [wx, wy] = getWorldPos(e);
-    const currentMode = useUIStore.getState().mode;
-
-    if (e.button === 1 || currentMode === 'pan') {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX, y: e.clientY, px: panXRef.current, py: panYRef.current });
-      return;
-    }
-
-    if (currentMode === 'select') {
-      // Check hole mode
-      if (holeAddMode) {
-        // Find piece under cursor
-        const ps = piecesRef.current;
-        for (let i = ps.length - 1; i >= 0; i--) {
-          if (hitTestPiece(ps[i], wx, wy)) {
-            const fromStart = snapHolePosition(ps[i], wx, wy);
-            const newHole: Hole = {
-              id: crypto.randomUUID(),
-              pieceId: ps[i].id,
-              snapTo: 'custom',
-              fromStart,
-              type: 'through',
-              diameter: 0.5,
-            };
-            const updated = ps[i].holes ? [...ps[i].holes, newHole] : [newHole];
-            historyStore.push({ pieces: ps, connections: connectionsRef.current });
-            updatePiece(ps[i].id, { holes: updated });
-            return;
-          }
-        }
-        return;
-      }
-
-      // Check piece hit
-      const ps = piecesRef.current;
-      let hit: Piece | null = null;
-      for (let i = ps.length - 1; i >= 0; i--) {
-        if (hitTestPiece(ps[i], wx, wy)) {
-          hit = ps[i];
-          break;
-        }
-      }
-
-      if (hit) {
-        const currentSelected = useUIStore.getState().selectedIds;
-        if (e.shiftKey) {
-          toggleSelectedId(hit.id);
-        } else if (!currentSelected.includes(hit.id)) {
-          setSelectedIds([hit.id]);
-        }
-
-        // Start drag
-        historyStore.push({ pieces: ps, connections: connectionsRef.current });
-        dragOffsetX = wx - hit.x;
-        dragOffsetY = wy - hit.y;
-        setDragging(hit.id);
-      } else {
-        // Selection box
-        if (!e.shiftKey) setSelectedIds([]);
-        const rect = canvasRef.current!.getBoundingClientRect();
-        setSelBoxStart({ cx: e.clientX - rect.left, cy: e.clientY - rect.top });
-        setSelBox(null);
-      }
-    }
-  }, [holeAddMode, getWorldPos, historyStore, updatePiece, toggleSelectedId, setSelectedIds]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const [wx, wy] = getWorldPos(e);
-
-    if (isPanning) {
-      const dx = e.clientX - panStart.x;
-      const dy = e.clientY - panStart.y;
-      setPan(panStart.px + dx, panStart.py + dy);
-      return;
-    }
-
-    if (dragging) {
-      const ps = piecesRef.current;
-      const piece = ps.find(p => p.id === dragging);
-      if (!piece) return;
-
-      const newPiece = { ...piece, x: wx - dragOffsetX, y: wy - dragOffsetY };
-      const snap = findSnap(newPiece, ps, SNAP_RADIUS, zoomRef.current);
-
-      if (snap) {
-        const snapped = applySnapToPiece(newPiece, snap);
-        snapRef.current = { x: snap.targetPoint.x, y: snap.targetPoint.y };
-        updatePiece(dragging, { x: snapped.x, y: snapped.y });
-      } else {
-        snapRef.current = null;
-        updatePiece(dragging, { x: newPiece.x, y: newPiece.y });
-      }
-      return;
-    }
-
-    // Selection box
-    if (selBoxStart) {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      setSelBox({ x1: selBoxStart.cx, y1: selBoxStart.cy, x2: cx, y2: cy });
-      return;
-    }
-
-    // Hole preview
-    if (holeAddMode) {
-      const ps = piecesRef.current;
-      for (let i = ps.length - 1; i >= 0; i--) {
-        if (hitTestPiece(ps[i], wx, wy)) {
-          const fromStart = snapHolePosition(ps[i], wx, wy);
-          setHolePreview({ pieceId: ps[i].id, fromStart, x: wx, y: wy });
-          return;
-        }
-      }
-      setHolePreview(null);
-    }
-  }, [isPanning, panStart, dragging, selBoxStart, holeAddMode, getWorldPos, setPan, updatePiece, setHolePreview]);
-
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    if (dragging) {
-      // Create connection if snapped
-      if (snapRef.current) {
-        const ps = piecesRef.current;
-        const piece = ps.find(p => p.id === dragging);
-        if (piece) {
-          const myPts = getSnapPoints(piece);
-          const z = zoomRef.current;
-          const px2 = panXRef.current;
-          const py2 = panYRef.current;
-          // Find closest snap points
-          for (const other of ps) {
-            if (other.id === piece.id) continue;
-            const otherPts = getSnapPoints(other);
-            for (const mp of myPts) {
-              for (const op of otherPts) {
-                const dx = Math.abs(mp.x - op.x);
-                const dy = Math.abs(mp.y - op.y);
-                if (dx < 0.2 && dy < 0.2) {
-                  const conn: Connection = {
-                    id: crypto.randomUUID(),
-                    pieceAId: piece.id,
-                    pieceBId: other.id,
-                    snapPointA: mp.id,
-                    snapPointB: op.id,
-                    type: 'butt',
-                  };
-                  addConnection(conn);
-                }
-              }
-            }
-          }
-        }
-      }
-      snapRef.current = null;
-      setDragging(null);
-    }
-
-    if (selBox) {
-      // Select pieces in box
-      const z = zoomRef.current;
-      const px2 = panXRef.current;
-      const py2 = panYRef.current;
-      const [wx1, wy1] = canvasToWorld(Math.min(selBox.x1, selBox.x2), Math.min(selBox.y1, selBox.y2), z, px2, py2);
-      const [wx2, wy2] = canvasToWorld(Math.max(selBox.x1, selBox.x2), Math.max(selBox.y1, selBox.y2), z, px2, py2);
-      const ps = piecesRef.current;
-      const inBox = ps.filter(p => p.x >= wx1 && p.x <= wx2 && p.y >= wy1 && p.y <= wy2);
-      if (e.shiftKey) {
-        const current = useUIStore.getState().selectedIds;
-        setSelectedIds([...new Set([...current, ...inBox.map(p => p.id)])]);
-      } else {
-        setSelectedIds(inBox.map(p => p.id));
-      }
-      setSelBox(null);
-      setSelBoxStart(null);
-    }
-
-    setIsPanning(false);
-  }, [dragging, selBox, addConnection, setSelectedIds]);
-
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.05, Math.min(10, zoomRef.current * factor));
-    const newPanX = cx - (cx - panXRef.current) * (newZoom / zoomRef.current);
-    const newPanY = cy - (cy - panYRef.current) * (newZoom / zoomRef.current);
-    setZoom(newZoom);
-    setPan(newPanX, newPanY);
-  }, [setZoom, setPan]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const [wx, wy] = getWorldPos(e);
-    const ps = piecesRef.current;
-    for (let i = ps.length - 1; i >= 0; i--) {
-      if (hitTestPiece(ps[i], wx, wy)) {
-        setContextMenu({ x: e.clientX, y: e.clientY, type: 'piece', pieceId: ps[i].id });
-        return;
-      }
-    }
-    setContextMenu({ x: e.clientX, y: e.clientY, type: 'canvas' });
-  }, [getWorldPos, setContextMenu]);
-
-  const cursorClass = mode === 'pan' ? 'cursor-grab active:cursor-grabbing' :
-    holeAddMode ? 'cursor-crosshair' : 'cursor-default';
+  const { width, height } = parseSizeString(m.type, m.size)
+  const h = height * zoom * SCALE
+  const len = m.length * zoom * SCALE
+  const showLabel = zoom > 0.3
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`w-full h-full block ${cursorClass}`}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onContextMenu={handleContextMenu}
-    />
-  );
+    <Group
+      x={cx}
+      y={cy}
+      rotation={angle}
+      draggable
+      onClick={(e) => {
+        e.cancelBubble = true
+        onSelect(m.id, e.evt.shiftKey)
+      }}
+      onContextMenu={(e) => {
+        e.evt.preventDefault()
+        e.cancelBubble = true
+        onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
+      }}
+      onDragEnd={(e) => {
+        onDragEnd(m.id, e.target.x(), e.target.y())
+        // Reset visual position — store will re-render with correct coords
+        e.target.x(cx)
+        e.target.y(cy)
+      }}
+    >
+      <MemberShape m={m} zoom={zoom} selected={selected} />
+
+      {/* Holes */}
+      {m.holes.map(hole => {
+        const t = hole.positionAlongMember / m.length - 0.5 // -0.5 to 0.5
+        const hx = t * len
+        const r = Math.max(hole.diameter / 2 * zoom * SCALE, 2)
+        return (
+          <Circle key={hole.id} x={hx} y={0} radius={r}
+            fill='rgba(0,0,0,0.8)' stroke='rgba(255,255,255,0.6)' strokeWidth={1} listening={false} />
+        )
+      })}
+
+      {/* Dimension label */}
+      {showLabel && (
+        <Text
+          x={0}
+          y={-h / 2 - 14}
+          text={`${m.length}"`}
+          fontSize={Math.max(10, 11 * zoom)}
+          fill='rgba(255,255,255,0.7)'
+          align='center'
+          offsetX={20}
+          listening={false}
+        />
+      )}
+
+      {/* Selection glow */}
+      {selected && (
+        <Rect
+          x={-m.length * zoom * SCALE / 2 - 4}
+          y={-height * zoom * SCALE / 2 - 4}
+          width={m.length * zoom * SCALE + 8}
+          height={height * zoom * SCALE + 8}
+          stroke='rgba(249,115,22,0.5)'
+          strokeWidth={6}
+          fill='transparent'
+          dash={[6, 4]}
+          listening={false}
+        />
+      )}
+    </Group>
+  )
+}
+
+function ConnectionDot({ conn, zoom, panX, panY }: { conn: Connection; zoom: number; panX: number; panY: number }) {
+  const color = conn.type === 'weld' ? '#f97316' : conn.type === 'bolted' ? '#22c55e' : '#a855f7'
+  const ax = wx2cx(conn.pointA.x, zoom, panX)
+  const ay = wy2cy(conn.pointA.y, zoom, panY)
+  const bx = wx2cx(conn.pointB.x, zoom, panX)
+  const by = wy2cy(conn.pointB.y, zoom, panY)
+  const r = Math.max(4, 5 * zoom)
+  return (
+    <Group listening={false}>
+      <Circle x={ax} y={ay} radius={r} fill={color} opacity={0.85} />
+      <Circle x={bx} y={by} radius={r} fill={color} opacity={0.85} />
+    </Group>
+  )
+}
+
+export default function Canvas2D() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<Konva.Stage>(null)
+  const [size, setSize] = useState({ w: 800, h: 600 })
+
+  const { project, updateMember } = useProjectStore()
+  const { members, connections } = project
+  const {
+    panX, panY, zoom, setPan, setZoom, setPanZoom,
+    selectedIds, setSelectedIds, toggleSelectedId,
+    mode, setContextMenu,
+  } = useUIStore()
+  const { push } = useHistoryStore()
+
+  // Resize observer
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setSize({ w: el.clientWidth, h: el.clientHeight })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Selection rect state
+  const [selRect, setSelRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const selStart = useRef<{ x: number; y: number } | null>(null)
+  const isPanning = useRef(false)
+  const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const spaceDown = useRef(false)
+
+  // Keyboard: space for pan
+  useEffect(() => {
+    const onDown = (e: KeyboardEvent) => { if (e.code === 'Space') { e.preventDefault(); spaceDown.current = true } }
+    const onUp = (e: KeyboardEvent) => { if (e.code === 'Space') spaceDown.current = false }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
+  }, [])
+
+  const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault()
+    const stage = stageRef.current
+    if (!stage) return
+    const oldZoom = zoom
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+    const zoomFactor = e.evt.deltaY < 0 ? 1.1 : 0.9
+    const newZoom = Math.max(0.05, Math.min(12, oldZoom * zoomFactor))
+    const mouseWorldX = (pointer.x - panX) / (oldZoom * SCALE)
+    const mouseWorldY = (pointer.y - panY) / (oldZoom * SCALE)
+    const newPanX = pointer.x - mouseWorldX * newZoom * SCALE
+    const newPanY = pointer.y - mouseWorldY * newZoom * SCALE
+    setPanZoom(newPanX, newPanY, newZoom)
+  }, [zoom, panX, panY, setPanZoom])
+
+  const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current
+    if (!stage) return
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+
+    // Middle mouse or space+left = pan
+    if (e.evt.button === 1 || (e.evt.button === 0 && spaceDown.current) || mode === 'pan') {
+      isPanning.current = true
+      panStart.current = { x: e.evt.clientX, y: e.evt.clientY, panX, panY }
+      return
+    }
+
+    // Right mouse = selection rect (on stage background only)
+    if (e.evt.button === 2 && e.target === stage) {
+      selStart.current = { x: pos.x, y: pos.y }
+      setSelRect({ x: pos.x, y: pos.y, w: 0, h: 0 })
+      return
+    }
+
+    // Left click on background = deselect
+    if (e.evt.button === 0 && e.target === stage) {
+      setSelectedIds([])
+      setContextMenu(null)
+    }
+  }, [mode, panX, panY, setSelectedIds, setContextMenu])
+
+  const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (isPanning.current && panStart.current) {
+      const dx = e.evt.clientX - panStart.current.x
+      const dy = e.evt.clientY - panStart.current.y
+      setPan(panStart.current.panX + dx, panStart.current.panY + dy)
+      return
+    }
+    if (selStart.current) {
+      const stage = stageRef.current
+      const pos = stage?.getPointerPosition()
+      if (!pos) return
+      setSelRect({
+        x: Math.min(selStart.current.x, pos.x),
+        y: Math.min(selStart.current.y, pos.y),
+        w: Math.abs(pos.x - selStart.current.x),
+        h: Math.abs(pos.y - selStart.current.y),
+      })
+    }
+  }, [setPan])
+
+  const handleStageMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
+    if (selStart.current && selRect) {
+      // Select members whose canvas center is inside the rect
+      const ids = members.filter(m => {
+        const cx = wx2cx(m.position.x, zoom, panX)
+        const cy = wy2cy(m.position.y, zoom, panY)
+        return cx >= selRect.x && cx <= selRect.x + selRect.w && cy >= selRect.y && cy <= selRect.y + selRect.h
+      }).map(m => m.id)
+      setSelectedIds(ids)
+      selStart.current = null
+      setSelRect(null)
+    }
+  }, [selRect, members, zoom, panX, panY, setSelectedIds])
+
+  const handleContextMenu = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.evt.preventDefault()
+    if (e.target === stageRef.current) {
+      setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, type: 'canvas' })
+    }
+  }, [setContextMenu])
+
+  const handleMemberSelect = useCallback((id: string, shift: boolean) => {
+    if (shift) toggleSelectedId(id)
+    else setSelectedIds([id])
+    setContextMenu(null)
+  }, [toggleSelectedId, setSelectedIds, setContextMenu])
+
+  const handleMemberContextMenu = useCallback((id: string, x: number, y: number) => {
+    if (!selectedIds.includes(id)) setSelectedIds([id])
+    setContextMenu({ x, y, type: 'member', memberId: id })
+  }, [selectedIds, setSelectedIds, setContextMenu])
+
+  const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
+    const wx = cx2wx(canvasX, zoom, panX)
+    const wy = cy2wy(canvasY, zoom, panY)
+    // Snap to 1" grid
+    const snappedX = Math.round(wx)
+    const snappedY = Math.round(wy)
+    const m = members.find(m => m.id === id)
+    if (!m) return
+    push({ members, connections })
+    updateMember(id, { position: { ...m.position, x: snappedX, y: snappedY } })
+  }, [zoom, panX, panY, members, connections, push, updateMember])
+
+  // Grid dots
+  const gridSpacingPx = zoom * SCALE // 1 inch in pixels
+  const showGrid = gridSpacingPx >= 6
+  const gridDots: React.ReactNode[] = []
+  if (showGrid) {
+    const startX = Math.floor(-panX / gridSpacingPx) * gridSpacingPx + panX
+    const startY = Math.floor(-panY / gridSpacingPx) * gridSpacingPx + panY
+    const cols = Math.ceil(size.w / gridSpacingPx) + 2
+    const rows = Math.ceil(size.h / gridSpacingPx) + 2
+    // Limit to 2500 dots
+    const total = Math.min(cols * rows, 2500)
+    for (let i = 0; i < total; i++) {
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      gridDots.push(
+        <Circle key={i} x={startX + col * gridSpacingPx} y={startY + row * gridSpacingPx}
+          radius={0.8} fill='rgba(255,255,255,0.15)' listening={false} />
+      )
+    }
+  }
+
+  return (
+    <div ref={containerRef} className='w-full h-full' style={{ background: '#12151e', cursor: mode === 'pan' || spaceDown.current ? 'grab' : 'default' }}>
+      <Stage
+        ref={stageRef}
+        width={size.w}
+        height={size.h}
+        onWheel={handleWheel}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
+        onContextMenu={handleContextMenu}
+        style={{ display: 'block' }}
+      >
+        {/* Grid layer */}
+        <Layer listening={false}>
+          {gridDots}
+        </Layer>
+
+        {/* Members + connections */}
+        <Layer>
+          {connections.map(conn => (
+            <ConnectionDot key={conn.id} conn={conn} zoom={zoom} panX={panX} panY={panY} />
+          ))}
+          {members.map(m => (
+            <MemberNode
+              key={m.id}
+              m={m}
+              zoom={zoom}
+              panX={panX}
+              panY={panY}
+              selected={selectedIds.includes(m.id)}
+              onSelect={handleMemberSelect}
+              onContextMenu={handleMemberContextMenu}
+              onDragEnd={handleMemberDragEnd}
+            />
+          ))}
+        </Layer>
+
+        {/* Selection rectangle overlay */}
+        {selRect && (
+          <Layer listening={false}>
+            <Rect
+              x={selRect.x} y={selRect.y}
+              width={selRect.w} height={selRect.h}
+              stroke='#f97316' strokeWidth={1.5}
+              fill='rgba(249,115,22,0.08)'
+              dash={[6, 3]}
+            />
+          </Layer>
+        )}
+      </Stage>
+
+      {/* Empty state */}
+      {members.length === 0 && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ textAlign: 'center', color: '#334155' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>◻</div>
+            <div style={{ fontSize: 14 }}>Add a member from the Library panel</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

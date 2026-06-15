@@ -1,14 +1,16 @@
-import type { Piece, MaterialGrade } from '../types';
+import type { Member, Grade } from '../types';
 
-const DENSITY: Record<MaterialGrade, number> = {
-  mild_steel: 0.2833,
+const DENSITY: Record<Grade, number> = {
+  mild: 0.2833,
   stainless: 0.2890,
   aluminum: 0.0975,
 };
 
-export function calcWeight(piece: Piece): number {
-  const d = DENSITY[piece.grade];
-  const { type, width, height, wall, length } = piece;
+export function calcWeight(member: Member): number {
+  const d = DENSITY[member.grade];
+  const { type, size, wallThickness, length } = member;
+  const wall = parseFloat(wallThickness) || 0.125;
+  const { width, height } = parseMemberSize(type, size);
   let area = 0;
 
   switch (type) {
@@ -39,7 +41,7 @@ export function calcWeight(piece: Piece): number {
       area = width * wall * 2 + (height - 2 * wall) * wall;
       break;
     }
-    case 'ibeam': {
+    case 'i_beam': {
       area = width * wall * 2 + (height - 2 * wall) * wall;
       break;
     }
@@ -59,11 +61,56 @@ export function calcWeight(piece: Piece): number {
   return area * length * d;
 }
 
+function parseMemberSize(type: string, sizeStr: string): { width: number; height: number } {
+  if (type === 'square_tube') {
+    const parts = sizeStr.split('x');
+    if (parts.length === 2) return { width: parseFloat(parts[0]), height: parseFloat(parts[1]) };
+    const v = parseFloat(sizeStr);
+    return { width: v, height: v };
+  }
+  if (type === 'round_tube' || type === 'pipe') {
+    const v = parseFloat(sizeStr);
+    return { width: v, height: v };
+  }
+  if (type === 'rect_tube' || type === 'sheet' || type === 'plate') {
+    const parts = sizeStr.split('x');
+    return { width: parseFloat(parts[0] || '2'), height: parseFloat(parts[1] || '2') };
+  }
+  if (type === 'angle') {
+    const parts = sizeStr.split('x');
+    const v = parseFloat(parts[0]);
+    return { width: v, height: v };
+  }
+  if (type === 'channel') {
+    const match = sizeStr.match(/C(\d+)/);
+    const d = match ? parseFloat(match[1]) : 4;
+    return { width: d * 0.6, height: d };
+  }
+  if (type === 'i_beam') {
+    const match = sizeStr.match(/W(\d+)/);
+    const d = match ? parseFloat(match[1]) : 6;
+    return { width: d * 0.6, height: d };
+  }
+  if (type === 'flat_bar') {
+    const parts = sizeStr.split('x');
+    const wStr = parts[0];
+    let w = 0;
+    if (wStr && wStr.includes('/')) {
+      const frac = wStr.split('/');
+      w = parseFloat(frac[0]) / parseFloat(frac[1]);
+    } else {
+      w = parseFloat(wStr || '1');
+    }
+    return { width: parseFloat(parts[1] || '2'), height: w };
+  }
+  return { width: 2, height: 2 };
+}
+
 export function formatWeight(lbs: number): string {
   if (lbs < 0.1) return '< 0.1 lbs';
   return `${lbs.toFixed(2)} lbs`;
 }
 
-export function totalWeight(pieces: Piece[]): number {
-  return pieces.reduce((sum, p) => sum + calcWeight(p), 0);
+export function totalWeight(members: Member[]): number {
+  return members.reduce((sum, m) => sum + calcWeight(m), 0);
 }

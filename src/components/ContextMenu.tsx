@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Copy, Trash2, RotateCcw, Crosshair, FlipHorizontal, Layers } from 'lucide-react';
+import { Copy, Trash2, Layers } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
 
 export default function ContextMenu() {
   const { contextMenu, setContextMenu, selectedIds, setSelectedIds, setClipboard, clipboard } = useUIStore();
-  const { pieces, connections, deletePieces, updatePiece, addPiece, setPieces, setConnections } = useProjectStore();
+  const { project, deleteMembers, addMember } = useProjectStore();
+  const { members, connections } = project;
   const historyStore = useHistoryStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -23,56 +24,32 @@ export default function ContextMenu() {
 
   if (!contextMenu) return null;
 
-  const pieceId = contextMenu.pieceId;
-  const piece = pieceId ? pieces.find(p => p.id === pieceId) : null;
+  const memberId = contextMenu.memberId;
+  const member = memberId ? members.find(m => m.id === memberId) : null;
 
   const close = () => setContextMenu(null);
 
   const handleDuplicate = () => {
-    const ids = pieceId ? [pieceId] : selectedIds;
-    const toDupe = pieces.filter(p => ids.includes(p.id));
-    historyStore.push({ pieces, connections });
-    for (const p of toDupe) {
-      addPiece({ ...p, id: crypto.randomUUID(), x: p.x + 2, y: p.y + 2 });
+    const ids = memberId ? [memberId] : selectedIds;
+    const toDupe = members.filter(m => ids.includes(m.id));
+    historyStore.push({ members, connections });
+    for (const m of toDupe) {
+      addMember({ ...m, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } });
     }
     close();
   };
 
   const handleDelete = () => {
-    const ids = pieceId ? [pieceId] : selectedIds;
-    historyStore.push({ pieces, connections });
-    deletePieces(ids);
+    const ids = memberId ? [memberId] : selectedIds;
+    historyStore.push({ members, connections });
+    deleteMembers(ids);
     setSelectedIds([]);
     close();
   };
 
   const handleCopy = () => {
-    const ids = pieceId ? [pieceId] : selectedIds;
-    setClipboard(pieces.filter(p => ids.includes(p.id)));
-    close();
-  };
-
-  const handleRotate90 = () => {
-    const ids = pieceId ? [pieceId] : selectedIds;
-    for (const id of ids) {
-      const p = pieces.find(p2 => p2.id === id);
-      if (p) updatePiece(id, { angle: (p.angle + 90) % 360 });
-    }
-    close();
-  };
-
-  const handleFlipH = () => {
-    const ids = pieceId ? [pieceId] : selectedIds;
-    for (const id of ids) {
-      const p = pieces.find(p2 => p2.id === id);
-      if (p) updatePiece(id, { angle: (360 - p.angle) % 360 });
-    }
-    close();
-  };
-
-  const handleSetUpright = () => {
-    if (!pieceId) return;
-    updatePiece(pieceId, { orientation: 'upright' });
+    const ids = memberId ? [memberId] : selectedIds;
+    setClipboard(members.filter(m => ids.includes(m.id)));
     close();
   };
 
@@ -83,7 +60,6 @@ export default function ContextMenu() {
     zIndex: 1000,
   };
 
-  // Adjust if near edge
   const adjustedStyle = { ...menuStyle };
   if (contextMenu.x + 180 > window.innerWidth) adjustedStyle.left = contextMenu.x - 180;
   if (contextMenu.y + 300 > window.innerHeight) adjustedStyle.top = contextMenu.y - 200;
@@ -119,18 +95,14 @@ export default function ContextMenu() {
       style={adjustedStyle}
       className="bg-[#1e2130] border border-slate-700 rounded-lg shadow-2xl w-44 py-1 overflow-hidden"
     >
-      {contextMenu.type === 'piece' && piece && (
+      {contextMenu.type === 'member' && member && (
         <>
           <div className="px-3 py-1.5 text-xs text-slate-500 font-semibold uppercase tracking-wider">
-            {piece.type.replace(/_/g, ' ')}
+            {member.type.replace(/_/g, ' ')}
           </div>
           <Divider />
           <MenuItem icon={<Copy size={14} />} label="Copy" onClick={handleCopy} />
           <MenuItem icon={<Layers size={14} />} label="Duplicate" onClick={handleDuplicate} />
-          <Divider />
-          <MenuItem icon={<RotateCcw size={14} />} label="Rotate 90°" onClick={handleRotate90} />
-          <MenuItem icon={<FlipHorizontal size={14} />} label="Flip Horizontal" onClick={handleFlipH} />
-          <MenuItem icon={<Crosshair size={14} />} label="Set Upright" onClick={handleSetUpright} />
           <Divider />
           <MenuItem icon={<Trash2 size={14} />} label="Delete" onClick={handleDelete} danger />
         </>
@@ -143,9 +115,9 @@ export default function ContextMenu() {
             label={`Paste (${clipboard.length})`}
             onClick={() => {
               if (clipboard.length === 0) return;
-              historyStore.push({ pieces, connections });
-              for (const p of clipboard) {
-                addPiece({ ...p, id: crypto.randomUUID(), x: p.x + 2, y: p.y + 2 });
+              historyStore.push({ members, connections });
+              for (const m of clipboard) {
+                addMember({ ...m, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } });
               }
               close();
             }}
@@ -156,13 +128,13 @@ export default function ContextMenu() {
             icon={<Trash2 size={14} />}
             label="Clear All"
             onClick={() => {
-              historyStore.push({ pieces, connections });
-              deletePieces(pieces.map(p => p.id));
+              historyStore.push({ members, connections });
+              deleteMembers(members.map(m => m.id));
               setSelectedIds([]);
               close();
             }}
             danger
-            disabled={pieces.length === 0}
+            disabled={members.length === 0}
           />
         </>
       )}

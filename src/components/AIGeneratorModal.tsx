@@ -1,123 +1,115 @@
 import React, { useState } from 'react';
-import Anthropic from '@anthropic-ai/sdk';
 import { X, Sparkles, Send, Loader2 } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
-import type { Piece } from '../types';
+import type { Member } from '../types';
 
 const EXAMPLES = [
   '10-foot workbench frame with 2x2 square tube legs and a flat bar top rail',
   '6x6 ft welding table with 2x2 square tube and cross bracing',
   'Simple 4-legged cart, 24x48 inch, 30 inches tall with 1.5x1.5 square tube',
-  'Truck bed rack with round tube uprights and flat bar cross members',
-  'Motorcycle trailer frame 5 feet long by 2.5 feet wide',
+  'Motorcycle trailer frame 5 feet long by 2.5 feet wide with round tube',
 ];
 
-const AI_SYSTEM_PROMPT = `You are a fabrication CAD assistant. Return ONLY a valid JSON array. No markdown, no explanation, no code fences. Start with [ end with ].
+const SYSTEM_PROMPT = `You are a fabrication CAD assistant for FabDraw. Return ONLY a valid JSON array of Member objects. No markdown, no code fences, no explanation. Start with [ and end with ].
 
-PIECE FIELDS (all required):
-id: unique string "p1","p2",etc
-type: square_tube | round_tube | rect_tube | pipe | angle | channel | ibeam | flat_bar | sheet | plate
-grade: mild_steel | stainless | aluminum
-width: outer width inches
-height: outer height inches (= width for square tubes)
-wall: wall thickness inches
-length: piece length inches
-x: CENTER x position inches
-y: CENTER y position inches
-angle: degrees, 0=along X axis, 90=along Y axis
-orientation: "horizontal" or "upright"
-zHeight: height above floor inches
-notes: ""
-weldSymbol: ""
-holes: []
+Each Member object must have EXACTLY these fields:
+{
+  "type": one of: "square_tube" | "round_tube" | "rect_tube" | "pipe" | "angle" | "channel" | "i_beam" | "flat_bar" | "sheet" | "plate",
+  "size": string like "2x2" for square/rect/angle/channel/i_beam, "2" for round/pipe, "1/4x2" for flat_bar, "48x96" for sheet/plate,
+  "wallThickness": string like "0.125" or "0.083",
+  "grade": one of: "mild" | "stainless" | "aluminum",
+  "length": number in inches,
+  "position": { "x": number, "y": number, "z": number },
+  "rotation": { "x": 0, "y": number (degrees, 0=horizontal), "z": 0 },
+  "holes": []
+}
 
-TABLE RULES — follow exactly:
-- A rectangular table has EXACTLY 4 legs, one at each corner. No more, no less.
-- Corners are at: (0,0), (width,0), (0,depth), (width,depth)
-- Legs: orientation "upright", x/y at corner position, length = leg height
-- Frame rails: EXACTLY 4 horizontal rails connecting leg tops
-  - 2 rails along X axis (angle:0): centered at x=width/2, y=0 and y=depth
-  - 2 rails along Y axis (angle:90): centered at x=0 and x=width, y=depth/2
-  - All rails: zHeight = legHeight - tubeSize, length = (tableWidth or tableDepth) - tubeSize*2
-- Sheet top (if requested): EXACTLY 1 sheet piece, type "sheet", orientation "horizontal",
-  x = width/2, y = depth/2, length = width, height = depth, zHeight = legHeight
-  DO NOT split the sheet into multiple pieces. One sheet only.
+For a rectangular frame/table with width W, depth D, height H using square tube SIZE:
+- 4 legs: type="square_tube", rotation.x=90 (upright), length=H, position at corners: (0,0,0),(W,0,0),(0,D,0),(W,D,0)
+- 2 long rails: rotation.y=0, length=W, position.x=W/2, position.y=0 and D, position.z=H-SIZE
+- 2 short rails: rotation.y=90, length=D, position.x=0 and W, position.y=D/2, position.z=H-SIZE
 
-EXAMPLE — 48x48 table, 34" legs, 2x2 sq tube 0.125 wall:
-[
-  {"id":"p1","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":0,"y":0,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p2","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":48,"y":0,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p3","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":0,"y":48,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p4","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":34,"x":48,"y":48,"angle":0,"orientation":"upright","zHeight":0,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p5","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":24,"y":0,"angle":0,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p6","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":24,"y":48,"angle":0,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p7","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":0,"y":24,"angle":90,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p8","type":"square_tube","grade":"mild_steel","width":2,"height":2,"wall":0.125,"length":44,"x":48,"y":24,"angle":90,"orientation":"horizontal","zHeight":32,"notes":"","weldSymbol":"","holes":[]},
-  {"id":"p9","type":"sheet","grade":"mild_steel","width":48,"height":48,"wall":0.06,"length":48,"x":24,"y":24,"angle":0,"orientation":"horizontal","zHeight":34,"notes":"","weldSymbol":"","holes":[]}
-]
+Position x/y are the 2D plan coordinates (inches). Position z is height above floor. Never omit any field.`;
 
-Return valid JSON array only.`;
+type ParsedMember = Omit<Member, 'id'>;
 
-const VALID_TYPES = ['square_tube','round_tube','rect_tube','pipe','angle','channel','ibeam','flat_bar','sheet','plate'] as const;
-const VALID_GRADES = ['mild_steel','stainless','aluminum'] as const;
-const VALID_ORIENTATIONS = ['horizontal','vertical','upright'] as const;
-
-type ParsedPiece = Omit<Piece, 'id'>;
-
-function mapAIPiece(obj: Record<string, unknown>): ParsedPiece {
-  const type = VALID_TYPES.includes(obj.type as Piece['type']) ? (obj.type as Piece['type']) : 'square_tube';
-  const grade = VALID_GRADES.includes(obj.grade as Piece['grade']) ? (obj.grade as Piece['grade']) : 'mild_steel';
-  const orientation = VALID_ORIENTATIONS.includes(obj.orientation as Piece['orientation']) ? (obj.orientation as Piece['orientation']) : 'horizontal';
+function mapAIMember(obj: Record<string, unknown>): ParsedMember {
+  const pos = (obj.position ?? {}) as Record<string, unknown>;
+  const rot = (obj.rotation ?? {}) as Record<string, unknown>;
   return {
-    type,
-    grade,
-    width: typeof obj.width === 'number' ? obj.width : 2,
-    height: typeof obj.height === 'number' ? obj.height : 2,
-    wall: typeof obj.wall === 'number' ? obj.wall : 0.125,
+    type: (obj.type as Member['type']) || 'square_tube',
+    size: typeof obj.size === 'string' ? obj.size : '2x2',
+    wallThickness: typeof obj.wallThickness === 'string' ? obj.wallThickness : '0.125',
+    grade: (['mild', 'stainless', 'aluminum'].includes(obj.grade as string) ? obj.grade as Member['grade'] : 'mild'),
     length: typeof obj.length === 'number' ? obj.length : 24,
-    x: typeof obj.x === 'number' ? obj.x : 0,
-    y: typeof obj.y === 'number' ? obj.y : 0,
-    angle: typeof obj.angle === 'number' ? obj.angle : 0,
-    orientation,
-    zHeight: typeof obj.zHeight === 'number' ? obj.zHeight : 0,
-    notes: typeof obj.notes === 'string' ? obj.notes : '',
-    weldSymbol: typeof obj.weldSymbol === 'string' ? obj.weldSymbol : '',
-    holes: Array.isArray(obj.holes) ? obj.holes : [],
+    position: {
+      x: typeof pos.x === 'number' ? pos.x : 0,
+      y: typeof pos.y === 'number' ? pos.y : 0,
+      z: typeof pos.z === 'number' ? pos.z : 0,
+    },
+    rotation: {
+      x: typeof rot.x === 'number' ? rot.x : 0,
+      y: typeof rot.y === 'number' ? rot.y : 0,
+      z: typeof rot.z === 'number' ? rot.z : 0,
+    },
+    holes: [],
   };
 }
 
-async function generateStructureAI(prompt: string): Promise<ParsedPiece[]> {
-  const client = new Anthropic({ apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY, dangerouslyAllowBrowser: true });
-  const message = await client.messages.create({
-    model: 'claude-opus-4-5',
-    max_tokens: 4096,
-    system: AI_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+async function callAnthropicAPI(systemPrompt: string, userContent: string): Promise<string> {
+  const apiKey = (import.meta as unknown as { env: Record<string, string> }).env.VITE_ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('VITE_ANTHROPIC_API_KEY is not set. Add it to your .env file.');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: (import.meta as unknown as { env: Record<string, string> }).env.VITE_ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    }),
   });
 
-  const rawText = message.content
-    .filter(block => block.type === 'text')
-    .map(block => (block as { type: 'text'; text: string }).text)
-    .join('');
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`API error ${res.status}: ${err}`);
+  }
 
-  // Strip markdown fences if present
-  const stripped = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(stripped);
-  if (!Array.isArray(parsed)) throw new Error('AI did not return an array');
-  return (parsed as Record<string, unknown>[]).map(mapAIPiece);
+  const data = await res.json();
+  return (data.content?.[0]?.text ?? '') as string;
+}
+
+function parseMembers(text: string): ParsedMember[] {
+  // Strip markdown code fences if present
+  const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+  const arr = JSON.parse(cleaned);
+  if (!Array.isArray(arr)) throw new Error('Expected a JSON array');
+  return arr.map((obj: unknown) => mapAIMember(obj as Record<string, unknown>));
+}
+
+async function generateStructureAI(prompt: string): Promise<ParsedMember[]> {
+  const text = await callAnthropicAPI(SYSTEM_PROMPT, prompt);
+  return parseMembers(text);
 }
 
 export default function AIGeneratorModal() {
-  const { pieces, connections, addPiece, clearProject } = useProjectStore();
+  const { project, addMember } = useProjectStore();
+  const { members, connections } = project;
   const { setShowAIModal } = useUIStore();
   const historyStore = useHistoryStore();
 
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
-  const [generated, setGenerated] = useState<ParsedPiece[]>([]);
+  const [generated, setGenerated] = useState<ParsedMember[]>([]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -126,47 +118,49 @@ export default function AIGeneratorModal() {
     setGenerated([]);
 
     try {
-      const parsedPieces = await generateStructureAI(prompt);
-      setGenerated(parsedPieces);
-      setResult(`Generated ${parsedPieces.length} pieces based on your description. Review and click "Add to Drawing" to place them.`);
+      const parsedMembers = await generateStructureAI(prompt);
+      setGenerated(parsedMembers);
+      setResult(`Generated ${parsedMembers.length} members based on your description.`);
     } catch (err) {
-      setResult('Failed to generate. Check your API key or try a more specific description.');
+      setResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
       console.error('AI generation error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddToDrawing = () => {
-    historyStore.push({ pieces, connections });
-    for (const p of generated) {
-      const newPiece: Piece = {
-        id: crypto.randomUUID(),
-        ...p,
-      };
-      addPiece(newPiece);
-    }
-    setShowAIModal(false);
-  };
+  const { setPanZoom } = useUIStore();
 
-  const handleReplaceDrawing = () => {
-    historyStore.push({ pieces, connections });
-    clearProject();
-    for (const p of generated) {
-      const newPiece: Piece = {
-        id: crypto.randomUUID(),
-        ...p,
-      };
-      addPiece(newPiece);
+  const handleAddToDrawing = () => {
+    historyStore.push({ members, connections });
+    for (const m of generated) addMember(m);
+
+    // Auto-fit canvas to show generated members
+    const all = [...members, ...generated.map(m => ({ ...m, id: '' }))];
+    if (all.length > 0) {
+      const canvas = document.querySelector('canvas');
+      const W = canvas?.offsetWidth ?? 800;
+      const H = canvas?.offsetHeight ?? 600;
+      const SCALE = 8;
+      let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+      for (const m of all) {
+        mnX = Math.min(mnX, m.position.x - m.length / 2);
+        mnY = Math.min(mnY, m.position.y - 2);
+        mxX = Math.max(mxX, m.position.x + m.length / 2);
+        mxY = Math.max(mxY, m.position.y + 2);
+      }
+      const z = Math.max(0.05, Math.min(8, Math.min(W * 0.8 / ((mxX - mnX + 10) * SCALE), H * 0.8 / ((mxY - mnY + 10) * SCALE))));
+      const cx = (mnX + mxX) / 2, cy = (mnY + mxY) / 2;
+      setPanZoom(W / 2 - cx * z * SCALE, H / 2 - cy * z * SCALE, z);
     }
     setShowAIModal(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1d2e] border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg mx-4 rounded-xl shadow-2xl flex flex-col" style={{ background: '#1a1d27', border: '1px solid #2e3350' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #2e3350' }}>
           <div className="flex items-center gap-2">
             <Sparkles size={18} className="text-purple-400" />
             <div>
@@ -181,29 +175,31 @@ export default function AIGeneratorModal() {
 
         {/* Content */}
         <div className="p-5 space-y-4">
-          {/* Prompt */}
           <div>
             <label className="text-xs text-slate-500 block mb-1.5">Describe your structure</label>
-            <div className="flex gap-2">
-              <textarea
-                className="flex-1 bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-500 resize-none h-24"
-                placeholder="e.g. A 6x4 foot welding table frame with 2x2 square tube legs and cross bracing..."
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate(); }}
-              />
-            </div>
+            <textarea
+              className="flex-1 w-full text-slate-200 text-sm rounded-lg px-3 py-2.5 focus:outline-none resize-none h-24 transition-colors"
+          style={{ background: '#0f1117', border: '1px solid #2e3350' }}
+          onFocus={e => (e.target.style.borderColor = '#f97316')}
+          onBlur={e => (e.target.style.borderColor = '#2e3350')}
+              placeholder="e.g. A 6x4 foot welding table frame with 2x2 square tube legs..."
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate(); }}
+            />
             <div className="text-xs text-slate-600 mt-1">Ctrl+Enter to generate</div>
           </div>
 
-          {/* Examples */}
           <div>
             <div className="text-xs text-slate-500 mb-2">Examples:</div>
             <div className="space-y-1">
-              {EXAMPLES.slice(0, 3).map((ex, i) => (
+              {EXAMPLES.map((ex, i) => (
                 <button
                   key={i}
-                  className="w-full text-left text-xs text-slate-400 hover:text-slate-200 bg-slate-900 hover:bg-slate-800 rounded px-3 py-1.5 transition-colors"
+                  className="w-full text-left text-xs text-slate-400 hover:text-slate-200 rounded px-3 py-1.5 transition-colors"
+                  style={{ background: '#21253a' }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = '#2a2f4a')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '#21253a')}
                   onClick={() => setPrompt(ex)}
                 >
                   {ex}
@@ -212,9 +208,11 @@ export default function AIGeneratorModal() {
             </div>
           </div>
 
-          {/* Generate button */}
           <button
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40"
+          style={{ background: '#f97316' }}
+          onMouseEnter={e => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a' }}
+          onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '#f97316')}
             onClick={handleGenerate}
             disabled={loading || !prompt.trim()}
           >
@@ -222,48 +220,31 @@ export default function AIGeneratorModal() {
             {loading ? 'Generating...' : 'Generate Structure'}
           </button>
 
-          {/* Result */}
           {result && (
-            <div className="bg-slate-900 rounded-lg p-3">
+            <div className="rounded-lg p-3" style={{ background: '#0f1117', border: '1px solid #2e3350' }}>
               <div className="text-xs text-slate-300 mb-2">{result}</div>
               {generated.length > 0 && (
-                <div className="space-y-1 max-h-40 overflow-y-auto mb-3">
-                  {generated.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-slate-400">
-                      <span className="w-4 text-slate-600">{i + 1}</span>
-                      <span className="text-slate-300">{p.type.replace('_', ' ')}</span>
-                      <span className="text-slate-600">
-                        {p.width}×{p.height} {p.wall}" wall {p.length}" {p.notes && `• ${p.notes}`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {generated.length > 0 && (
-                <div className="flex gap-2">
+                <>
+                  <div className="space-y-1 max-h-40 overflow-y-auto mb-3">
+                    {generated.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-slate-400">
+                        <span className="w-4 text-slate-600">{i + 1}</span>
+                        <span className="text-slate-300">{m.type.replace('_', ' ')}</span>
+                        <span className="text-slate-600">{m.size} {m.wallThickness}" wall {m.length}"</span>
+                      </div>
+                    ))}
+                  </div>
                   <button
-                    className="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded transition-colors"
+                    className="w-full py-1.5 text-slate-200 text-xs rounded transition-colors"
+                  style={{ background: '#21253a' }}
                     onClick={handleAddToDrawing}
                   >
                     Add to Drawing
                   </button>
-                  <button
-                    className="flex-1 py-1.5 bg-accent hover:bg-orange-600 text-white text-xs font-semibold rounded transition-colors"
-                    onClick={handleReplaceDrawing}
-                  >
-                    Replace Drawing
-                  </button>
-                </div>
+                </>
               )}
             </div>
           )}
-        </div>
-
-        {/* Note */}
-        <div className="px-5 pb-4">
-          <div className="text-xs text-slate-600 bg-slate-900 rounded p-2">
-            Note: AI generation uses heuristic rules. For complex structures, add pieces manually from the Library.
-          </div>
         </div>
       </div>
     </div>

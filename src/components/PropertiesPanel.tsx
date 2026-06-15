@@ -5,30 +5,28 @@ import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
 import { MATERIALS } from '../lib/materials';
 import { calcWeight, formatWeight } from '../lib/weights';
-import type { MaterialGrade, HoleType, Orientation, Hole } from '../types';
+import type { Grade, Hole } from '../types';
+import { inputCls, labelCls } from '../styles/tokens';
 
-const CONNECTION_TYPES = ['butt', 'miter', 'cope', 'fish', 'gusset', 'flange'];
-const HOLE_TYPES: HoleType[] = ['through', 'tapped', 'countersink'];
-const GRADE_LABELS: Record<MaterialGrade, string> = {
-  mild_steel: 'Mild Steel',
+const GRADE_LABELS: Record<Grade, string> = {
+  mild: 'Mild Steel',
   stainless: 'Stainless',
   aluminum: 'Aluminum',
 };
 
-const inputCls = 'w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#f1f5f9] text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-[#f97316] transition-colors';
-const labelCls = 'block text-[9px] uppercase tracking-[2px] text-[#475569] mb-1';
 
 export default function PropertiesPanel() {
-  const { pieces, connections, updatePiece, updateConnectionType, removeConnection, deletePieces } = useProjectStore();
+  const { project, updateMember, deleteMembers, deleteConnection } = useProjectStore();
+  const { members, connections } = project;
   const { selectedIds, selectedConnectionId, activeRightTab, setActiveRightTab, setSelectedIds } = useUIStore();
   const historyStore = useHistoryStore();
 
-  const selectedPiece = selectedIds.length === 1 ? pieces.find(p => p.id === selectedIds[0]) : null;
+  const selectedMember = selectedIds.length === 1 ? members.find(m => m.id === selectedIds[0]) : null;
   const selectedConn = selectedConnectionId ? connections.find(c => c.id === selectedConnectionId) : null;
 
   const update = (field: string, value: unknown) => {
-    if (!selectedPiece) return;
-    updatePiece(selectedPiece.id, { [field]: value });
+    if (!selectedMember) return;
+    updateMember(selectedMember.id, { [field]: value } as any);
   };
 
   const numInput = (label: string, field: string, value: number, step = 0.0625, min = 0) => (
@@ -47,8 +45,8 @@ export default function PropertiesPanel() {
 
   const panelStyle = {
     width: '240px',
-    background: '#161b25',
-    borderLeft: '1px solid rgba(255,255,255,0.06)',
+    background: '#1a1d27',
+    borderLeft: '1px solid #2e3350',
   };
 
   if (selectedIds.length === 0 && !selectedConn) {
@@ -56,7 +54,7 @@ export default function PropertiesPanel() {
       <div className="shrink-0 flex items-center justify-center" style={panelStyle}>
         <div className="text-center p-4">
           <div className="text-3xl mb-2" style={{ color: '#2d3748' }}>◻</div>
-          <div style={{ color: '#475569', fontSize: '12px' }}>Select a piece</div>
+          <div style={{ color: '#475569', fontSize: '12px' }}>Select a member</div>
         </div>
       </div>
     );
@@ -66,52 +64,43 @@ export default function PropertiesPanel() {
     return (
       <div className="shrink-0 p-3" style={panelStyle}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', marginBottom: '12px' }}>
-          {selectedIds.length} pieces selected
+          {selectedIds.length} members selected
         </div>
         <button
           className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item"
           style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
           onClick={() => {
-            historyStore.push({ pieces, connections });
-            deletePieces(selectedIds);
+            historyStore.push({ members, connections });
+            deleteMembers(selectedIds);
             setSelectedIds([]);
           }}
         >
           <Trash2 size={13} />
-          Delete {selectedIds.length} Pieces
+          Delete {selectedIds.length} Members
         </button>
       </div>
     );
   }
 
   if (selectedConn) {
-    const pA = pieces.find(p => p.id === selectedConn.pieceAId);
-    const pB = pieces.find(p => p.id === selectedConn.pieceBId);
+    const mA = members.find(m => m.id === selectedConn.memberAId);
+    const mB = members.find(m => m.id === selectedConn.memberBId);
     return (
       <div className="shrink-0 p-3 space-y-2" style={panelStyle}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>Connection</div>
-        <div className="rounded-md p-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
-          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>PIECE A</div>
-          <div>{pA ? MATERIALS[pA.type].label : '—'}</div>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
+          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER A</div>
+          <div>{mA ? MATERIALS[mA.type].label : '—'}</div>
         </div>
-        <div className="rounded-md p-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
-          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>PIECE B</div>
-          <div>{pB ? MATERIALS[pB.type].label : '—'}</div>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
+          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER B</div>
+          <div>{mB ? MATERIALS[mB.type].label : '—'}</div>
         </div>
-        <div>
-          <label className={labelCls}>Joint Type</label>
-          <select
-            className={inputCls}
-            value={selectedConn.type}
-            onChange={e => updateConnectionType(selectedConn.id, e.target.value)}
-          >
-            {CONNECTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
+        <div style={{ color: '#94a3b8', fontSize: '12px' }}>Type: {selectedConn.type}</div>
         <button
           className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md text-xs panel-item"
           style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
-          onClick={() => removeConnection(selectedConn.id)}
+          onClick={() => deleteConnection(selectedConn.id)}
         >
           <Trash2 size={12} /> Remove Connection
         </button>
@@ -119,46 +108,43 @@ export default function PropertiesPanel() {
     );
   }
 
-  if (!selectedPiece) return null;
-  const mat = MATERIALS[selectedPiece.type];
-  const weight = calcWeight(selectedPiece);
+  if (!selectedMember) return null;
+  const mat = MATERIALS[selectedMember.type];
+  const weight = calcWeight(selectedMember);
 
   const handleAddHole = () => {
     const newHole: Hole = {
       id: crypto.randomUUID(),
-      pieceId: selectedPiece.id,
-      snapTo: 'custom',
-      fromStart: selectedPiece.length / 2,
-      type: 'through',
+      type: 'circle',
       diameter: 0.5,
+      positionAlongMember: selectedMember.length / 2,
+      face: 'top',
     };
-    update('holes', [...(selectedPiece.holes || []), newHole]);
+    update('holes', [...(selectedMember.holes || []), newHole]);
   };
 
   const handleUpdateHole = (holeId: string, field: keyof Hole, value: unknown) => {
-    const updated = (selectedPiece.holes || []).map(h =>
+    const updated = (selectedMember.holes || []).map(h =>
       h.id === holeId ? { ...h, [field]: value } : h
     );
     update('holes', updated);
   };
 
   const handleRemoveHole = (holeId: string) => {
-    const updated = (selectedPiece.holes || []).filter(h => h.id !== holeId);
+    const updated = (selectedMember.holes || []).filter(h => h.id !== holeId);
     update('holes', updated);
   };
 
   const tabs = [
     { id: 'props', label: 'Props' },
-    { id: 'holes', label: `Holes` },
+    { id: 'holes', label: 'Holes' },
     { id: 'notes', label: 'Notes' },
   ];
-
-  const dimStr = `${selectedPiece.width}×${selectedPiece.height}×${selectedPiece.wall}`;
 
   return (
     <div className="shrink-0 flex flex-col" style={panelStyle}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #2e3350' }}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
           {mat.label}
         </div>
@@ -170,12 +156,12 @@ export default function PropertiesPanel() {
             color: '#f1f5f9',
           }}
         >
-          {dimStr}
+          {selectedMember.size} × {selectedMember.wallThickness}"
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #2e3350' }}>
         {tabs.map(t => (
           <button
             key={t.id}
@@ -197,7 +183,7 @@ export default function PropertiesPanel() {
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {activeRightTab === 'props' && (
           <>
-            {numInput('Length (in)', 'length', selectedPiece.length, 0.25, 0.1)}
+            {numInput('Length (in)', 'length', selectedMember.length, 0.25, 0.1)}
             <div
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
@@ -205,52 +191,35 @@ export default function PropertiesPanel() {
                 color: '#475569',
               }}
             >
-              {Math.floor(selectedPiece.length / 12)}' {(selectedPiece.length % 12).toFixed(4).replace(/\.?0+$/, '')}"
+              {Math.floor(selectedMember.length / 12)}' {(selectedMember.length % 12).toFixed(4).replace(/\.?0+$/, '')}"
             </div>
-
-            {numInput('Angle (°)', 'angle', selectedPiece.angle, 1)}
-
-            {/* Angle quick buttons */}
-            <div className="flex gap-1">
-              {[0, 45, 90, 135].map(a => (
-                <button
-                  key={a}
-                  className="flex-1 py-1 rounded-md text-[11px] panel-item"
-                  style={{
-                    background: selectedPiece.angle === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                    color: selectedPiece.angle === a ? '#f97316' : '#475569',
-                    border: selectedPiece.angle === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                  }}
-                  onClick={() => update('angle', a)}
-                >
-                  {a}°
-                </button>
-              ))}
-            </div>
-
-            {selectedPiece.orientation === 'upright' && (
-              numInput('Z Height (in)', 'zHeight', selectedPiece.zHeight, 1, 1)
-            )}
 
             <div>
-              <label className={labelCls}>Orientation</label>
-              <select
+              <label className={labelCls}>Size</label>
+              <input
+                type="text"
                 className={inputCls}
-                value={selectedPiece.orientation}
-                onChange={e => update('orientation', e.target.value as Orientation)}
-              >
-                <option value="horizontal">Horizontal</option>
-                <option value="vertical">Vertical</option>
-                <option value="upright">Upright (3D)</option>
-              </select>
+                value={selectedMember.size}
+                onChange={e => update('size', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Wall Thickness</label>
+              <input
+                type="text"
+                className={inputCls}
+                value={selectedMember.wallThickness}
+                onChange={e => update('wallThickness', e.target.value)}
+              />
             </div>
 
             <div>
               <label className={labelCls}>Grade</label>
               <select
                 className={inputCls}
-                value={selectedPiece.grade}
-                onChange={e => update('grade', e.target.value as MaterialGrade)}
+                value={selectedMember.grade}
+                onChange={e => update('grade', e.target.value as Grade)}
               >
                 {Object.entries(GRADE_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
@@ -258,10 +227,60 @@ export default function PropertiesPanel() {
               </select>
             </div>
 
+            <div>
+              <label className={labelCls}>Position X</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.position.x}
+                step={0.25}
+                onChange={e => update('position', { ...selectedMember.position, x: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Position Y</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.position.y}
+                step={0.25}
+                onChange={e => update('position', { ...selectedMember.position, y: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Rotation Z (°)</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.rotation.z}
+                step={1}
+                onChange={e => update('rotation', { ...selectedMember.rotation, z: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+
+            {/* Rotation quick buttons */}
+            <div className="flex gap-1">
+              {[0, 45, 90, 135].map(a => (
+                <button
+                  key={a}
+                  className="flex-1 py-1 rounded-md text-[11px] panel-item"
+                  style={{
+                    background: selectedMember.rotation.z === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
+                    color: selectedMember.rotation.z === a ? '#f97316' : '#475569',
+                    border: selectedMember.rotation.z === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  }}
+                  onClick={() => update('rotation', { ...selectedMember.rotation, z: a })}
+                >
+                  {a}°
+                </button>
+              ))}
+            </div>
+
             {/* Weight */}
             <div
               className="flex items-center justify-between px-2 py-2 rounded-md"
-              style={{ background: 'rgba(255,255,255,0.03)' }}
+              style={{ background: '#21253a' }}
             >
               <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
                 WEIGHT
@@ -283,12 +302,12 @@ export default function PropertiesPanel() {
               className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item mt-1"
               style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
               onClick={() => {
-                historyStore.push({ pieces, connections });
-                deletePieces([selectedPiece.id]);
+                historyStore.push({ members, connections });
+                deleteMembers([selectedMember.id]);
                 setSelectedIds([]);
               }}
             >
-              <Trash2 size={12} /> Delete Piece
+              <Trash2 size={12} /> Delete Member
             </button>
           </>
         )}
@@ -303,12 +322,12 @@ export default function PropertiesPanel() {
               <Plus size={12} /> Add Hole
             </button>
 
-            {(selectedPiece.holes || []).length === 0 && (
+            {(selectedMember.holes || []).length === 0 && (
               <div className="text-center py-4" style={{ color: '#475569', fontSize: '12px' }}>No holes</div>
             )}
 
-            {(selectedPiece.holes || []).map((hole, i) => (
-              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            {(selectedMember.holes || []).map((hole, i) => (
+              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#21253a' }}>
                 <div className="flex items-center justify-between">
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hole {i + 1}</span>
                   <button
@@ -321,15 +340,15 @@ export default function PropertiesPanel() {
                 </div>
                 <div className="space-y-1.5">
                   <div>
-                    <label className={labelCls}>From start</label>
+                    <label className={labelCls}>Position Along Member</label>
                     <input
                       type="number"
                       className={inputCls}
-                      value={hole.fromStart}
+                      value={hole.positionAlongMember}
                       step={0.0625}
                       min={0}
-                      max={selectedPiece.length}
-                      onChange={e => handleUpdateHole(hole.id, 'fromStart', parseFloat(e.target.value) || 0)}
+                      max={selectedMember.length}
+                      onChange={e => handleUpdateHole(hole.id, 'positionAlongMember', parseFloat(e.target.value) || 0)}
                     />
                   </div>
                   <div>
@@ -348,9 +367,22 @@ export default function PropertiesPanel() {
                     <select
                       className={inputCls}
                       value={hole.type}
-                      onChange={e => handleUpdateHole(hole.id, 'type', e.target.value as HoleType)}
+                      onChange={e => handleUpdateHole(hole.id, 'type', e.target.value as Hole['type'])}
                     >
-                      {HOLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      <option value="circle">Circle</option>
+                      <option value="slot">Slot</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Face</label>
+                    <select
+                      className={inputCls}
+                      value={hole.face}
+                      onChange={e => handleUpdateHole(hole.id, 'face', e.target.value as Hole['face'])}
+                    >
+                      <option value="top">Top</option>
+                      <option value="front">Front</option>
+                      <option value="side">Side</option>
                     </select>
                   </div>
                 </div>
@@ -360,27 +392,9 @@ export default function PropertiesPanel() {
         )}
 
         {activeRightTab === 'notes' && (
-          <>
-            <div>
-              <label className={labelCls}>Notes</label>
-              <textarea
-                className={`${inputCls} resize-none h-32`}
-                value={selectedPiece.notes}
-                placeholder="Add notes, spec references..."
-                onChange={e => update('notes', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Weld Symbol</label>
-              <input
-                type="text"
-                className={inputCls}
-                value={selectedPiece.weldSymbol}
-                placeholder="e.g. 1/4 → 4"
-                onChange={e => update('weldSymbol', e.target.value)}
-              />
-            </div>
-          </>
+          <div style={{ color: '#475569', fontSize: '12px', padding: '8px 0' }}>
+            Notes not available in this version.
+          </div>
         )}
       </div>
     </div>

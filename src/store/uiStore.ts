@@ -1,22 +1,15 @@
 import { create } from 'zustand';
-import type { Piece } from '../types';
+import type { Member } from '../types';
 
 export type Mode = 'select' | 'pan' | 'hole_add';
 export type ActiveView = '2d' | '3d';
 export type ActiveRightTab = 'props' | 'holes' | 'notes';
 
-interface HolePreview {
-  pieceId: string;
-  fromStart: number;
-  x: number;
-  y: number;
-}
-
 interface ContextMenu {
   x: number;
   y: number;
-  type: 'piece' | 'connection' | 'canvas';
-  pieceId?: string;
+  type: 'member' | 'connection' | 'canvas';
+  memberId?: string;
   connectionId?: string;
 }
 
@@ -27,13 +20,16 @@ interface UIState {
   activeView: ActiveView;
   activeRightTab: ActiveRightTab;
   isBOMCollapsed: boolean;
-  clipboard: Piece[];
-  holeAddMode: boolean;
-  holePreview: HolePreview | null;
+  clipboard: Member[];
   showTitleBlockModal: boolean;
   showAIModal: boolean;
+  showPhotoModal: boolean;
   contextMenu: ContextMenu | null;
-  snapPreview: { x: number; y: number } | null;
+
+  // Pan/zoom (separate from project data)
+  panX: number;
+  panY: number;
+  zoom: number;
 
   setMode: (mode: Mode) => void;
   setSelectedIds: (ids: string[]) => void;
@@ -42,13 +38,17 @@ interface UIState {
   setActiveView: (view: ActiveView) => void;
   setActiveRightTab: (tab: ActiveRightTab) => void;
   toggleBOM: () => void;
-  setClipboard: (pieces: Piece[]) => void;
-  setHoleAddMode: (v: boolean) => void;
-  setHolePreview: (h: HolePreview | null) => void;
+  setClipboard: (members: Member[]) => void;
   setShowTitleBlockModal: (v: boolean) => void;
   setShowAIModal: (v: boolean) => void;
+  setShowPhotoModal: (v: boolean) => void;
+  holeAddMode: boolean
+  holeTargetMemberId: string | null
+  setHoleAddMode: (active: boolean, memberId?: string | null) => void
   setContextMenu: (m: ContextMenu | null) => void;
-  setSnapPreview: (p: { x: number; y: number } | null) => void;
+  setPanZoom: (x: number, y: number, z: number) => void;
+  setZoom: (z: number) => void;
+  setPan: (x: number, y: number) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -59,29 +59,35 @@ export const useUIStore = create<UIState>((set) => ({
   activeRightTab: 'props',
   isBOMCollapsed: false,
   clipboard: [],
-  holeAddMode: false,
-  holePreview: null,
   showTitleBlockModal: false,
   showAIModal: false,
+  showPhotoModal: false,
   contextMenu: null,
-  snapPreview: null,
+  holeAddMode: false,
+  holeTargetMemberId: null,
+  panX: 400,
+  panY: 300,
+  zoom: 1,
 
   setMode: (mode) => set({ mode }),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
-  toggleSelectedId: (id) => set(s => ({
-    selectedIds: s.selectedIds.includes(id)
-      ? s.selectedIds.filter(x => x !== id)
-      : [...s.selectedIds, id]
-  })),
+  toggleSelectedId: (id) =>
+    set((s) => ({
+      selectedIds: s.selectedIds.includes(id)
+        ? s.selectedIds.filter((x) => x !== id)
+        : [...s.selectedIds, id],
+    })),
   setSelectedConnectionId: (id) => set({ selectedConnectionId: id }),
   setActiveView: (activeView) => set({ activeView }),
   setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
-  toggleBOM: () => set(s => ({ isBOMCollapsed: !s.isBOMCollapsed })),
+  toggleBOM: () => set((s) => ({ isBOMCollapsed: !s.isBOMCollapsed })),
   setClipboard: (clipboard) => set({ clipboard }),
-  setHoleAddMode: (holeAddMode) => set({ holeAddMode }),
-  setHolePreview: (holePreview) => set({ holePreview }),
   setShowTitleBlockModal: (showTitleBlockModal) => set({ showTitleBlockModal }),
   setShowAIModal: (showAIModal) => set({ showAIModal }),
+  setShowPhotoModal: (showPhotoModal) => set({ showPhotoModal }),
+  setHoleAddMode: (active, memberId = null) => set({ holeAddMode: active, holeTargetMemberId: memberId ?? null }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
-  setSnapPreview: (snapPreview) => set({ snapPreview }),
+  setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),
+  setZoom: (zoom) => set({ zoom }),
+  setPan: (panX, panY) => set({ panX, panY }),
 }));
