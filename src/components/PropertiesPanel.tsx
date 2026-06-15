@@ -228,7 +228,7 @@ export default function PropertiesPanel() {
             </div>
 
             <div>
-              <label className={labelCls}>Position X</label>
+              <label className={labelCls}>Position X (in)</label>
               <input
                 type="number"
                 className={inputCls}
@@ -238,13 +238,24 @@ export default function PropertiesPanel() {
               />
             </div>
             <div>
-              <label className={labelCls}>Position Y</label>
+              <label className={labelCls}>Position Y (in)</label>
               <input
                 type="number"
                 className={inputCls}
                 value={selectedMember.position.y}
                 step={0.25}
                 onChange={e => update('position', { ...selectedMember.position, y: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Position Z — height (in)</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.position.z ?? 0}
+                step={0.25}
+                min={0}
+                onChange={e => update('position', { ...selectedMember.position, z: parseFloat(e.target.value) || 0 })}
               />
             </div>
 

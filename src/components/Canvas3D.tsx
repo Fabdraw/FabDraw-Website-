@@ -80,8 +80,9 @@ interface DragState {
   origPos: { x: number; y: number; z: number }
   groundHit: THREE.Vector3
   screenY0: number
-  origZ: number  // 3D Y (height) at drag start
+  origZ: number      // 3D Y (height) at drag start
   shift: boolean
+  isUpright: boolean // upright members can move Y freely without shift
   pushed: boolean
 }
 
@@ -206,6 +207,7 @@ function Scene() {
       screenY0: (e as unknown as PointerEvent).clientY,
       origZ: m.position.z ?? 0,
       shift: (e as unknown as PointerEvent).shiftKey,
+      isUpright: Math.abs(m.rotation.x) >= 45,
       pushed: true,
     }
 
@@ -220,16 +222,29 @@ function Scene() {
       if (!d) return
 
       if (d.shift) {
-        // Shift+drag: move vertically (3D Y = member's z in data model)
+        // Shift+drag: vertical only
         const dy = (d.screenY0 - e.clientY) * 0.15
         updateMember(d.memberId, {
           position: { ...d.origPos, z: Math.max(0, d.origZ + dy) }
         })
-      } else {
-        // Drag along XZ ground plane
+      } else if (d.isUpright) {
+        // Upright member: XZ drag + free vertical from screen-space Y delta
         const hit = groundHit(e.clientX, e.clientY)
         const dx = hit.x - d.groundHit.x
-        const dz = hit.z - d.groundHit.z  // 3D Z = 2D y
+        const dz = hit.z - d.groundHit.z
+        const dy = (d.screenY0 - e.clientY) * 0.15
+        updateMember(d.memberId, {
+          position: {
+            x: Math.round(d.origPos.x + dx),
+            y: Math.round(d.origPos.y + dz),
+            z: Math.max(0, d.origZ + dy),
+          }
+        })
+      } else {
+        // Flat member: drag along XZ ground plane only
+        const hit = groundHit(e.clientX, e.clientY)
+        const dx = hit.x - d.groundHit.x
+        const dz = hit.z - d.groundHit.z
         updateMember(d.memberId, {
           position: {
             ...d.origPos,
@@ -359,7 +374,7 @@ export default function Canvas3D() {
         position: 'absolute', bottom: 12, left: 12,
         fontSize: 11, color: '#475569', fontFamily: 'monospace', pointerEvents: 'none',
       }}>
-        3D  •  Drag: move on ground  •  Shift+drag: move up/down  •  Right drag: pan  •  Scroll: zoom
+        3D  •  Drag: move  •  Upright: drag moves X/Z + height  •  Shift+drag: vertical only  •  Right drag: pan  •  Scroll: zoom
       </div>
 
       {members.length === 0 && (
