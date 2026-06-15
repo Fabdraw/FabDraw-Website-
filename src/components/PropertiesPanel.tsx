@@ -248,8 +248,50 @@ export default function PropertiesPanel() {
               />
             </div>
 
+            {/* Orientation presets */}
             <div>
-              <label className={labelCls}>Rotation (°)</label>
+              <label className={labelCls}>Orientation</label>
+              <div className="flex gap-1">
+                {([
+                  { label: 'Flat', rx: 0, ry: 0, rz: 0 },
+                  { label: 'Upright', rx: 90, ry: 0, rz: 0 },
+                  { label: 'Side', rx: 0, ry: 0, rz: 90 },
+                ] as const).map(preset => {
+                  const active =
+                    selectedMember.rotation.x === preset.rx &&
+                    selectedMember.rotation.y === preset.ry &&
+                    selectedMember.rotation.z === preset.rz
+                  return (
+                    <button
+                      key={preset.label}
+                      className="flex-1 py-1 rounded-md text-[11px] panel-item"
+                      style={{
+                        background: active ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
+                        color: active ? '#f97316' : '#64748b',
+                        border: active ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                      }}
+                      onClick={() => update('rotation', { x: preset.rx, y: preset.ry, z: preset.rz })}
+                    >
+                      {preset.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Rotation axes */}
+            <div>
+              <label className={labelCls}>Rotation X (°) — tilt / upright</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.rotation.x}
+                step={1}
+                onChange={e => update('rotation', { ...selectedMember.rotation, x: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Rotation Y (°) — in-plane angle</label>
               <input
                 type="number"
                 className={inputCls}
@@ -258,23 +300,36 @@ export default function PropertiesPanel() {
                 onChange={e => update('rotation', { ...selectedMember.rotation, y: parseFloat(e.target.value) || 0 })}
               />
             </div>
+            <div>
+              <label className={labelCls}>Rotation Z (°) — roll</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={selectedMember.rotation.z}
+                step={1}
+                onChange={e => update('rotation', { ...selectedMember.rotation, z: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
 
-            {/* Rotation quick buttons */}
-            <div className="flex gap-1">
-              {[0, 45, 90, 135].map(a => (
-                <button
-                  key={a}
-                  className="flex-1 py-1 rounded-md text-[11px] panel-item"
-                  style={{
-                    background: selectedMember.rotation.y === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                    color: selectedMember.rotation.y === a ? '#f97316' : '#475569',
-                    border: selectedMember.rotation.y === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                  }}
-                  onClick={() => update('rotation', { ...selectedMember.rotation, y: a })}
-                >
-                  {a}°
-                </button>
-              ))}
+            {/* In-plane angle quick-set */}
+            <div>
+              <label className={labelCls}>Quick angle (Y)</label>
+              <div className="flex gap-1">
+                {[0, 45, 90, 135].map(a => (
+                  <button
+                    key={a}
+                    className="flex-1 py-1 rounded-md text-[11px] panel-item"
+                    style={{
+                      background: selectedMember.rotation.y === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
+                      color: selectedMember.rotation.y === a ? '#f97316' : '#64748b',
+                      border: selectedMember.rotation.y === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                    }}
+                    onClick={() => update('rotation', { ...selectedMember.rotation, y: a })}
+                  >
+                    {a}°
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Weight */}
