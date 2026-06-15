@@ -23,6 +23,7 @@ interface UIState {
   clipboard: Member[];
   showTitleBlockModal: boolean;
   showAIModal: boolean;
+  showPhotoModal: boolean;
   contextMenu: ContextMenu | null;
 
   // Pan/zoom (separate from project data)
@@ -40,6 +41,7 @@ interface UIState {
   setClipboard: (members: Member[]) => void;
   setShowTitleBlockModal: (v: boolean) => void;
   setShowAIModal: (v: boolean) => void;
+  setShowPhotoModal: (v: boolean) => void;
   holeAddMode: boolean
   holeTargetMemberId: string | null
   setHoleAddMode: (active: boolean, memberId?: string | null) => void
@@ -59,6 +61,7 @@ export const useUIStore = create<UIState>((set) => ({
   clipboard: [],
   showTitleBlockModal: false,
   showAIModal: false,
+  showPhotoModal: false,
   contextMenu: null,
   holeAddMode: false,
   holeTargetMemberId: null,
@@ -81,6 +84,7 @@ export const useUIStore = create<UIState>((set) => ({
   setClipboard: (clipboard) => set({ clipboard }),
   setShowTitleBlockModal: (showTitleBlockModal) => set({ showTitleBlockModal }),
   setShowAIModal: (showAIModal) => set({ showAIModal }),
+  setShowPhotoModal: (showPhotoModal) => set({ showPhotoModal }),
   setHoleAddMode: (active, memberId = null) => set({ holeAddMode: active, holeTargetMemberId: memberId ?? null }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),

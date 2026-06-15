@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { MousePointer2, Hand, Undo2, Redo2, Download, Trash2, Copy, Clipboard, LayoutGrid, Sparkles, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { MousePointer2, Hand, Undo2, Redo2, Download, Trash2, Copy, Clipboard, LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -16,7 +16,7 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
     mode, setMode, selectedIds, setSelectedIds,
     clipboard, setClipboard,
     activeView, setActiveView,
-    setShowTitleBlockModal, setShowAIModal,
+    setShowTitleBlockModal, setShowAIModal, setShowPhotoModal,
     zoom, setZoom, panX, panY, setPan,
   } = useUIStore()
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore()
@@ -111,6 +111,11 @@ export default function Toolbar({ onExportJSON, onImportJSON }: ToolbarProps) {
         style={{ border: '1px solid #f97316', color: '#f97316', background: 'transparent' }}
         onClick={() => setShowAIModal(true)}>
         <Sparkles size={13} /> AI
+      </button>
+      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium ml-1"
+        style={{ border: '1px solid #14b8a6', color: '#14b8a6', background: 'transparent' }}
+        onClick={() => setShowPhotoModal(true)}>
+        <Camera size={13} /> Photo
       </button>
     </div>
   )

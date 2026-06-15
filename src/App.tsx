@@ -7,6 +7,7 @@ import PropertiesPanel from './components/PropertiesPanel';
 import BOMPanel from './components/BOMPanel';
 import TitleBlockModal from './components/TitleBlockModal';
 import AIGeneratorModal from './components/AIGeneratorModal';
+import PhotoModal from './components/PhotoModal';
 import ContextMenu from './components/ContextMenu';
 import { useProjectStore } from './store/projectStore';
 import { useUIStore } from './store/uiStore';
@@ -17,7 +18,7 @@ export default function App() {
   const { members, connections } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
-    showTitleBlockModal, showAIModal, setContextMenu,
+    showTitleBlockModal, showAIModal, showPhotoModal, setContextMenu,
     clipboard, setClipboard,
     zoom, setZoom, panX, panY, setPan,
   } = useUIStore();
@@ -179,6 +180,7 @@ export default function App() {
 
       {showTitleBlockModal && <TitleBlockModal />}
       {showAIModal && <AIGeneratorModal />}
+      {showPhotoModal && <PhotoModal />}
       <ContextMenu />
 
       <input
