@@ -1,5 +1,5 @@
-import React, { useRef, useMemo, useCallback } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import React, { useRef, useMemo, useCallback, useEffect } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import { useProjectStore } from '../store/projectStore'
@@ -30,126 +30,89 @@ function buildCrossSection(m: Member): THREE.Shape {
     case 'square_tube':
     case 'rect_tube': {
       const shape = new THREE.Shape()
-      shape.moveTo(-hw, -hh)
-      shape.lineTo(hw, -hh)
-      shape.lineTo(hw, hh)
-      shape.lineTo(-hw, hh)
-      shape.closePath()
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()
       const hole = new THREE.Path()
-      hole.moveTo(-(hw - wall), -(hh - wall))
-      hole.lineTo(hw - wall, -(hh - wall))
-      hole.lineTo(hw - wall, hh - wall)
-      hole.lineTo(-(hw - wall), hh - wall)
-      hole.closePath()
+      hole.moveTo(-(hw - wall), -(hh - wall)); hole.lineTo(hw - wall, -(hh - wall))
+      hole.lineTo(hw - wall, hh - wall); hole.lineTo(-(hw - wall), hh - wall); hole.closePath()
       shape.holes.push(hole)
       return shape
     }
     case 'round_tube':
     case 'pipe': {
-      const r = hw
-      const ir = Math.max(r - wall, 0.01)
+      const r = hw; const ir = Math.max(r - wall, 0.01)
       const shape = new THREE.Shape()
       shape.absarc(0, 0, r, 0, Math.PI * 2, false)
-      const hole = new THREE.Path()
-      hole.absarc(0, 0, ir, 0, Math.PI * 2, true)
-      shape.holes.push(hole)
-      return shape
+      const hole = new THREE.Path(); hole.absarc(0, 0, ir, 0, Math.PI * 2, true)
+      shape.holes.push(hole); return shape
     }
     case 'i_beam': {
-      const fh = wall * 1.5  // flange thickness
+      const fh = wall * 1.5
       const shape = new THREE.Shape()
-      // I-beam: top flange, web, bottom flange
-      shape.moveTo(-hw, -hh)
-      shape.lineTo(hw, -hh)
-      shape.lineTo(hw, -hh + fh)
-      shape.lineTo(wall / 2, -hh + fh)
-      shape.lineTo(wall / 2, hh - fh)
-      shape.lineTo(hw, hh - fh)
-      shape.lineTo(hw, hh)
-      shape.lineTo(-hw, hh)
-      shape.lineTo(-hw, hh - fh)
-      shape.lineTo(-wall / 2, hh - fh)
-      shape.lineTo(-wall / 2, -hh + fh)
-      shape.lineTo(-hw, -hh + fh)
-      shape.closePath()
-      return shape
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + fh)
+      shape.lineTo(wall / 2, -hh + fh); shape.lineTo(wall / 2, hh - fh); shape.lineTo(hw, hh - fh)
+      shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.lineTo(-hw, hh - fh)
+      shape.lineTo(-wall / 2, hh - fh); shape.lineTo(-wall / 2, -hh + fh); shape.lineTo(-hw, -hh + fh)
+      shape.closePath(); return shape
     }
     case 'channel': {
       const fh = wall * 1.5
       const shape = new THREE.Shape()
-      // C-channel: open on right side
-      shape.moveTo(-hw, -hh)
-      shape.lineTo(hw, -hh)
-      shape.lineTo(hw, -hh + fh)
-      shape.lineTo(-hw + wall, -hh + fh)
-      shape.lineTo(-hw + wall, hh - fh)
-      shape.lineTo(hw, hh - fh)
-      shape.lineTo(hw, hh)
-      shape.lineTo(-hw, hh)
-      shape.closePath()
-      return shape
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + fh)
+      shape.lineTo(-hw + wall, -hh + fh); shape.lineTo(-hw + wall, hh - fh); shape.lineTo(hw, hh - fh)
+      shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath(); return shape
     }
     case 'angle': {
       const shape = new THREE.Shape()
-      // L-angle
-      shape.moveTo(-hw, -hh)
-      shape.lineTo(hw, -hh)
-      shape.lineTo(hw, -hh + wall)
-      shape.lineTo(-hw + wall, -hh + wall)
-      shape.lineTo(-hw + wall, hh)
-      shape.lineTo(-hw, hh)
-      shape.closePath()
-      return shape
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + wall)
+      shape.lineTo(-hw + wall, -hh + wall); shape.lineTo(-hw + wall, hh); shape.lineTo(-hw, hh)
+      shape.closePath(); return shape
     }
     default: {
-      // flat_bar, sheet, plate — solid rect
       const shape = new THREE.Shape()
-      shape.moveTo(-hw, -hh)
-      shape.lineTo(hw, -hh)
-      shape.lineTo(hw, hh)
-      shape.lineTo(-hw, hh)
-      shape.closePath()
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()
       return shape
     }
   }
+}
+
+interface DragState {
+  memberId: string
+  origPos: { x: number; y: number; z: number }
+  groundHit: THREE.Vector3
+  screenY0: number
+  origZ: number  // 3D Y (height) at drag start
+  shift: boolean
+  pushed: boolean
 }
 
 function MemberMesh({
   m,
   selected,
   onClick,
+  onPointerDown,
 }: {
   m: Member
   selected: boolean
   onClick: () => void
+  onPointerDown: (e: React.PointerEvent<Element>) => void
 }) {
-  const groupRef = useRef<THREE.Group>(null)
-
   const { width, height } = parseSizeString(m.type, m.size)
-  const wall = parseFloat(m.wallThickness) || 0.12
   const color = memberColor(m, selected)
   const hexColor = new THREE.Color(color)
 
-  // Build geometry: extrude cross-section along Z (member length), then rotate
   const geo = useMemo(() => {
     const shape = buildCrossSection(m)
-    const extrudeSettings = { depth: m.length, bevelEnabled: false, steps: 1 }
-    const g = new THREE.ExtrudeGeometry(shape, extrudeSettings)
-    // Center along Z so member is centered at origin
+    const g = new THREE.ExtrudeGeometry(shape, { depth: m.length, bevelEnabled: false, steps: 1 })
     g.translate(0, 0, -m.length / 2)
-    // Rotate so length runs along X axis (matching 2D canvas convention)
     g.applyMatrix4(new THREE.Matrix4().makeRotationY(Math.PI / 2))
     return g
   }, [m.type, m.size, m.wallThickness, m.length])
 
-  // Upright: standing member, length runs up Y
   const uprightGeo = useMemo(() => {
     if (Math.abs(m.rotation.x) < 45) return null
     const shape = buildCrossSection(m)
-    const extrudeSettings = { depth: m.length, bevelEnabled: false, steps: 1 }
-    const g = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+    const g = new THREE.ExtrudeGeometry(shape, { depth: m.length, bevelEnabled: false, steps: 1 })
     g.translate(0, 0, -m.length / 2)
-    // Rotate Z->Y so extrusion runs up
     g.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2))
     return g
   }, [m.type, m.size, m.wallThickness, m.length, m.rotation.x])
@@ -157,44 +120,37 @@ function MemberMesh({
   const isUpright = Math.abs(m.rotation.x) >= 45
   const activeGeo = isUpright ? uprightGeo ?? geo : geo
 
-  // Hole geometries
-  const holeGeos = useMemo(() => {
-    return m.holes.map(hole => {
-      const r = hole.diameter / 2
-      const g = new THREE.CylinderGeometry(r, r, Math.max(width, height) + 0.2, 16)
-      return { geo: g, posInches: hole.positionAlongMember, id: hole.id }
-    })
-  }, [m.holes, width, height])
+  const holeGeos = useMemo(() => m.holes.map(hole => ({
+    geo: new THREE.CylinderGeometry(hole.diameter / 2, hole.diameter / 2, Math.max(width, height) + 0.2, 16),
+    posInches: hole.positionAlongMember,
+    id: hole.id,
+  })), [m.holes, width, height])
 
-  // Position: member center in world space
-  // In 2D, x=horizontal inches, y=vertical inches (screen). In 3D: X=x, Z=y (2D), Y=zOffset
+  // 3D position: 2D x→3D X, 2D y→3D Z, model z→3D Y (height)
   const px = m.position.x
-  const pz = m.position.y   // 2D y maps to 3D Z
-  const py = m.position.z ?? 0   // z in 3D model = height above floor
+  const pz = m.position.y
+  const py = m.position.z ?? 0
   const angleY = -(m.rotation.y * Math.PI) / 180
 
   return (
-    <group ref={groupRef} position={[px, py, pz]} rotation={[0, angleY, 0]} onClick={(e) => { e.stopPropagation(); onClick() }}>
+    <group
+      position={[px, py, pz]}
+      rotation={[0, angleY, 0]}
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e as unknown as React.PointerEvent<Element>) }}
+    >
       <mesh geometry={activeGeo} castShadow receiveShadow>
         <meshPhongMaterial color={hexColor} shininess={selected ? 80 : 30} />
       </mesh>
-
-      {/* Edge lines for clarity */}
       <lineSegments>
         <edgesGeometry args={[activeGeo]} />
         <lineBasicMaterial color={selected ? '#ff8800' : hexColor.clone().multiplyScalar(0.6)} />
       </lineSegments>
-
-      {/* Holes */}
-      {holeGeos.map(({ geo: hGeo, posInches, id }) => {
-        // Hole position along member X axis, centered at posInches from start -> -length/2 + posInches
-        const hx = -m.length / 2 + posInches
-        return (
-          <mesh key={id} geometry={hGeo} position={[hx, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <meshPhongMaterial color='#111111' />
-          </mesh>
-        )
-      })}
+      {holeGeos.map(({ geo: hGeo, posInches, id }) => (
+        <mesh key={id} geometry={hGeo} position={[-m.length / 2 + posInches, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <meshPhongMaterial color='#111111' />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -204,24 +160,111 @@ function Scene() {
   const { members, connections } = project
   const { selectedIds, setSelectedIds } = useUIStore()
   const { push } = useHistoryStore()
+  const { camera, gl, controls } = useThree()
 
-  const handleClick = useCallback((id: string) => {
-    setSelectedIds([id])
-  }, [setSelectedIds])
+  // Stable refs for members/connections so pointer event handlers don't go stale
+  const membersRef = useRef(members)
+  membersRef.current = members
+  const connectionsRef = useRef(connections)
+  connectionsRef.current = connections
+  const selectedIdsRef = useRef(selectedIds)
+  selectedIdsRef.current = selectedIds
 
-  const handleMissedClick = useCallback(() => {
-    setSelectedIds([])
+  const dragRef = useRef<DragState | null>(null)
+  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  const hitVec = useMemo(() => new THREE.Vector3(), [])
+
+  const getNDC = useCallback((clientX: number, clientY: number) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    return new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+  }, [gl])
+
+  const groundHit = useCallback((clientX: number, clientY: number): THREE.Vector3 => {
+    raycaster.setFromCamera(getNDC(clientX, clientY), camera)
+    const hit = new THREE.Vector3()
+    raycaster.ray.intersectPlane(groundPlane, hit)
+    return hit
+  }, [camera, raycaster, groundPlane, getNDC])
+
+  const handleMemberPointerDown = useCallback((m: Member, e: React.PointerEvent<Element>) => {
+    // Disable orbit controls so drag doesn't rotate the scene
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
+
+    // Push history once at drag start
+    push({ members: membersRef.current, connections: connectionsRef.current })
+
+    const hit = groundHit((e as unknown as PointerEvent).clientX, (e as unknown as PointerEvent).clientY)
+
+    dragRef.current = {
+      memberId: m.id,
+      origPos: { ...m.position },
+      groundHit: hit,
+      screenY0: (e as unknown as PointerEvent).clientY,
+      origZ: m.position.z ?? 0,
+      shift: (e as unknown as PointerEvent).shiftKey,
+      pushed: true,
+    }
+
+    gl.domElement.setPointerCapture((e as unknown as PointerEvent).pointerId)
+  }, [controls, push, groundHit, gl])
+
+  useEffect(() => {
+    const dom = gl.domElement
+
+    const onPointerMove = (e: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+
+      if (d.shift) {
+        // Shift+drag: move vertically (3D Y = member's z in data model)
+        const dy = (d.screenY0 - e.clientY) * 0.15
+        updateMember(d.memberId, {
+          position: { ...d.origPos, z: Math.max(0, d.origZ + dy) }
+        })
+      } else {
+        // Drag along XZ ground plane
+        const hit = groundHit(e.clientX, e.clientY)
+        const dx = hit.x - d.groundHit.x
+        const dz = hit.z - d.groundHit.z  // 3D Z = 2D y
+        updateMember(d.memberId, {
+          position: {
+            ...d.origPos,
+            x: Math.round(d.origPos.x + dx),
+            y: Math.round(d.origPos.y + dz),
+          }
+        })
+      }
+    }
+
+    const onPointerUp = () => {
+      if (!dragRef.current) return
+      if (controls) (controls as unknown as { enabled: boolean }).enabled = true
+      dragRef.current = null
+    }
+
+    dom.addEventListener('pointermove', onPointerMove)
+    dom.addEventListener('pointerup', onPointerUp)
+    return () => {
+      dom.removeEventListener('pointermove', onPointerMove)
+      dom.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [gl, controls, updateMember, groundHit])
+
+  const handleMissed = useCallback(() => {
+    if (!dragRef.current) setSelectedIds([])
   }, [setSelectedIds])
 
   return (
     <>
-      {/* Lighting */}
       <ambientLight intensity={0.5} />
       <directionalLight position={[80, 100, 60]} intensity={0.8} castShadow shadow-mapSize={[2048, 2048]} />
       <directionalLight position={[-40, 40, -40]} intensity={0.3} color='#8888ff' />
       <pointLight position={[0, 50, 0]} intensity={0.2} />
 
-      {/* Ground grid */}
       <Grid
         args={[400, 400]}
         cellSize={6}
@@ -235,18 +278,18 @@ function Scene() {
         position={[0, -0.01, 0]}
       />
 
-      {/* Members */}
       {members.map(m => (
         <MemberMesh
           key={m.id}
           m={m}
           selected={selectedIds.includes(m.id)}
-          onClick={() => handleClick(m.id)}
+          onClick={() => setSelectedIds([m.id])}
+          onPointerDown={(e) => handleMemberPointerDown(m, e)}
         />
       ))}
 
-      {/* Click miss — deselect */}
-      <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerMissed={handleMissedClick} visible={false}>
+      {/* Invisible backdrop — click miss deselects */}
+      <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerMissed={handleMissed} visible={false}>
         <planeGeometry args={[10000, 10000]} />
         <meshBasicMaterial />
       </mesh>
@@ -258,13 +301,14 @@ function CameraSetup({ members }: { members: Member[] }) {
   const { camera } = useThree()
   const initialized = useRef(false)
 
-  useFrame(() => {
+  // Run once after first render
+  useEffect(() => {
     if (initialized.current) return
+    initialized.current = true
     if (members.length === 0) {
       camera.position.set(50, 40, 50)
       camera.lookAt(0, 0, 0)
     } else {
-      // Fit to bounding box
       let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity, maxY = 0
       for (const m of members) {
         const hw = m.length / 2
@@ -280,8 +324,8 @@ function CameraSetup({ members }: { members: Member[] }) {
       camera.position.set(cx + span, span * 0.8, cz + span)
       camera.lookAt(cx, maxY / 2, cz)
     }
-    initialized.current = true
-  })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return null
 }
@@ -296,18 +340,12 @@ export default function Canvas3D() {
         shadows
         camera={{ fov: 45, near: 0.1, far: 5000 }}
         gl={{ antialias: true }}
-        onCreated={({ gl }) => {
-          gl.setClearColor(new THREE.Color('#12151e'))
-        }}
+        onCreated={({ gl }) => { gl.setClearColor(new THREE.Color('#12151e')) }}
       >
         <CameraSetup members={members} />
         <OrbitControls
           makeDefault
-          mouseButtons={{
-            LEFT: THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN,
-          }}
+          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
           enableDamping
           dampingFactor={0.08}
           minDistance={2}
@@ -317,13 +355,11 @@ export default function Canvas3D() {
         <Scene />
       </Canvas>
 
-      {/* HUD */}
       <div style={{
         position: 'absolute', bottom: 12, left: 12,
-        fontSize: 11, color: '#475569', fontFamily: 'monospace',
-        pointerEvents: 'none',
+        fontSize: 11, color: '#475569', fontFamily: 'monospace', pointerEvents: 'none',
       }}>
-        3D View  •  Left drag: orbit  •  Right drag: pan  •  Scroll: zoom
+        3D  •  Drag: move on ground  •  Shift+drag: move up/down  •  Right drag: pan  •  Scroll: zoom
       </div>
 
       {members.length === 0 && (

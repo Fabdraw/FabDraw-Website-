@@ -249,13 +249,13 @@ export default function PropertiesPanel() {
             </div>
 
             <div>
-              <label className={labelCls}>Rotation Z (°)</label>
+              <label className={labelCls}>Rotation (°)</label>
               <input
                 type="number"
                 className={inputCls}
-                value={selectedMember.rotation.z}
+                value={selectedMember.rotation.y}
                 step={1}
-                onChange={e => update('rotation', { ...selectedMember.rotation, z: parseFloat(e.target.value) || 0 })}
+                onChange={e => update('rotation', { ...selectedMember.rotation, y: parseFloat(e.target.value) || 0 })}
               />
             </div>
 
@@ -266,11 +266,11 @@ export default function PropertiesPanel() {
                   key={a}
                   className="flex-1 py-1 rounded-md text-[11px] panel-item"
                   style={{
-                    background: selectedMember.rotation.z === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                    color: selectedMember.rotation.z === a ? '#f97316' : '#475569',
-                    border: selectedMember.rotation.z === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                    background: selectedMember.rotation.y === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
+                    color: selectedMember.rotation.y === a ? '#f97316' : '#475569',
+                    border: selectedMember.rotation.y === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.08)',
                   }}
-                  onClick={() => update('rotation', { ...selectedMember.rotation, z: a })}
+                  onClick={() => update('rotation', { ...selectedMember.rotation, y: a })}
                 >
                   {a}°
                 </button>
