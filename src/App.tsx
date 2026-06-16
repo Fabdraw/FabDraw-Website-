@@ -8,6 +8,7 @@ import BOMPanel from './components/BOMPanel';
 import TitleBlockModal from './components/TitleBlockModal';
 import AIGeneratorModal from './components/AIGeneratorModal';
 import PhotoModal from './components/PhotoModal';
+import TemplateLibrary from './components/TemplateLibrary';
 import ContextMenu from './components/ContextMenu';
 import { useProjectStore } from './store/projectStore';
 import { useUIStore } from './store/uiStore';
@@ -18,7 +19,7 @@ export default function App() {
   const { members, connections } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
-    showTitleBlockModal, showAIModal, showPhotoModal, setContextMenu,
+    showTitleBlockModal, showAIModal, showPhotoModal, showTemplateModal, setContextMenu,
     clipboard, setClipboard,
     zoom, setZoom, setPan,
   } = useUIStore();
@@ -144,6 +145,7 @@ export default function App() {
       {showTitleBlockModal && <TitleBlockModal />}
       {showAIModal && <AIGeneratorModal />}
       {showPhotoModal && <PhotoModal />}
+      {showTemplateModal && <TemplateLibrary />}
       <ContextMenu />
     </div>
   );

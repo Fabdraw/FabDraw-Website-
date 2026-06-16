@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
-  Save, FolderOpen, FileText, Ruler, Link2,
+  Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
@@ -17,7 +17,7 @@ export default function Toolbar() {
     mode, setMode, selectedIds, setSelectedIds,
     clipboard, setClipboard,
     activeView, setActiveView,
-    setShowTitleBlockModal, setShowAIModal, setShowPhotoModal,
+    setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowTemplateModal,
     zoom, setZoom, setPan,
   } = useUIStore()
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore()
@@ -228,6 +228,11 @@ export default function Toolbar() {
       {/* Title block */}
       <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block">
         <LayoutGrid size={14} />
+      </button>
+
+      {/* Templates */}
+      <button className={btn} onClick={() => setShowTemplateModal(true)} title="Template Library">
+        <LayoutTemplate size={14} />
       </button>
 
       {/* Spacer */}

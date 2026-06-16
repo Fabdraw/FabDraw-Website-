@@ -26,6 +26,7 @@ interface UIState {
   showTitleBlockModal: boolean;
   showAIModal: boolean;
   showPhotoModal: boolean;
+  showTemplateModal: boolean;
   contextMenu: ContextMenu | null;
   panX: number;
   panY: number;
@@ -44,6 +45,7 @@ interface UIState {
   setShowTitleBlockModal: (v: boolean) => void;
   setShowAIModal: (v: boolean) => void;
   setShowPhotoModal: (v: boolean) => void;
+  setShowTemplateModal: (v: boolean) => void;
   holeAddMode: boolean;
   holeTargetMemberId: string | null;
   setHoleAddMode: (active: boolean, memberId?: string | null) => void;
@@ -66,6 +68,7 @@ export const useUIStore = create<UIState>((set) => ({
   showTitleBlockModal: false,
   showAIModal: false,
   showPhotoModal: false,
+  showTemplateModal: false,
   contextMenu: null,
   holeAddMode: false,
   holeTargetMemberId: null,
@@ -91,6 +94,7 @@ export const useUIStore = create<UIState>((set) => ({
   setShowTitleBlockModal: (showTitleBlockModal) => set({ showTitleBlockModal }),
   setShowAIModal: (showAIModal) => set({ showAIModal }),
   setShowPhotoModal: (showPhotoModal) => set({ showPhotoModal }),
+  setShowTemplateModal: (showTemplateModal) => set({ showTemplateModal }),
   setHoleAddMode: (active, memberId = null) => set({ holeAddMode: active, holeTargetMemberId: memberId ?? null }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),
