@@ -724,6 +724,7 @@ export default function Canvas2D() {
   }, [selectedIds, setSelectedIds, setContextMenu])
 
   const handleMemberDragStart = useCallback((id: string) => {
+    setAlignGuides({ hLines: [], vLines: [] }) // clear Konva guide lines before drag begins
     // Record offsets for all selected members relative to dragged member
     const dragged = members.find(m => m.id === id)
     if (!dragged) return
@@ -741,29 +742,12 @@ export default function Canvas2D() {
     dragOffsets.current = offsets
   }, [members, selectedIds])
 
-  const handleMemberDragMove = useCallback((id: string, canvasX: number, canvasY: number) => {
-    const wx = cx2wx(canvasX, zoom, panX)
-    const wy = cy2wy(canvasY, zoom, panY)
-    const ALIGN_THRESH = 12 / (zoom * SCALE)
-    const hLines: number[] = []
-    const vLines: number[] = []
-    for (const m of members) {
-      if (m.id === id) continue
-      const angle = (m.rotation.y * Math.PI) / 180
-      const cos = Math.cos(angle), sin = Math.sin(angle)
-      const hw = m.length / 2
-      const pts = [
-        { x: m.position.x - cos * hw, y: m.position.y - sin * hw },
-        { x: m.position.x, y: m.position.y },
-        { x: m.position.x + cos * hw, y: m.position.y + sin * hw },
-      ]
-      for (const pt of pts) {
-        if (Math.abs(pt.x - wx) < ALIGN_THRESH) vLines.push(pt.x)
-        if (Math.abs(pt.y - wy) < ALIGN_THRESH) hLines.push(pt.y)
-      }
-    }
-    setAlignGuides({ hLines: [...new Set(hLines)], vLines: [...new Set(vLines)] })
-  }, [zoom, panX, panY, members])
+  const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {
+    // No state updates here — any React re-render during a Konva drag causes the
+    // dragged node's x/y props to reset, making the member jump back to its store
+    // position. The snap canvas overlay (driven by handleStageMouseMove) already
+    // draws snap indicators and tracking lines on every mousemove without re-renders.
+  }, [])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
     setAlignGuides({ hLines: [], vLines: [] })
