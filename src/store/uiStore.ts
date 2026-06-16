@@ -27,6 +27,8 @@ interface UIState {
   showAIModal: boolean;
   showPhotoModal: boolean;
   showTemplateModal: boolean;
+  showHelpModal: boolean;
+  showPDFExportModal: boolean;
   contextMenu: ContextMenu | null;
   panX: number;
   panY: number;
@@ -46,6 +48,8 @@ interface UIState {
   setShowAIModal: (v: boolean) => void;
   setShowPhotoModal: (v: boolean) => void;
   setShowTemplateModal: (v: boolean) => void;
+  setShowHelpModal: (v: boolean) => void;
+  setShowPDFExportModal: (v: boolean) => void;
   holeAddMode: boolean;
   holeTargetMemberId: string | null;
   setHoleAddMode: (active: boolean, memberId?: string | null) => void;
@@ -69,6 +73,8 @@ export const useUIStore = create<UIState>((set) => ({
   showAIModal: false,
   showPhotoModal: false,
   showTemplateModal: false,
+  showHelpModal: false,
+  showPDFExportModal: false,
   contextMenu: null,
   holeAddMode: false,
   holeTargetMemberId: null,
@@ -95,6 +101,8 @@ export const useUIStore = create<UIState>((set) => ({
   setShowAIModal: (showAIModal) => set({ showAIModal }),
   setShowPhotoModal: (showPhotoModal) => set({ showPhotoModal }),
   setShowTemplateModal: (showTemplateModal) => set({ showTemplateModal }),
+  setShowHelpModal: (showHelpModal) => set({ showHelpModal }),
+  setShowPDFExportModal: (showPDFExportModal) => set({ showPDFExportModal }),
   setHoleAddMode: (active, memberId = null) => set({ holeAddMode: active, holeTargetMemberId: memberId ?? null }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),

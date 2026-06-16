@@ -397,6 +397,9 @@ export default function Canvas2D() {
   const [dimStart, setDimStart] = useState<{ x: number; y: number } | null>(null)
   const [dimPreview, setDimPreview] = useState<{ x: number; y: number } | null>(null)
 
+  // Alignment guides state
+  const [alignGuides, setAlignGuides] = useState<{ hLines: number[]; vLines: number[] }>({ hLines: [], vLines: [] })
+
   // Connection dialog state
   const [connDialog, setConnDialog] = useState<{
     memberAId: string; memberBId: string
@@ -681,7 +684,35 @@ export default function Canvas2D() {
     dragOffsets.current = offsets
   }, [members, selectedIds])
 
+  const handleMemberDragMove = useCallback((id: string, canvasX: number, canvasY: number) => {
+    const wx = cx2wx(canvasX, zoom, panX)
+    const wy = cy2wy(canvasY, zoom, panY)
+    const SNAP_THRESH = 12 / (zoom * SCALE) // world units
+
+    const hLines: number[] = []
+    const vLines: number[] = []
+
+    for (const m of members) {
+      if (m.id === id) continue
+      const angle = (m.rotation.y * Math.PI) / 180
+      const cos = Math.cos(angle), sin = Math.sin(angle)
+      const hw = m.length / 2
+      const pts = [
+        { x: m.position.x - cos * hw, y: m.position.y - sin * hw },
+        { x: m.position.x, y: m.position.y },
+        { x: m.position.x + cos * hw, y: m.position.y + sin * hw },
+      ]
+      for (const pt of pts) {
+        if (Math.abs(pt.x - wx) < SNAP_THRESH) vLines.push(pt.x)
+        if (Math.abs(pt.y - wy) < SNAP_THRESH) hLines.push(pt.y)
+      }
+    }
+
+    setAlignGuides({ hLines: [...new Set(hLines)], vLines: [...new Set(vLines)] })
+  }, [zoom, panX, panY, members])
+
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
+    setAlignGuides({ hLines: [], vLines: [] })
     const newWx = cx2wx(canvasX, zoom, panX)
     const newWy = cy2wy(canvasY, zoom, panY)
     const snappedX = snapToGrid(newWx)
@@ -836,6 +867,7 @@ export default function Canvas2D() {
               onSelect={handleMemberSelect}
               onContextMenu={handleMemberContextMenu}
               onDragStart={handleMemberDragStart}
+              onDragMove={handleMemberDragMove}
               onDragEnd={handleMemberDragEnd}
             />
           ))}
@@ -891,6 +923,34 @@ export default function Canvas2D() {
               fill='rgba(249,115,22,0.08)'
               dash={[6, 3]}
             />
+          </Layer>
+        )}
+
+        {/* Alignment guide lines */}
+        {(alignGuides.hLines.length > 0 || alignGuides.vLines.length > 0) && (
+          <Layer listening={false}>
+            {alignGuides.hLines.map((wy, i) => (
+              <Line
+                key={`h${i}`}
+                points={[0, wy2cy(wy, zoom, panY), size.w, wy2cy(wy, zoom, panY)]}
+                stroke='#ef4444'
+                strokeWidth={1}
+                dash={[8, 4]}
+                opacity={0.8}
+                listening={false}
+              />
+            ))}
+            {alignGuides.vLines.map((wx, i) => (
+              <Line
+                key={`v${i}`}
+                points={[wx2cx(wx, zoom, panX), 0, wx2cx(wx, zoom, panX), size.h]}
+                stroke='#3b82f6'
+                strokeWidth={1}
+                dash={[8, 4]}
+                opacity={0.8}
+                listening={false}
+              />
+            ))}
           </Layer>
         )}
       </Stage>
@@ -960,7 +1020,7 @@ export default function Canvas2D() {
 // ---- MemberNode moved below to allow all helpers to be in scope ----
 function MemberNode({
   m, zoom, panX, panY, selected, connectHighlight,
-  onSelect, onContextMenu, onDragStart, onDragEnd,
+  onSelect, onContextMenu, onDragStart, onDragMove, onDragEnd,
 }: {
   m: Member
   zoom: number
@@ -971,6 +1031,7 @@ function MemberNode({
   onSelect: (id: string, shift: boolean) => void
   onContextMenu: (id: string, x: number, y: number) => void
   onDragStart: (id: string) => void
+  onDragMove: (id: string, cx: number, cy: number) => void
   onDragEnd: (id: string, cx: number, cy: number) => void
 }) {
   const cx = wx2cx(m.position.x, zoom, panX)
@@ -998,6 +1059,7 @@ function MemberNode({
         onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
       }}
       onDragStart={() => onDragStart(m.id)}
+      onDragMove={(e) => onDragMove(m.id, e.target.x(), e.target.y())}
       onDragEnd={(e) => {
         onDragEnd(m.id, e.target.x(), e.target.y())
         e.target.x(cx)

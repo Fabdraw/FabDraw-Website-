@@ -10,6 +10,8 @@ import AIGeneratorModal from './components/AIGeneratorModal';
 import PhotoModal from './components/PhotoModal';
 import TemplateLibrary from './components/TemplateLibrary';
 import ContextMenu from './components/ContextMenu';
+import HelpModal from './components/HelpModal';
+import PDFExportModal from './components/PDFExportModal';
 import { useProjectStore } from './store/projectStore';
 import { useUIStore } from './store/uiStore';
 import { useHistoryStore } from './store/historyStore';
@@ -19,7 +21,9 @@ export default function App() {
   const { members, connections } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
-    showTitleBlockModal, showAIModal, showPhotoModal, showTemplateModal, setContextMenu,
+    showTitleBlockModal, showAIModal, showPhotoModal, showTemplateModal,
+    showHelpModal, showPDFExportModal,
+    setContextMenu,
     clipboard, setClipboard,
     zoom, setZoom, setPan,
   } = useUIStore();
@@ -33,8 +37,35 @@ export default function App() {
 
       const ctrl = e.ctrlKey || e.metaKey;
 
-      if (e.key === 'v' || e.key === 'V') { setMode('select'); return; }
-      if (e.key === 'h' || e.key === 'H' || e.key === ' ') { e.preventDefault(); setMode('pan'); return; }
+      // Mode shortcuts (not when ctrl is held)
+      if (!ctrl) {
+        if (e.key === 'v' || e.key === 'V') { setMode('select'); return; }
+        if (e.key === '1') { setMode('select'); return; }
+        if (e.key === '2') { setMode('dimension'); return; }
+        if (e.key === '3') { setMode('connect'); return; }
+        if (e.key === 'd' || e.key === 'D') { setMode('dimension'); return; }
+        if (e.key === 'c' || e.key === 'C') { setMode('connect'); return; }
+        if (e.key === 'h' || e.key === 'H' || e.key === ' ') { e.preventDefault(); setMode('pan'); return; }
+        if (e.key === 'f' || e.key === 'F') {
+          // Fit view — same logic as Toolbar handleFitView
+          if (members.length === 0) { setZoom(1); setPan(200, 200); return; }
+          const canvas = document.querySelector('canvas');
+          const W = canvas?.offsetWidth ?? 800, H = canvas?.offsetHeight ?? 600;
+          const S = 8;
+          let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+          for (const m of members) {
+            mnX = Math.min(mnX, m.position.x - m.length / 2);
+            mnY = Math.min(mnY, m.position.y - 2);
+            mxX = Math.max(mxX, m.position.x + m.length / 2);
+            mxY = Math.max(mxY, m.position.y + 2);
+          }
+          const nz = Math.max(0.05, Math.min(8, Math.min(W / ((mxX - mnX + 10) * S), H / ((mxY - mnY + 10) * S))));
+          setPan(W / 2 - ((mnX + mxX) / 2) * nz * S, H / 2 - ((mnY + mxY) / 2) * nz * S);
+          setZoom(nz);
+          return;
+        }
+      }
+
       if (e.key === 'Escape') { setMode('select'); setSelectedIds([]); setContextMenu(null); return; }
 
       if (e.key === '=' || e.key === '+') { setZoom(Math.min(10, zoom * 1.25)); return; }
@@ -146,6 +177,8 @@ export default function App() {
       {showAIModal && <AIGeneratorModal />}
       {showPhotoModal && <PhotoModal />}
       {showTemplateModal && <TemplateLibrary />}
+      {showHelpModal && <HelpModal />}
+      {showPDFExportModal && <PDFExportModal />}
       <ContextMenu />
     </div>
   );

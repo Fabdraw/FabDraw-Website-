@@ -18,11 +18,147 @@ function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
 }
 
+type ViewType = 'top' | 'front' | 'side' | 'isometric';
+
+/** Project each member into 2D (px, py) for a given view */
+function projectMember(m: Member, view: ViewType): { cx: number; cy: number; angle: number } {
+  const cos30 = Math.cos(Math.PI / 6);
+  const sin30 = Math.sin(Math.PI / 6);
+  const mx = m.position.x;
+  const my = m.position.y;
+  const mz = m.position.z ?? 0;
+
+  switch (view) {
+    case 'top':
+      return { cx: mx, cy: my, angle: m.rotation.y };
+    case 'front':
+      return { cx: mx, cy: -mz, angle: 0 };
+    case 'side':
+      return { cx: my, cy: -mz, angle: 0 };
+    case 'isometric': {
+      const px2 = mx + my * cos30;
+      const py2 = -mz - my * sin30 * 0.5;
+      return { cx: px2, cy: py2, angle: 0 };
+    }
+  }
+}
+
+function drawViewInCell(
+  doc: jsPDF,
+  members: Member[],
+  dimensions: Dimension[],
+  view: ViewType,
+  cellX: number,
+  cellY: number,
+  cellW: number,
+  cellH: number,
+  label: string,
+) {
+  const pad = 10;
+  const drawArea = { x: cellX + pad, y: cellY + 18 + pad, w: cellW - pad * 2, h: cellH - 18 - pad * 2 };
+
+  // Label
+  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text(label, cellX + pad, cellY + 14);
+
+  if (members.length === 0) {
+    doc.setTextColor(180, 180, 180);
+    doc.setFontSize(10);
+    doc.text('No members', cellX + cellW / 2, cellY + cellH / 2, { align: 'center' });
+    return;
+  }
+
+  // Compute projected bounds
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const m of members) {
+    const { cx, cy } = projectMember(m, view);
+    const hw = m.length / 2;
+    minX = Math.min(minX, cx - hw);
+    minY = Math.min(minY, cy - hw);
+    maxX = Math.max(maxX, cx + hw);
+    maxY = Math.max(maxY, cy + hw);
+  }
+
+  const p = 2;
+  const bw = maxX - minX + p * 2;
+  const bh = maxY - minY + p * 2;
+  const scale = Math.min(drawArea.w / (bw || 1), drawArea.h / (bh || 1), 10);
+  const offX = drawArea.x + (drawArea.w - bw * scale) / 2 - (minX - p) * scale;
+  const offY = drawArea.y + (drawArea.h - bh * scale) / 2 - (minY - p) * scale;
+
+  for (const m of members) {
+    const { cx: mcx, cy: mcy, angle } = projectMember(m, view);
+    const mat = MATERIALS[m.type];
+    const [r, g, b] = hexToRgb(mat.color);
+    const { height } = parseSizeString(m.type, m.size);
+    const rad = (angle * Math.PI) / 180;
+    const cx = mcx * scale + offX;
+    const cy = mcy * scale + offY;
+    const len = m.length * scale;
+    const vizH = Math.max(height * scale, 2);
+
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const hw = len / 2, hh = vizH / 2;
+    const pts = [
+      { x: cx - cos * hw + sin * hh, y: cy - sin * hw - cos * hh },
+      { x: cx + cos * hw + sin * hh, y: cy + sin * hw - cos * hh },
+      { x: cx + cos * hw - sin * hh, y: cy + sin * hw + cos * hh },
+      { x: cx - cos * hw - sin * hh, y: cy - sin * hw + cos * hh },
+    ];
+
+    doc.setFillColor(r * 0.7 + 76, g * 0.7 + 76, b * 0.7 + 76);
+    doc.setDrawColor(r * 0.5, g * 0.5, b * 0.5);
+    doc.setLineWidth(0.7);
+
+    (doc as unknown as { lines: (lines: [number, number][], x: number, y: number, scale: [number, number], style: string, closed: boolean) => void }).lines(
+      pts.slice(1).map((p2, i) => {
+        const prev = pts[i];
+        return [p2.x - prev.x, p2.y - prev.y] as [number, number];
+      }),
+      pts[0].x, pts[0].y, [1, 1], 'FD', true
+    );
+  }
+
+  // Dimensions (top view only)
+  if (view === 'top') {
+    for (const d of dimensions) {
+      const sx = d.startX * scale + offX;
+      const sy = d.startY * scale + offY;
+      const ex = d.endX * scale + offX;
+      const ey = d.endY * scale + offY;
+      const dx = ex - sx, dy = ey - sy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1) continue;
+      const nx = -dy / len, ny = dx / len;
+      const off = (d.offset ?? 3) * scale;
+      const lsx = sx + nx * off, lsy = sy + ny * off;
+      const lex = ex + nx * off, ley = ey + ny * off;
+      doc.setDrawColor(96, 165, 250);
+      doc.setLineWidth(0.6);
+      doc.line(lsx, lsy, lex, ley);
+      doc.line(sx, sy, lsx, lsy);
+      doc.line(ex, ey, lex, ley);
+      const mx2 = (lsx + lex) / 2, my2 = (lsy + ley) / 2;
+      const totalIn = Math.sqrt((d.endX - d.startX) ** 2 + (d.endY - d.startY) ** 2);
+      const ft = Math.floor(totalIn / 12);
+      const inch = totalIn % 12;
+      const lbl = ft > 0 ? `${ft}'-${inch.toFixed(2).replace(/\.?0+$/, '')}"` : `${totalIn.toFixed(2).replace(/\.?0+$/, '')}"`;
+      doc.setFontSize(5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(96, 165, 250);
+      doc.text(lbl, mx2, my2 - 2, { align: 'center' });
+    }
+  }
+}
+
 export function exportPDF(
   members: Member[],
   titleBlock: TitleBlock,
   projectName: string,
-  dimensions: Dimension[] = []
+  dimensions: Dimension[] = [],
+  views: ViewType[] = ['top'],
 ): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'tabloid' });
   const W = doc.internal.pageSize.getWidth();
@@ -139,108 +275,47 @@ export function exportPDF(
   doc.setFont('helvetica', 'normal');
   doc.text('FABRICATION DRAWING', 30, 68);
 
-  // Draw members
+  // Drawing area
   const drawArea = { x: 30, y: 85, w: W - 60, h: tbY - 100 };
 
-  if (members.length > 0) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const m of members) {
-      const hw = m.length / 2;
-      const rad = (m.rotation.y * Math.PI) / 180;
-      const cos = Math.cos(rad), sin = Math.sin(rad);
-      minX = Math.min(minX, m.position.x - Math.abs(cos * hw), m.position.x + Math.abs(cos * hw));
-      minY = Math.min(minY, m.position.y - Math.abs(sin * hw), m.position.y + Math.abs(sin * hw));
-      maxX = Math.max(maxX, m.position.x + Math.abs(cos * hw));
-      maxY = Math.max(maxY, m.position.y + Math.abs(sin * hw));
-    }
+  const viewCount = views.length;
+  const VIEW_LABELS: Record<ViewType, string> = {
+    top: 'TOP VIEW',
+    front: 'FRONT VIEW',
+    side: 'SIDE VIEW',
+    isometric: 'ISOMETRIC VIEW',
+  };
 
-    const pad = 2;
-    const bw = maxX - minX + pad * 2;
-    const bh = maxY - minY + pad * 2;
-    const scale = Math.min(drawArea.w / (bw || 1), drawArea.h / (bh || 1), 10);
-    const offX = drawArea.x + (drawArea.w - bw * scale) / 2 - (minX - pad) * scale;
-    const offY = drawArea.y + (drawArea.h - bh * scale) / 2 - (minY - pad) * scale;
-
-    for (const m of members) {
-      const mat = MATERIALS[m.type];
-      const [r, g, b] = hexToRgb(mat.color);
-      const { width, height } = parseSizeString(m.type, m.size);
-      const rad = (m.rotation.y * Math.PI) / 180;
-      const cx = m.position.x * scale + offX;
-      const cy = m.position.y * scale + offY;
-      const len = m.length * scale;
-      const vizH = Math.max(height * scale, 3);
-
-      const cos = Math.cos(rad), sin = Math.sin(rad);
-      const hw = len / 2, hh = vizH / 2;
-      const pts = [
-        { x: cx - cos * hw + sin * hh, y: cy - sin * hw - cos * hh },
-        { x: cx + cos * hw + sin * hh, y: cy + sin * hw - cos * hh },
-        { x: cx + cos * hw - sin * hh, y: cy + sin * hw + cos * hh },
-        { x: cx - cos * hw - sin * hh, y: cy - sin * hw + cos * hh },
-      ];
-
-      doc.setFillColor(r * 0.7 + 76, g * 0.7 + 76, b * 0.7 + 76);
-      doc.setDrawColor(r * 0.5, g * 0.5, b * 0.5);
-      doc.setLineWidth(1);
-
-      (doc as unknown as { lines: (lines: [number,number][], x: number, y: number, scale: [number,number], style: string, closed: boolean) => void }).lines(
-        pts.slice(1).map((p2, i) => {
-          const prev = pts[i];
-          return [p2.x - prev.x, p2.y - prev.y] as [number, number];
-        }),
-        pts[0].x, pts[0].y, [1, 1], 'FD', true
-      );
-
-      // Dimension label above member
-      const labelAngle = -(m.rotation.y % 180);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-      doc.setTextColor(40, 40, 40);
-      doc.text(inchesToFtIn(m.length), cx, cy - vizH / 2 - 4, { align: 'center', angle: labelAngle });
-
-      for (const hole of m.holes) {
-        const t = hole.positionAlongMember / m.length;
-        const hx = cx - cos * hw + cos * (m.length * t * scale);
-        const hy = cy - sin * hw + sin * (m.length * t * scale);
-        const hr = Math.max(1.5, hole.diameter / 2 * scale);
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(100, 100, 100);
-        doc.circle(hx, hy, hr, 'FD');
-      }
-    }
-    // Draw dimensions
-    for (const d of dimensions) {
-      const sx = d.startX * scale + offX
-      const sy = d.startY * scale + offY
-      const ex = d.endX * scale + offX
-      const ey = d.endY * scale + offY
-      const dx = ex - sx, dy = ey - sy
-      const len = Math.sqrt(dx * dx + dy * dy)
-      if (len < 1) continue
-      const nx = -dy / len, ny = dx / len
-      const off = (d.offset ?? 3) * scale
-      const lsx = sx + nx * off, lsy = sy + ny * off
-      const lex = ex + nx * off, ley = ey + ny * off
-      doc.setDrawColor(96, 165, 250)
-      doc.setLineWidth(0.8)
-      doc.line(lsx, lsy, lex, ley)
-      doc.line(sx, sy, lsx, lsy)
-      doc.line(ex, ey, lex, ley)
-      const mx = (lsx + lex) / 2, my = (lsy + ley) / 2
-      const totalIn = Math.sqrt((d.endX - d.startX) ** 2 + (d.endY - d.startY) ** 2)
-      const ft = Math.floor(totalIn / 12)
-      const inch = totalIn % 12
-      const label = ft > 0 ? `${ft}'-${inch.toFixed(2).replace(/\.?0+$/, '')}"` : `${totalIn.toFixed(2).replace(/\.?0+$/, '')}"`;
-      doc.setFontSize(6)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(96, 165, 250)
-      doc.text(label, mx, my - 2, { align: 'center' })
-    }
-  } else {
-    doc.setTextColor(180, 180, 180);
-    doc.setFontSize(14);
-    doc.text('No members added yet', W / 2, (drawArea.y + drawArea.y + drawArea.h) / 2, { align: 'center' });
+  if (viewCount === 1) {
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, drawArea.w, drawArea.h, VIEW_LABELS[views[0]]);
+  } else if (viewCount === 2) {
+    const hw = drawArea.w / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, drawArea.h, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, drawArea.h, VIEW_LABELS[views[1]]);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + drawArea.h);
+  } else if (viewCount === 3) {
+    const hw = drawArea.w / 2;
+    const hh = drawArea.h / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, hh, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, hh, VIEW_LABELS[views[1]]);
+    drawViewInCell(doc, members, dimensions, views[2], drawArea.x, drawArea.y + hh, drawArea.w, hh, VIEW_LABELS[views[2]]);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + hh);
+    doc.line(drawArea.x, drawArea.y + hh, drawArea.x + drawArea.w, drawArea.y + hh);
+  } else if (viewCount >= 4) {
+    const hw = drawArea.w / 2;
+    const hh = drawArea.h / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, hh, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, hh, VIEW_LABELS[views[1]]);
+    drawViewInCell(doc, members, dimensions, views[2], drawArea.x, drawArea.y + hh, hw, hh, VIEW_LABELS[views[2]]);
+    drawViewInCell(doc, members, dimensions, views[3], drawArea.x + hw, drawArea.y + hh, hw, hh, VIEW_LABELS[views[3]]);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + drawArea.h);
+    doc.line(drawArea.x, drawArea.y + hh, drawArea.x + drawArea.w, drawArea.y + hh);
   }
 
   // === PAGE 2: BOM ===

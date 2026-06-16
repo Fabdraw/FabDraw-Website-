@@ -2,12 +2,11 @@ import React, { useRef, useState } from 'react'
 import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
-  Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate,
+  Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate, HelpCircle,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
-import { exportPDF } from '../lib/pdfExport'
 import type { Project } from '../types'
 
 export default function Toolbar() {
@@ -18,6 +17,7 @@ export default function Toolbar() {
     clipboard, setClipboard,
     activeView, setActiveView,
     setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowTemplateModal,
+    setShowHelpModal, setShowPDFExportModal,
     zoom, setZoom, setPan,
   } = useUIStore()
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore()
@@ -96,11 +96,6 @@ export default function Toolbar() {
     }
     reader.readAsText(file)
     e.target.value = ''
-  }
-
-  const handleExportPDF = () => {
-    const url = exportPDF(members, project.titleBlock, project.name, project.dimensions ?? [])
-    window.open(url, '_blank')
   }
 
   // Button variants
@@ -201,7 +196,7 @@ export default function Toolbar() {
       <button className={btn} onClick={() => setZoom(Math.min(10, zoom * 1.25))} title="Zoom In (+)">
         <ZoomIn size={14} />
       </button>
-      <button className={btn} onClick={handleFitView} title="Fit View">
+      <button className={btn} onClick={handleFitView} title="Fit View (F)">
         <Maximize2 size={14} />
       </button>
 
@@ -245,7 +240,7 @@ export default function Toolbar() {
       <button className={btn} onClick={handleLoad} title="Load (.fabdraw.json)">
         <FolderOpen size={14} />
       </button>
-      <button className={btn} onClick={handleExportPDF} title="Export PDF">
+      <button className={btn} onClick={() => setShowPDFExportModal(true)} title="Export PDF">
         <FileText size={14} />
       </button>
 
@@ -269,6 +264,15 @@ export default function Toolbar() {
       >
         <Camera size={12} />
         Photo
+      </button>
+
+      {/* Help */}
+      <button
+        className={`${btn} ml-1`}
+        onClick={() => setShowHelpModal(true)}
+        title="Help (?)"
+      >
+        <HelpCircle size={14} />
       </button>
 
       <input ref={fileInputRef} type="file" accept=".json,.fabdraw.json" className="hidden" onChange={handleFileChange} />

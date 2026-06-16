@@ -29,7 +29,6 @@ function buildCrossSection(m: Member): THREE.Shape {
   switch (m.type) {
     case 'square_tube':
     case 'rect_tube': {
-      // Hollow rectangle — wall thickness subtracted on all sides
       const iw = Math.max(hw - wall, 0.01)
       const ih = Math.max(hh - wall, 0.01)
       const shape = new THREE.Shape()
@@ -41,7 +40,6 @@ function buildCrossSection(m: Member): THREE.Shape {
     }
     case 'round_tube':
     case 'pipe': {
-      // Hollow cylinder — inner radius = outer minus wall
       const r = hw
       const ir = Math.max(r - wall, 0.01)
       const shape = new THREE.Shape()
@@ -52,14 +50,11 @@ function buildCrossSection(m: Member): THREE.Shape {
       return shape
     }
     case 'i_beam': {
-      // Proper I-shape: two wide flanges + thin vertical web
-      // width = flange width, height = total depth, wall = flange thickness
       const flangeThickness = Math.max(wall, height * 0.08)
       const webThickness = Math.max(wall * 0.6, 0.05)
-      const hwf = hw  // half flange width
-      const hww = webThickness / 2  // half web thickness
+      const hwf = hw
+      const hww = webThickness / 2
       const shape = new THREE.Shape()
-      // Start at bottom-left of bottom flange, go clockwise
       shape.moveTo(-hwf, -hh)
       shape.lineTo( hwf, -hh)
       shape.lineTo( hwf, -hh + flangeThickness)
@@ -76,7 +71,6 @@ function buildCrossSection(m: Member): THREE.Shape {
       return shape
     }
     case 'channel': {
-      // C-shape: one web on left side, two horizontal flanges top and bottom
       const flangeThickness = Math.max(wall, height * 0.08)
       const webThickness = Math.max(wall, 0.05)
       const shape = new THREE.Shape()
@@ -92,7 +86,6 @@ function buildCrossSection(m: Member): THREE.Shape {
       return shape
     }
     case 'angle': {
-      // L-shape: two legs meeting at 90 degrees in the bottom-left corner
       const shape = new THREE.Shape()
       shape.moveTo(-hw, -hh)
       shape.lineTo( hw, -hh)
@@ -104,15 +97,12 @@ function buildCrossSection(m: Member): THREE.Shape {
       return shape
     }
     case 'flat_bar': {
-      // Solid thin rectangle: width = face width (hw), height = thickness (hh)
-      // parseSizeString("flat_bar","1/4x2") → {width:2, height:0.25} ✓
       const shape = new THREE.Shape()
       shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()
       return shape
     }
     case 'sheet': {
-      // Thin flat panel: width from size = one face dimension, wallThickness = panel thickness
-      const halfFaceW = hw  // half the sheet width (e.g. 24 for a 48" wide sheet)
+      const halfFaceW = hw
       const halfThk = wall / 2
       const shape = new THREE.Shape()
       shape.moveTo(-halfFaceW, -halfThk); shape.lineTo(halfFaceW, -halfThk)
@@ -120,7 +110,6 @@ function buildCrossSection(m: Member): THREE.Shape {
       return shape
     }
     case 'plate': {
-      // Flat plate: width from size = face width, wallThickness = actual plate thickness
       const halfFaceW = hw
       const halfThk = wall / 2
       const shape = new THREE.Shape()
@@ -141,10 +130,11 @@ interface DragState {
   origPos: { x: number; y: number; z: number }
   groundHit: THREE.Vector3
   screenY0: number
-  origZ: number      // 3D Y (height) at drag start
+  origZ: number
   shift: boolean
-  isUpright: boolean // upright members can move Y freely without shift
+  isUpright: boolean
   pushed: boolean
+  groupOffsets?: Record<string, { x: number; y: number; z: number }>
 }
 
 function MemberMesh({
@@ -194,9 +184,12 @@ function MemberMesh({
   const py = m.position.z ?? 0
   const angleY = -(m.rotation.y * Math.PI) / 180
 
+  // For upright members, base is at py; center should be py + length/2
+  const posY = isUpright ? py + m.length / 2 : py
+
   return (
     <group
-      position={[px, py, pz]}
+      position={[px, posY, pz]}
       rotation={[0, angleY, 0]}
       onClick={(e) => { e.stopPropagation(); onClick() }}
       onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e as unknown as React.PointerEvent<Element>) }}
@@ -230,7 +223,6 @@ function Scene() {
   const { push } = useHistoryStore()
   const { camera, gl, controls } = useThree()
 
-  // Stable refs for members/connections so pointer event handlers don't go stale
   const membersRef = useRef(members)
   membersRef.current = members
   const connectionsRef = useRef(connections)
@@ -241,7 +233,6 @@ function Scene() {
   const dragRef = useRef<DragState | null>(null)
   const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
-  const hitVec = useMemo(() => new THREE.Vector3(), [])
 
   const getNDC = useCallback((clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -258,14 +249,36 @@ function Scene() {
     return hit
   }, [camera, raycaster, groundPlane, getNDC])
 
-  const handleMemberPointerDown = useCallback((m: Member, e: React.PointerEvent<Element>) => {
-    // Disable orbit controls so drag doesn't rotate the scene
-    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
+  const handleMemberClick = useCallback((m: Member) => {
+    if (m.groupId) {
+      const groupIds = membersRef.current
+        .filter(x => x.groupId === m.groupId)
+        .map(x => x.id)
+      setSelectedIds(groupIds)
+    } else {
+      setSelectedIds([m.id])
+    }
+  }, [setSelectedIds])
 
-    // Push history once at drag start
+  const handleMemberPointerDown = useCallback((m: Member, e: React.PointerEvent<Element>) => {
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
     push({ members: membersRef.current, connections: connectionsRef.current })
 
     const hit = groundHit((e as unknown as PointerEvent).clientX, (e as unknown as PointerEvent).clientY)
+
+    let groupOffsets: Record<string, { x: number; y: number; z: number }> | undefined
+    if (m.groupId) {
+      groupOffsets = {}
+      for (const gm of membersRef.current) {
+        if (gm.groupId === m.groupId && gm.id !== m.id) {
+          groupOffsets[gm.id] = {
+            x: gm.position.x - m.position.x,
+            y: gm.position.y - m.position.y,
+            z: (gm.position.z ?? 0) - (m.position.z ?? 0),
+          }
+        }
+      }
+    }
 
     dragRef.current = {
       memberId: m.id,
@@ -276,6 +289,7 @@ function Scene() {
       shift: (e as unknown as PointerEvent).shiftKey,
       isUpright: Math.abs(m.rotation.x) >= 45,
       pushed: true,
+      groupOffsets,
     }
 
     gl.domElement.setPointerCapture((e as unknown as PointerEvent).pointerId)
@@ -289,36 +303,59 @@ function Scene() {
       if (!d) return
 
       if (d.shift) {
-        // Shift+drag: vertical only
         const dy = (d.screenY0 - e.clientY) * 0.15
         updateMember(d.memberId, {
           position: { ...d.origPos, z: Math.max(0, d.origZ + dy) }
         })
+        if (d.groupOffsets) {
+          for (const [gid, off] of Object.entries(d.groupOffsets)) {
+            const gm = membersRef.current.find(x => x.id === gid)
+            if (gm) updateMember(gid, { position: { ...gm.position, z: Math.max(0, d.origZ + off.z + dy) } })
+          }
+        }
       } else if (d.isUpright) {
-        // Upright member: XZ drag + free vertical from screen-space Y delta
         const hit = groundHit(e.clientX, e.clientY)
         const dx = hit.x - d.groundHit.x
         const dz = hit.z - d.groundHit.z
         const dy = (d.screenY0 - e.clientY) * 0.15
-        updateMember(d.memberId, {
-          position: {
-            x: Math.round(d.origPos.x + dx),
-            y: Math.round(d.origPos.y + dz),
-            z: Math.max(0, d.origZ + dy),
+        const newPos = {
+          x: Math.round(d.origPos.x + dx),
+          y: Math.round(d.origPos.y + dz),
+          z: Math.max(0, d.origZ + dy),
+        }
+        updateMember(d.memberId, { position: newPos })
+        if (d.groupOffsets) {
+          for (const [gid, off] of Object.entries(d.groupOffsets)) {
+            updateMember(gid, {
+              position: {
+                x: Math.round(newPos.x + off.x),
+                y: Math.round(newPos.y + off.y),
+                z: Math.max(0, newPos.z + off.z),
+              }
+            })
           }
-        })
+        }
       } else {
-        // Flat member: drag along XZ ground plane only
         const hit = groundHit(e.clientX, e.clientY)
         const dx = hit.x - d.groundHit.x
         const dz = hit.z - d.groundHit.z
-        updateMember(d.memberId, {
-          position: {
-            ...d.origPos,
-            x: Math.round(d.origPos.x + dx),
-            y: Math.round(d.origPos.y + dz),
+        const newPos = {
+          ...d.origPos,
+          x: Math.round(d.origPos.x + dx),
+          y: Math.round(d.origPos.y + dz),
+        }
+        updateMember(d.memberId, { position: newPos })
+        if (d.groupOffsets) {
+          for (const [gid, off] of Object.entries(d.groupOffsets)) {
+            updateMember(gid, {
+              position: {
+                x: Math.round(newPos.x + off.x),
+                y: Math.round(newPos.y + off.y),
+                z: newPos.z,
+              }
+            })
           }
-        })
+        }
       }
     }
 
@@ -339,6 +376,47 @@ function Scene() {
   const handleMissed = useCallback(() => {
     if (!dragRef.current) setSelectedIds([])
   }, [setSelectedIds])
+
+  // Compute group bounding boxes
+  const groupBounds = useMemo(() => {
+    const bounds: Record<string, { cx: number; cy: number; cz: number; sx: number; sy: number; sz: number }> = {}
+    const gm = new Map<string, Member[]>()
+    for (const m of members) {
+      if (m.groupId) {
+        if (!gm.has(m.groupId)) gm.set(m.groupId, [])
+        gm.get(m.groupId)!.push(m)
+      }
+    }
+    for (const [gid, gMembers] of gm) {
+      let mnX = Infinity, mnY = Infinity, mnZ = Infinity
+      let mxX = -Infinity, mxY = -Infinity, mxZ = -Infinity
+      for (const m of gMembers) {
+        const hw = m.length / 2
+        const isUp = Math.abs(m.rotation.x) >= 45
+        const py = m.position.z ?? 0
+        mnX = Math.min(mnX, m.position.x - hw)
+        mxX = Math.max(mxX, m.position.x + hw)
+        if (isUp) {
+          mnY = Math.min(mnY, py)
+          mxY = Math.max(mxY, py + m.length)
+        } else {
+          mnY = Math.min(mnY, py)
+          mxY = Math.max(mxY, py)
+        }
+        mnZ = Math.min(mnZ, m.position.y - hw)
+        mxZ = Math.max(mxZ, m.position.y + hw)
+      }
+      bounds[gid] = {
+        cx: (mnX + mxX) / 2,
+        cy: (mnY + mxY) / 2,
+        cz: (mnZ + mxZ) / 2,
+        sx: mxX - mnX,
+        sy: Math.max(mxY - mnY, 0.5),
+        sz: mxZ - mnZ,
+      }
+    }
+    return bounds
+  }, [members])
 
   return (
     <>
@@ -365,9 +443,19 @@ function Scene() {
           key={m.id}
           m={m}
           selected={selectedIds.includes(m.id)}
-          onClick={() => setSelectedIds([m.id])}
+          onClick={() => handleMemberClick(m)}
           onPointerDown={(e) => handleMemberPointerDown(m, e)}
         />
+      ))}
+
+      {/* Group bounding boxes */}
+      {Object.entries(groupBounds).map(([gid, b]) => (
+        <group key={gid} position={[b.cx, b.cy, b.cz]}>
+          <lineSegments>
+            <edgesGeometry args={[new THREE.BoxGeometry(b.sx + 0.5, b.sy + 0.5, b.sz + 0.5)]} />
+            <lineBasicMaterial color="#a855f7" />
+          </lineSegments>
+        </group>
       ))}
 
       {connections.map(c => {
@@ -398,7 +486,6 @@ function CameraSetup({ members }: { members: Member[] }) {
   const { camera } = useThree()
   const initialized = useRef(false)
 
-  // Run once after first render
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
