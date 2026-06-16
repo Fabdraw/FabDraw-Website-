@@ -20,33 +20,49 @@ function hexToRgb(hex: string): [number, number, number] {
 
 type ViewType = 'top' | 'front' | 'side' | 'isometric';
 
-/** Project each member into 2D for a given view, with foreshortened length */
-function projectMember(m: Member, view: ViewType): { cx: number; cy: number; angle: number; projLen: number } {
-  const cos30 = Math.cos(Math.PI / 6);
-  const sin30 = Math.sin(Math.PI / 6);
-  const mx = m.position.x;
-  const my = m.position.y;
-  const mz = m.position.z ?? 0;
-  const rotY = (m.rotation.y * Math.PI) / 180;
-  const isUp = Math.abs(m.rotation.x ?? 0) >= 45;
+// ─── 3D projection engine ───────────────────────────────────────────────────
 
-  switch (view) {
-    case 'top':
-      // Top view: full plan, member lies along rotation.y angle, uprights show as dot
-      return { cx: mx, cy: my, angle: m.rotation.y, projLen: isUp ? 0 : m.length };
-    case 'front':
-      // Front view: x horizontal, z vertical; horizontal members foreshortened by cos(rotY)
-      return { cx: mx, cy: -mz, angle: 0, projLen: isUp ? m.length : m.length * Math.abs(Math.cos(rotY)) };
-    case 'side':
-      // Side view: y horizontal, z vertical; horizontal members foreshortened by sin(rotY)
-      return { cx: my, cy: -mz, angle: 0, projLen: isUp ? m.length : m.length * Math.abs(Math.sin(rotY)) };
-    case 'isometric': {
-      // Isometric: dimetric projection
-      const isoX = (mx - my) * cos30;
-      const isoY = (mx + my) * sin30 - mz;
-      return { cx: isoX, cy: isoY, angle: 30, projLen: m.length };
-    }
-  }
+interface Pt3 { x: number; y: number; z: number }
+interface Pt2 { x: number; y: number }
+
+const toRad = (d: number) => d * Math.PI / 180;
+
+function get3DEndpoints(m: Member): { start3: Pt3; end3: Pt3 } {
+  const rx = toRad(m.rotation.x ?? 0);
+  const ry = toRad(m.rotation.y);
+  const halfLen = m.length / 2;
+  const dx = Math.cos(ry) * Math.cos(rx);
+  const dy = Math.sin(rx);
+  const dz = Math.sin(ry) * Math.cos(rx);
+  const cx = m.position.x, cy = m.position.y, cz = m.position.z ?? 0;
+  return {
+    start3: { x: cx - dx * halfLen, y: cy - dy * halfLen, z: cz - dz * halfLen },
+    end3:   { x: cx + dx * halfLen, y: cy + dy * halfLen, z: cz + dz * halfLen },
+  };
+}
+
+const topProj   = (p: Pt3): Pt2 => ({ x: p.x,  y: p.z });
+const frontProj = (p: Pt3): Pt2 => ({ x: p.x,  y: -p.y });
+const sideProj  = (p: Pt3): Pt2 => ({ x: -p.z, y: -p.y });
+const isoProj   = (p: Pt3): Pt2 => ({
+  x: (p.x - p.z) * Math.cos(Math.PI / 6),
+  y: (p.x + p.z) * Math.sin(Math.PI / 6) - p.y,
+});
+
+function drawPoly(
+  doc: jsPDF,
+  pts: Pt2[],
+  fr: number, fg: number, fb: number,
+) {
+  doc.setFillColor(Math.min(255, fr), Math.min(255, fg), Math.min(255, fb));
+  doc.setDrawColor(Math.round(fr * 0.45), Math.round(fg * 0.45), Math.round(fb * 0.45));
+  doc.setLineWidth(0.4);
+  (doc as unknown as {
+    lines: (l: [number, number][], x: number, y: number, s: [number, number], style: string, closed: boolean) => void
+  }).lines(
+    pts.slice(1).map((p, i) => [p.x - pts[i].x, p.y - pts[i].y] as [number, number]),
+    pts[0].x, pts[0].y, [1, 1], 'FD', true,
+  );
 }
 
 function drawViewInCell(
@@ -60,14 +76,19 @@ function drawViewInCell(
   cellH: number,
   label: string,
 ) {
-  const pad = 10;
-  const drawArea = { x: cellX + pad, y: cellY + 18 + pad, w: cellW - pad * 2, h: cellH - 18 - pad * 2 };
+  const pad = 15;
+  const drawArea = { x: cellX + pad, y: cellY + 22 + pad, w: cellW - pad * 2, h: cellH - 22 - pad * 2 };
+
+  // Cell border
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.rect(cellX, cellY, cellW, cellH);
 
   // Label
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(60, 60, 60);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text(label, cellX + pad, cellY + 14);
+  doc.text(label, cellX + pad, cellY + 16);
 
   if (members.length === 0) {
     doc.setTextColor(180, 180, 180);
@@ -76,79 +97,94 @@ function drawViewInCell(
     return;
   }
 
-  // Compute projected bounds
+  const projFn = view === 'top' ? topProj : view === 'front' ? frontProj : view === 'side' ? sideProj : isoProj;
+
+  // Collect all projected endpoints for auto-scaling
+  const allPts: Pt2[] = [];
+  for (const m of members) {
+    const { start3, end3 } = get3DEndpoints(m);
+    allPts.push(projFn(start3), projFn(end3));
+    if (view === 'isometric') {
+      // Include box corners for better bounds
+      const { width } = parseSizeString(m.type, m.size);
+      const hw = (parseFloat(m.size) || width) / 2;
+      const corners: Pt3[] = [
+        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
+        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
+        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
+        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
+      ];
+      corners.forEach(c => allPts.push(isoProj(c)));
+    }
+  }
+
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const m of members) {
-    const { cx, cy, projLen } = projectMember(m, view);
-    const hw = (projLen || 1) / 2;
-    const { height } = parseSizeString(m.type, m.size);
-    const hh = height / 2;
-    minX = Math.min(minX, cx - hw);
-    minY = Math.min(minY, cy - hh);
-    maxX = Math.max(maxX, cx + hw);
-    maxY = Math.max(maxY, cy + hh);
+  for (const p of allPts) {
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+  }
+  const bw = (maxX - minX) || 1, bh = (maxY - minY) || 1;
+  const scale = Math.min(drawArea.w / (bw + 4), drawArea.h / (bh + 4), 20);
+  const offX = drawArea.x + (drawArea.w - bw * scale) / 2 - minX * scale;
+  const offY = drawArea.y + (drawArea.h - bh * scale) / 2 - minY * scale;
+  const toScreen = (p: Pt2): Pt2 => ({ x: p.x * scale + offX, y: p.y * scale + offY });
+
+  if (view !== 'isometric') {
+    // Orthographic views: draw a thick line from projected start to projected end
+    for (const m of members) {
+      const { start3, end3 } = get3DEndpoints(m);
+      const s = toScreen(projFn(start3));
+      const e = toScreen(projFn(end3));
+      const { width } = parseSizeString(m.type, m.size);
+      doc.setDrawColor(26, 58, 92);
+      doc.setLineWidth(Math.max(width * scale * 0.6, 1));
+      doc.line(s.x, s.y, e.x, e.y);
+    }
+  } else {
+    // Isometric: draw each member as a 3D box with 3 lit faces
+    for (const m of members) {
+      const { start3, end3 } = get3DEndpoints(m);
+      const { width } = parseSizeString(m.type, m.size);
+      const hw = (parseFloat(m.size) || width) / 2;
+      const mat = MATERIALS[m.type];
+      const [br, bg, bb] = hexToRgb(mat.color);
+
+      const c3: Pt3[] = [
+        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
+        { x: start3.x + hw, y: start3.y - hw, z: start3.z },
+        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
+        { x: start3.x - hw, y: start3.y + hw, z: start3.z },
+        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
+        { x: end3.x + hw,   y: end3.y - hw,   z: end3.z },
+        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
+        { x: end3.x - hw,   y: end3.y + hw,   z: end3.z },
+      ];
+      const p = c3.map(c => toScreen(isoProj(c)));
+
+      // TOP face (corners 0,1,5,4) — lightened
+      drawPoly(doc, [p[0], p[1], p[5], p[4]], br + 60, bg + 60, bb + 60);
+      // FRONT face (corners 0,1,2,3) — base color
+      drawPoly(doc, [p[0], p[1], p[2], p[3]], br + 20, bg + 20, bb + 20);
+      // SIDE face (corners 1,5,6,2) — darkened
+      drawPoly(doc, [p[1], p[5], p[6], p[2]], Math.round(br * 0.7), Math.round(bg * 0.7), Math.round(bb * 0.7));
+    }
   }
 
-  const p = 2;
-  const bw = maxX - minX + p * 2;
-  const bh = maxY - minY + p * 2;
-  const scale = Math.min(drawArea.w / (bw || 1), drawArea.h / (bh || 1), 10);
-  const offX = drawArea.x + (drawArea.w - bw * scale) / 2 - (minX - p) * scale;
-  const offY = drawArea.y + (drawArea.h - bh * scale) / 2 - (minY - p) * scale;
-
-  for (const m of members) {
-    const { cx: mcx, cy: mcy, angle, projLen } = projectMember(m, view);
-    const mat = MATERIALS[m.type];
-    const [r, g, b] = hexToRgb(mat.color);
-    const { height } = parseSizeString(m.type, m.size);
-    const rad = (angle * Math.PI) / 180;
-    const cx = mcx * scale + offX;
-    const cy = mcy * scale + offY;
-    const len = Math.max(projLen * scale, 2);
-    const vizH = Math.max(height * scale, 2);
-
-    const cos = Math.cos(rad), sin = Math.sin(rad);
-    const hw = len / 2, hh = vizH / 2;
-    const pts = [
-      { x: cx - cos * hw + sin * hh, y: cy - sin * hw - cos * hh },
-      { x: cx + cos * hw + sin * hh, y: cy + sin * hw - cos * hh },
-      { x: cx + cos * hw - sin * hh, y: cy + sin * hw + cos * hh },
-      { x: cx - cos * hw - sin * hh, y: cy - sin * hw + cos * hh },
-    ];
-
-    doc.setFillColor(r * 0.7 + 76, g * 0.7 + 76, b * 0.7 + 76);
-    doc.setDrawColor(r * 0.5, g * 0.5, b * 0.5);
-    doc.setLineWidth(0.7);
-
-    (doc as unknown as { lines: (lines: [number, number][], x: number, y: number, scale: [number, number], style: string, closed: boolean) => void }).lines(
-      pts.slice(1).map((p2, i) => {
-        const prev = pts[i];
-        return [p2.x - prev.x, p2.y - prev.y] as [number, number];
-      }),
-      pts[0].x, pts[0].y, [1, 1], 'FD', true
-    );
-  }
-
-  // Dimensions (top view only)
+  // Dimension lines (top view only)
   if (view === 'top') {
     for (const d of dimensions) {
-      const sx = d.startX * scale + offX;
-      const sy = d.startY * scale + offY;
-      const ex = d.endX * scale + offX;
-      const ey = d.endY * scale + offY;
-      const dx = ex - sx, dy = ey - sy;
+      const ds = toScreen(topProj({ x: d.startX, y: d.startY, z: 0 }));
+      const de = toScreen(topProj({ x: d.endX, y: d.endY, z: 0 }));
+      const dx = de.x - ds.x, dy = de.y - ds.y;
       const len = Math.sqrt(dx * dx + dy * dy);
       if (len < 1) continue;
       const nx = -dy / len, ny = dx / len;
       const off = (d.offset ?? 3) * scale;
-      const lsx = sx + nx * off, lsy = sy + ny * off;
-      const lex = ex + nx * off, ley = ey + ny * off;
       doc.setDrawColor(96, 165, 250);
       doc.setLineWidth(0.6);
-      doc.line(lsx, lsy, lex, ley);
-      doc.line(sx, sy, lsx, lsy);
-      doc.line(ex, ey, lex, ley);
-      const mx2 = (lsx + lex) / 2, my2 = (lsy + ley) / 2;
+      doc.line(ds.x + nx * off, ds.y + ny * off, de.x + nx * off, de.y + ny * off);
+      doc.line(ds.x, ds.y, ds.x + nx * off, ds.y + ny * off);
+      doc.line(de.x, de.y, de.x + nx * off, de.y + ny * off);
       const totalIn = Math.sqrt((d.endX - d.startX) ** 2 + (d.endY - d.startY) ** 2);
       const ft = Math.floor(totalIn / 12);
       const inch = totalIn % 12;
@@ -156,7 +192,7 @@ function drawViewInCell(
       doc.setFontSize(5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(96, 165, 250);
-      doc.text(lbl, mx2, my2 - 2, { align: 'center' });
+      doc.text(lbl, ds.x + nx * off + (de.x - ds.x) / 2, ds.y + ny * off + (de.y - ds.y) / 2 - 2, { align: 'center' });
     }
   }
 }

@@ -7,6 +7,8 @@ import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString } from '../lib/materials'
 import type { Member, Connection, Dimension } from '../types'
 import ConnectionDialog from './ConnectionDialog'
+import { useSnapEngine } from '../hooks/useSnapEngine'
+import type { SnapResult } from '../hooks/useSnapEngine'
 
 const SCALE = 8 // pixels per inch
 
@@ -42,44 +44,6 @@ function formatDimension(totalInches: number): string {
     return `${feet}'`
   }
   return `${feet}'-${inches}"`
-}
-
-// Snap to member endpoints and midpoints — returns snap point and label
-function snapToMemberPoints(
-  wx: number, wy: number,
-  members: Member[],
-  thresholdPx: number,
-  zoom: number,
-  panX: number,
-  panY: number
-): { x: number; y: number; type: 'endpoint' | 'midpoint' } | null {
-  const threshWx = thresholdPx / (zoom * SCALE)
-  let best: { x: number; y: number; type: 'endpoint' | 'midpoint' } | null = null
-  let bestDist = threshWx
-
-  for (const m of members) {
-    const angle = (m.rotation.y * Math.PI) / 180
-    const halfLen = m.length / 2
-    const cos = Math.cos(angle)
-    const sin = Math.sin(angle)
-
-    const pts: Array<{ x: number; y: number; type: 'endpoint' | 'midpoint' }> = [
-      { x: m.position.x - cos * halfLen, y: m.position.y - sin * halfLen, type: 'endpoint' },
-      { x: m.position.x, y: m.position.y, type: 'midpoint' },
-      { x: m.position.x + cos * halfLen, y: m.position.y + sin * halfLen, type: 'endpoint' },
-    ]
-
-    for (const pt of pts) {
-      const dx = pt.x - wx
-      const dy = pt.y - wy
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < bestDist) {
-        bestDist = dist
-        best = pt
-      }
-    }
-  }
-  return best
 }
 
 // Grid snap (0.25 inch)
@@ -419,13 +383,13 @@ export default function Canvas2D() {
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
 
-  // Snap state
-  const snapRef = useRef<{ x: number; y: number } | null>(null)
-  const [snapIndicator, setSnapIndicator] = useState<{ wx: number; wy: number; type: string } | null>(null)
-
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
   const rightDragStart = useRef<{ x: number; y: number } | null>(null)
+
+  // Snap engine — runs on every mousemove, stores result in ref (no re-renders)
+  const { compute: computeSnap, snapResultRef } = useSnapEngine(members, zoom, panX, panY)
+  const snapCanvasRef = useRef<HTMLCanvasElement>(null)
 
   // Resize observer
   useEffect(() => {
@@ -437,6 +401,70 @@ export default function Canvas2D() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  // Draw snap indicators on the overlay canvas — imperative, no React re-renders
+  const drawSnapLayer = useCallback((result: SnapResult) => {
+    const canvas = snapCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (!result.active || !result.point) return
+
+    const snap = result.point
+    const scx = snap.worldX * zoom * SCALE + panX
+    const scy = snap.worldY * zoom * SCALE + panY
+    const GREEN = '#00ff41'
+
+    ctx.strokeStyle = GREEN
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([])
+
+    switch (snap.type) {
+      case 'endpoint':
+        ctx.strokeRect(scx - 5, scy - 5, 10, 10)
+        break
+      case 'midpoint':
+        ctx.beginPath()
+        ctx.moveTo(scx, scy - 7)
+        ctx.lineTo(scx + 6, scy + 4)
+        ctx.lineTo(scx - 6, scy + 4)
+        ctx.closePath()
+        ctx.stroke()
+        break
+      case 'intersection':
+        ctx.beginPath()
+        ctx.moveTo(scx - 5, scy - 5); ctx.lineTo(scx + 5, scy + 5)
+        ctx.moveTo(scx + 5, scy - 5); ctx.lineTo(scx - 5, scy + 5)
+        ctx.stroke()
+        break
+      case 'center':
+        ctx.beginPath()
+        ctx.arc(scx, scy, 6, 0, Math.PI * 2)
+        ctx.stroke()
+        break
+    }
+
+    // Tooltip
+    const label = snap.type.charAt(0).toUpperCase() + snap.type.slice(1)
+    ctx.font = '11px sans-serif'
+    const tw = ctx.measureText(label).width
+    const tx = scx + 14
+    const ty = scy - 6
+    ctx.fillStyle = '#1a1d27'
+    ctx.fillRect(tx - 4, ty - 12, tw + 8, 18)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(label, tx, ty)
+
+    // Full-viewport tracking lines
+    ctx.setLineDash([6, 3])
+    ctx.lineWidth = 1
+    ctx.strokeStyle = '#ff4444'
+    ctx.beginPath(); ctx.moveTo(0, scy); ctx.lineTo(canvas.width, scy); ctx.stroke()
+    ctx.strokeStyle = '#4444ff'
+    ctx.beginPath(); ctx.moveTo(scx, 0); ctx.lineTo(scx, canvas.height); ctx.stroke()
+    ctx.setLineDash([])
+  }, [zoom, panX, panY])
 
   // Keyboard
   useEffect(() => {
@@ -555,26 +583,17 @@ export default function Canvas2D() {
 
     if (e.evt.button !== 0) return
 
-    const wx = cx2wx(pos.x, zoom, panX)
-    const wy = cy2wy(pos.y, zoom, panY)
-
-    // Dimension mode
+    // Dimension mode — use snap-locked position
     if (mode === 'dimension') {
-      const snapped = snapToMemberPoints(wx, wy, members, 12, zoom, panX, panY)
-      const sx = snapped ? snapped.x : snapToGrid(wx)
-      const sy = snapped ? snapped.y : snapToGrid(wy)
+      const sr = snapResultRef.current
+      const sx = sr.active ? sr.lockedX : snapToGrid(cx2wx(pos.x, zoom, panX))
+      const sy = sr.active ? sr.lockedY : snapToGrid(cy2wy(pos.y, zoom, panY))
 
       if (!dimStart) {
         setDimStart({ x: sx, y: sy })
       } else {
-        const ex = snapped ? snapped.x : snapToGrid(wx)
-        const ey = snapped ? snapped.y : snapToGrid(wy)
         push({ members, connections, dimensions, groupNames })
-        addDimension({
-          startX: dimStart.x, startY: dimStart.y,
-          endX: ex, endY: ey,
-          offset: 3,
-        })
+        addDimension({ startX: dimStart.x, startY: dimStart.y, endX: sx, endY: sy, offset: 3 })
         setDimStart(null)
         setDimPreview(null)
       }
@@ -591,6 +610,7 @@ export default function Canvas2D() {
     }
   }, [
     mode, panX, panY, zoom, dimStart, members, connections, dimensions, groupNames,
+    snapResultRef,
     setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
     setContextMenu, setConnectFirstMemberId, addDimension, push,
   ])
@@ -602,11 +622,16 @@ export default function Canvas2D() {
       setPan(panStart.current.panX + dx, panStart.current.panY + dy)
       return
     }
+
+    // Drive snap engine on every mousemove — imperative, no React re-render
+    const pos = stageRef.current?.getPointerPosition()
+    if (pos) {
+      const result = computeSnap(pos.x, pos.y)
+      drawSnapLayer(result)
+    }
+
     if (selStart.current) {
-      const stage = stageRef.current
-      const pos = stage?.getPointerPosition()
       if (!pos) return
-      // Track if right-drag moved enough to suppress context menu
       if (rightDragStart.current) {
         const ddx = pos.x - rightDragStart.current.x
         const ddy = pos.y - rightDragStart.current.y
@@ -620,20 +645,14 @@ export default function Canvas2D() {
       })
       return
     }
-    // Dimension preview
+
+    // Dimension preview — use snap-locked position
     if (mode === 'dimension' && dimStart) {
-      const stage = stageRef.current
-      const pos = stage?.getPointerPosition()
       if (!pos) return
-      const wx = cx2wx(pos.x, zoom, panX)
-      const wy = cy2wy(pos.y, zoom, panY)
-      const snapped = snapToMemberPoints(wx, wy, members, 12, zoom, panX, panY)
-      setDimPreview({
-        x: snapped ? snapped.x : snapToGrid(wx),
-        y: snapped ? snapped.y : snapToGrid(wy),
-      })
+      const sr = snapResultRef.current
+      setDimPreview({ x: sr.lockedX, y: sr.lockedY })
     }
-  }, [setPan, mode, dimStart, zoom, panX, panY, members])
+  }, [setPan, computeSnap, drawSnapLayer, snapResultRef, mode, dimStart])
 
   const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
@@ -725,25 +744,11 @@ export default function Canvas2D() {
   const handleMemberDragMove = useCallback((id: string, canvasX: number, canvasY: number) => {
     const wx = cx2wx(canvasX, zoom, panX)
     const wy = cy2wy(canvasY, zoom, panY)
-    const SNAP_THRESH_PX = 16
     const ALIGN_THRESH = 12 / (zoom * SCALE)
-
-    const otherMembers = members.filter(m => m.id !== id)
-
-    // Check snap to member points (endpoints/midpoints)
-    const snap = snapToMemberPoints(wx, wy, otherMembers, SNAP_THRESH_PX, zoom, panX, panY)
-    if (snap) {
-      snapRef.current = { x: snap.x, y: snap.y }
-      setSnapIndicator({ wx: snap.x, wy: snap.y, type: snap.type })
-      setAlignGuides({ hLines: [snap.y], vLines: [snap.x] })
-      return
-    }
-    snapRef.current = null
-    setSnapIndicator(null)
-
     const hLines: number[] = []
     const vLines: number[] = []
-    for (const m of otherMembers) {
+    for (const m of members) {
+      if (m.id === id) continue
       const angle = (m.rotation.y * Math.PI) / 180
       const cos = Math.cos(angle), sin = Math.sin(angle)
       const hw = m.length / 2
@@ -762,25 +767,22 @@ export default function Canvas2D() {
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
     setAlignGuides({ hLines: [], vLines: [] })
-    setSnapIndicator(null)
-    const newWx = cx2wx(canvasX, zoom, panX)
-    const newWy = cy2wy(canvasY, zoom, panY)
-    const snap = snapRef.current
-    snapRef.current = null
-    const snappedX = snap ? snap.x : snapToGrid(newWx)
-    const snappedY = snap ? snap.y : snapToGrid(newWy)
+    // Clear snap overlay
+    const sc = snapCanvasRef.current
+    if (sc) sc.getContext('2d')?.clearRect(0, 0, sc.width, sc.height)
+
+    const sr = snapResultRef.current
+    const snappedX = sr.active ? sr.lockedX : snapToGrid(cx2wx(canvasX, zoom, panX))
+    const snappedY = sr.active ? sr.lockedY : snapToGrid(cy2wy(canvasY, zoom, panY))
 
     push({ members, connections, dimensions, groupNames })
-    const offsets = dragOffsets.current
-    for (const [sid, off] of Object.entries(offsets)) {
+    for (const [sid, off] of Object.entries(dragOffsets.current)) {
       const sm = members.find(m => m.id === sid)
       if (!sm) continue
-      const tx = snappedX + off.dx
-      const ty = snappedY + off.dy
-      updateMember(sid, { position: { ...sm.position, x: snapToGrid(tx), y: snapToGrid(ty) } })
+      updateMember(sid, { position: { ...sm.position, x: snapToGrid(snappedX + off.dx), y: snapToGrid(snappedY + off.dy) } })
     }
     dragOffsets.current = {}
-  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember])
+  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember, snapResultRef])
 
   const handleConnectionClick = useCallback((id: string) => {
     setSelectedConnectionId(id)
@@ -962,52 +964,28 @@ export default function Canvas2D() {
           </Layer>
         )}
 
-        {/* Alignment guide lines + snap indicator */}
-        {(alignGuides.hLines.length > 0 || alignGuides.vLines.length > 0 || snapIndicator) && (
+        {/* Alignment guide lines */}
+        {(alignGuides.hLines.length > 0 || alignGuides.vLines.length > 0) && (
           <Layer listening={false}>
             {alignGuides.hLines.map((wy, i) => (
-              <Line
-                key={`h${i}`}
-                points={[0, wy2cy(wy, zoom, panY), size.w, wy2cy(wy, zoom, panY)]}
-                stroke={snapIndicator ? '#ef4444' : '#ef4444'}
-                strokeWidth={snapIndicator ? 1.5 : 1}
-                dash={[8, 4]}
-                opacity={0.8}
-                listening={false}
-              />
+              <Line key={`h${i}`} points={[0, wy2cy(wy, zoom, panY), size.w, wy2cy(wy, zoom, panY)]}
+                stroke='#ef4444' strokeWidth={1} dash={[8, 4]} opacity={0.8} listening={false} />
             ))}
             {alignGuides.vLines.map((wx, i) => (
-              <Line
-                key={`v${i}`}
-                points={[wx2cx(wx, zoom, panX), 0, wx2cx(wx, zoom, panX), size.h]}
-                stroke='#3b82f6'
-                strokeWidth={snapIndicator ? 1.5 : 1}
-                dash={[8, 4]}
-                opacity={0.8}
-                listening={false}
-              />
+              <Line key={`v${i}`} points={[wx2cx(wx, zoom, panX), 0, wx2cx(wx, zoom, panX), size.h]}
+                stroke='#3b82f6' strokeWidth={1} dash={[8, 4]} opacity={0.8} listening={false} />
             ))}
-            {snapIndicator && (() => {
-              const scx = wx2cx(snapIndicator.wx, zoom, panX)
-              const scy = wy2cy(snapIndicator.wy, zoom, panY)
-              return (
-                <>
-                  <Circle x={scx} y={scy} radius={6} fill='#f97316' opacity={0.9} listening={false} />
-                  <Circle x={scx} y={scy} radius={12} stroke='#f97316' strokeWidth={1.5} fill='transparent' opacity={0.6} listening={false} />
-                  <Text
-                    x={scx + 14}
-                    y={scy - 8}
-                    text={snapIndicator.type}
-                    fontSize={10}
-                    fill='#f97316'
-                    listening={false}
-                  />
-                </>
-              )
-            })()}
           </Layer>
         )}
       </Stage>
+
+      {/* Snap indicator overlay — drawn imperatively on every mousemove, zero React re-renders */}
+      <canvas
+        ref={snapCanvasRef}
+        width={size.w}
+        height={size.h}
+        style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+      />
 
       {/* Empty state */}
       {members.length === 0 && (
