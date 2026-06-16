@@ -20,25 +20,31 @@ function hexToRgb(hex: string): [number, number, number] {
 
 type ViewType = 'top' | 'front' | 'side' | 'isometric';
 
-/** Project each member into 2D (px, py) for a given view */
-function projectMember(m: Member, view: ViewType): { cx: number; cy: number; angle: number } {
+/** Project each member into 2D for a given view, with foreshortened length */
+function projectMember(m: Member, view: ViewType): { cx: number; cy: number; angle: number; projLen: number } {
   const cos30 = Math.cos(Math.PI / 6);
   const sin30 = Math.sin(Math.PI / 6);
   const mx = m.position.x;
   const my = m.position.y;
   const mz = m.position.z ?? 0;
+  const rotY = (m.rotation.y * Math.PI) / 180;
+  const isUp = Math.abs(m.rotation.x ?? 0) >= 45;
 
   switch (view) {
     case 'top':
-      return { cx: mx, cy: my, angle: m.rotation.y };
+      // Top view: full plan, member lies along rotation.y angle, uprights show as dot
+      return { cx: mx, cy: my, angle: m.rotation.y, projLen: isUp ? 0 : m.length };
     case 'front':
-      return { cx: mx, cy: -mz, angle: 0 };
+      // Front view: x horizontal, z vertical; horizontal members foreshortened by cos(rotY)
+      return { cx: mx, cy: -mz, angle: 0, projLen: isUp ? m.length : m.length * Math.abs(Math.cos(rotY)) };
     case 'side':
-      return { cx: my, cy: -mz, angle: 0 };
+      // Side view: y horizontal, z vertical; horizontal members foreshortened by sin(rotY)
+      return { cx: my, cy: -mz, angle: 0, projLen: isUp ? m.length : m.length * Math.abs(Math.sin(rotY)) };
     case 'isometric': {
-      const px2 = mx + my * cos30;
-      const py2 = -mz - my * sin30 * 0.5;
-      return { cx: px2, cy: py2, angle: 0 };
+      // Isometric: dimetric projection
+      const isoX = (mx - my) * cos30;
+      const isoY = (mx + my) * sin30 - mz;
+      return { cx: isoX, cy: isoY, angle: 30, projLen: m.length };
     }
   }
 }
@@ -73,12 +79,14 @@ function drawViewInCell(
   // Compute projected bounds
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const m of members) {
-    const { cx, cy } = projectMember(m, view);
-    const hw = m.length / 2;
+    const { cx, cy, projLen } = projectMember(m, view);
+    const hw = (projLen || 1) / 2;
+    const { height } = parseSizeString(m.type, m.size);
+    const hh = height / 2;
     minX = Math.min(minX, cx - hw);
-    minY = Math.min(minY, cy - hw);
+    minY = Math.min(minY, cy - hh);
     maxX = Math.max(maxX, cx + hw);
-    maxY = Math.max(maxY, cy + hw);
+    maxY = Math.max(maxY, cy + hh);
   }
 
   const p = 2;
@@ -89,14 +97,14 @@ function drawViewInCell(
   const offY = drawArea.y + (drawArea.h - bh * scale) / 2 - (minY - p) * scale;
 
   for (const m of members) {
-    const { cx: mcx, cy: mcy, angle } = projectMember(m, view);
+    const { cx: mcx, cy: mcy, angle, projLen } = projectMember(m, view);
     const mat = MATERIALS[m.type];
     const [r, g, b] = hexToRgb(mat.color);
     const { height } = parseSizeString(m.type, m.size);
     const rad = (angle * Math.PI) / 180;
     const cx = mcx * scale + offX;
     const cy = mcy * scale + offY;
-    const len = m.length * scale;
+    const len = Math.max(projLen * scale, 2);
     const vizH = Math.max(height * scale, 2);
 
     const cos = Math.cos(rad), sin = Math.sin(rad);

@@ -44,7 +44,7 @@ function formatDimension(totalInches: number): string {
   return `${feet}'-${inches}"`
 }
 
-// Snap to member endpoints and midpoints
+// Snap to member endpoints and midpoints — returns snap point and label
 function snapToMemberPoints(
   wx: number, wy: number,
   members: Member[],
@@ -52,9 +52,9 @@ function snapToMemberPoints(
   zoom: number,
   panX: number,
   panY: number
-): { x: number; y: number } | null {
+): { x: number; y: number; type: 'endpoint' | 'midpoint' } | null {
   const threshWx = thresholdPx / (zoom * SCALE)
-  let best: { x: number; y: number } | null = null
+  let best: { x: number; y: number; type: 'endpoint' | 'midpoint' } | null = null
   let bestDist = threshWx
 
   for (const m of members) {
@@ -63,10 +63,10 @@ function snapToMemberPoints(
     const cos = Math.cos(angle)
     const sin = Math.sin(angle)
 
-    const pts = [
-      { x: m.position.x - cos * halfLen, y: m.position.y - sin * halfLen }, // start
-      { x: m.position.x, y: m.position.y },                                    // mid
-      { x: m.position.x + cos * halfLen, y: m.position.y + sin * halfLen }, // end
+    const pts: Array<{ x: number; y: number; type: 'endpoint' | 'midpoint' }> = [
+      { x: m.position.x - cos * halfLen, y: m.position.y - sin * halfLen, type: 'endpoint' },
+      { x: m.position.x, y: m.position.y, type: 'midpoint' },
+      { x: m.position.x + cos * halfLen, y: m.position.y + sin * halfLen, type: 'endpoint' },
     ]
 
     for (const pt of pts) {
@@ -419,6 +419,14 @@ export default function Canvas2D() {
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
 
+  // Snap state
+  const snapRef = useRef<{ x: number; y: number } | null>(null)
+  const [snapIndicator, setSnapIndicator] = useState<{ wx: number; wy: number; type: string } | null>(null)
+
+  // Right-drag tracking (suppress context menu when drag occurred)
+  const rightDragMoved = useRef(false)
+  const rightDragStart = useRef<{ x: number; y: number } | null>(null)
+
   // Resize observer
   useEffect(() => {
     const el = containerRef.current
@@ -539,6 +547,8 @@ export default function Canvas2D() {
     // Right mouse on stage background = selection rect
     if (e.evt.button === 2 && e.target === stage) {
       selStart.current = { x: pos.x, y: pos.y }
+      rightDragStart.current = { x: pos.x, y: pos.y }
+      rightDragMoved.current = false
       setSelRect({ x: pos.x, y: pos.y, w: 0, h: 0 })
       return
     }
@@ -596,6 +606,12 @@ export default function Canvas2D() {
       const stage = stageRef.current
       const pos = stage?.getPointerPosition()
       if (!pos) return
+      // Track if right-drag moved enough to suppress context menu
+      if (rightDragStart.current) {
+        const ddx = pos.x - rightDragStart.current.x
+        const ddy = pos.y - rightDragStart.current.y
+        if (Math.sqrt(ddx * ddx + ddy * ddy) > 3) rightDragMoved.current = true
+      }
       setSelRect({
         x: Math.min(selStart.current.x, pos.x),
         y: Math.min(selStart.current.y, pos.y),
@@ -622,19 +638,41 @@ export default function Canvas2D() {
   const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
     if (selStart.current && selRect) {
+      const rx2 = selRect.x + selRect.w
+      const ry2 = selRect.y + selRect.h
       const ids = members.filter(m => {
-        const cx = wx2cx(m.position.x, zoom, panX)
-        const cy = wy2cy(m.position.y, zoom, panY)
-        return cx >= selRect.x && cx <= selRect.x + selRect.w && cy >= selRect.y && cy <= selRect.y + selRect.h
+        const angle = (m.rotation.y * Math.PI) / 180
+        const cos = Math.cos(angle), sin = Math.sin(angle)
+        const hw = m.length / 2 * zoom * SCALE
+        const { height } = parseSizeString(m.type, m.size)
+        const hh = height / 2 * zoom * SCALE
+        const mcx = wx2cx(m.position.x, zoom, panX)
+        const mcy = wy2cy(m.position.y, zoom, panY)
+        const corners = [
+          { x: mcx - cos * hw + sin * hh, y: mcy - sin * hw - cos * hh },
+          { x: mcx + cos * hw + sin * hh, y: mcy + sin * hw - cos * hh },
+          { x: mcx + cos * hw - sin * hh, y: mcy + sin * hw + cos * hh },
+          { x: mcx - cos * hw - sin * hh, y: mcy - sin * hw + cos * hh },
+        ]
+        const minBX = Math.min(...corners.map(c => c.x))
+        const maxBX = Math.max(...corners.map(c => c.x))
+        const minBY = Math.min(...corners.map(c => c.y))
+        const maxBY = Math.max(...corners.map(c => c.y))
+        return minBX <= rx2 && maxBX >= selRect.x && minBY <= ry2 && maxBY >= selRect.y
       }).map(m => m.id)
       setSelectedIds(ids)
       selStart.current = null
+      rightDragStart.current = null
       setSelRect(null)
     }
   }, [selRect, members, zoom, panX, panY, setSelectedIds])
 
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.evt.preventDefault()
+    if (rightDragMoved.current) {
+      rightDragMoved.current = false
+      return
+    }
     if (e.target === stageRef.current) {
       setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, type: 'canvas' })
     }
@@ -687,13 +725,25 @@ export default function Canvas2D() {
   const handleMemberDragMove = useCallback((id: string, canvasX: number, canvasY: number) => {
     const wx = cx2wx(canvasX, zoom, panX)
     const wy = cy2wy(canvasY, zoom, panY)
-    const SNAP_THRESH = 12 / (zoom * SCALE) // world units
+    const SNAP_THRESH_PX = 16
+    const ALIGN_THRESH = 12 / (zoom * SCALE)
+
+    const otherMembers = members.filter(m => m.id !== id)
+
+    // Check snap to member points (endpoints/midpoints)
+    const snap = snapToMemberPoints(wx, wy, otherMembers, SNAP_THRESH_PX, zoom, panX, panY)
+    if (snap) {
+      snapRef.current = { x: snap.x, y: snap.y }
+      setSnapIndicator({ wx: snap.x, wy: snap.y, type: snap.type })
+      setAlignGuides({ hLines: [snap.y], vLines: [snap.x] })
+      return
+    }
+    snapRef.current = null
+    setSnapIndicator(null)
 
     const hLines: number[] = []
     const vLines: number[] = []
-
-    for (const m of members) {
-      if (m.id === id) continue
+    for (const m of otherMembers) {
       const angle = (m.rotation.y * Math.PI) / 180
       const cos = Math.cos(angle), sin = Math.sin(angle)
       const hw = m.length / 2
@@ -703,20 +753,22 @@ export default function Canvas2D() {
         { x: m.position.x + cos * hw, y: m.position.y + sin * hw },
       ]
       for (const pt of pts) {
-        if (Math.abs(pt.x - wx) < SNAP_THRESH) vLines.push(pt.x)
-        if (Math.abs(pt.y - wy) < SNAP_THRESH) hLines.push(pt.y)
+        if (Math.abs(pt.x - wx) < ALIGN_THRESH) vLines.push(pt.x)
+        if (Math.abs(pt.y - wy) < ALIGN_THRESH) hLines.push(pt.y)
       }
     }
-
     setAlignGuides({ hLines: [...new Set(hLines)], vLines: [...new Set(vLines)] })
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
     setAlignGuides({ hLines: [], vLines: [] })
+    setSnapIndicator(null)
     const newWx = cx2wx(canvasX, zoom, panX)
     const newWy = cy2wy(canvasY, zoom, panY)
-    const snappedX = snapToGrid(newWx)
-    const snappedY = snapToGrid(newWy)
+    const snap = snapRef.current
+    snapRef.current = null
+    const snappedX = snap ? snap.x : snapToGrid(newWx)
+    const snappedY = snap ? snap.y : snapToGrid(newWy)
 
     push({ members, connections, dimensions, groupNames })
     const offsets = dragOffsets.current
@@ -770,25 +822,14 @@ export default function Canvas2D() {
     setRenamingGroupId(null)
   }, [renamingGroupId, renameValue, groupNames, renameGroup])
 
-  // Grid dots
+  // CSS grid (full viewport coverage via background-image)
   const gridSpacingPx = zoom * SCALE
   const showGrid = gridSpacingPx >= 6
-  const gridDots: React.ReactNode[] = []
-  if (showGrid) {
-    const startX = Math.floor(-panX / gridSpacingPx) * gridSpacingPx + panX
-    const startY = Math.floor(-panY / gridSpacingPx) * gridSpacingPx + panY
-    const cols = Math.ceil(size.w / gridSpacingPx) + 2
-    const rows = Math.ceil(size.h / gridSpacingPx) + 2
-    const total = Math.min(cols * rows, 2500)
-    for (let i = 0; i < total; i++) {
-      const col = i % cols
-      const row = Math.floor(i / cols)
-      gridDots.push(
-        <Circle key={i} x={startX + col * gridSpacingPx} y={startY + row * gridSpacingPx}
-          radius={0.8} fill='rgba(255,255,255,0.15)' listening={false} />
-      )
-    }
-  }
+  const gridStyle: React.CSSProperties = showGrid ? {
+    backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)',
+    backgroundSize: `${gridSpacingPx}px ${gridSpacingPx}px`,
+    backgroundPosition: `${panX % gridSpacingPx}px ${panY % gridSpacingPx}px`,
+  } : {}
 
   // Collect unique groups
   const groupIds = Array.from(new Set(members.filter(m => m.groupId).map(m => m.groupId as string)))
@@ -803,7 +844,7 @@ export default function Canvas2D() {
     <div
       ref={containerRef}
       className='w-full h-full'
-      style={{ background: '#12151e', cursor, position: 'relative' }}
+      style={{ background: '#12151e', cursor, position: 'relative', ...gridStyle }}
     >
       <Stage
         ref={stageRef}
@@ -816,11 +857,6 @@ export default function Canvas2D() {
         onContextMenu={handleContextMenu}
         style={{ display: 'block' }}
       >
-        {/* Grid layer */}
-        <Layer listening={false}>
-          {gridDots}
-        </Layer>
-
         {/* Main layer */}
         <Layer>
           {/* Group bounding boxes */}
@@ -926,15 +962,15 @@ export default function Canvas2D() {
           </Layer>
         )}
 
-        {/* Alignment guide lines */}
-        {(alignGuides.hLines.length > 0 || alignGuides.vLines.length > 0) && (
+        {/* Alignment guide lines + snap indicator */}
+        {(alignGuides.hLines.length > 0 || alignGuides.vLines.length > 0 || snapIndicator) && (
           <Layer listening={false}>
             {alignGuides.hLines.map((wy, i) => (
               <Line
                 key={`h${i}`}
                 points={[0, wy2cy(wy, zoom, panY), size.w, wy2cy(wy, zoom, panY)]}
-                stroke='#ef4444'
-                strokeWidth={1}
+                stroke={snapIndicator ? '#ef4444' : '#ef4444'}
+                strokeWidth={snapIndicator ? 1.5 : 1}
                 dash={[8, 4]}
                 opacity={0.8}
                 listening={false}
@@ -945,12 +981,30 @@ export default function Canvas2D() {
                 key={`v${i}`}
                 points={[wx2cx(wx, zoom, panX), 0, wx2cx(wx, zoom, panX), size.h]}
                 stroke='#3b82f6'
-                strokeWidth={1}
+                strokeWidth={snapIndicator ? 1.5 : 1}
                 dash={[8, 4]}
                 opacity={0.8}
                 listening={false}
               />
             ))}
+            {snapIndicator && (() => {
+              const scx = wx2cx(snapIndicator.wx, zoom, panX)
+              const scy = wy2cy(snapIndicator.wy, zoom, panY)
+              return (
+                <>
+                  <Circle x={scx} y={scy} radius={6} fill='#f97316' opacity={0.9} listening={false} />
+                  <Circle x={scx} y={scy} radius={12} stroke='#f97316' strokeWidth={1.5} fill='transparent' opacity={0.6} listening={false} />
+                  <Text
+                    x={scx + 14}
+                    y={scy - 8}
+                    text={snapIndicator.type}
+                    fontSize={10}
+                    fill='#f97316'
+                    listening={false}
+                  />
+                </>
+              )
+            })()}
           </Layer>
         )}
       </Stage>
