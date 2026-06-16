@@ -29,43 +29,104 @@ function buildCrossSection(m: Member): THREE.Shape {
   switch (m.type) {
     case 'square_tube':
     case 'rect_tube': {
+      // Hollow rectangle — wall thickness subtracted on all sides
+      const iw = Math.max(hw - wall, 0.01)
+      const ih = Math.max(hh - wall, 0.01)
       const shape = new THREE.Shape()
       shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()
       const hole = new THREE.Path()
-      hole.moveTo(-(hw - wall), -(hh - wall)); hole.lineTo(hw - wall, -(hh - wall))
-      hole.lineTo(hw - wall, hh - wall); hole.lineTo(-(hw - wall), hh - wall); hole.closePath()
+      hole.moveTo(-iw, -ih); hole.lineTo(iw, -ih); hole.lineTo(iw, ih); hole.lineTo(-iw, ih); hole.closePath()
       shape.holes.push(hole)
       return shape
     }
     case 'round_tube':
     case 'pipe': {
-      const r = hw; const ir = Math.max(r - wall, 0.01)
+      // Hollow cylinder — inner radius = outer minus wall
+      const r = hw
+      const ir = Math.max(r - wall, 0.01)
       const shape = new THREE.Shape()
       shape.absarc(0, 0, r, 0, Math.PI * 2, false)
-      const hole = new THREE.Path(); hole.absarc(0, 0, ir, 0, Math.PI * 2, true)
-      shape.holes.push(hole); return shape
+      const hole = new THREE.Path()
+      hole.absarc(0, 0, ir, 0, Math.PI * 2, true)
+      shape.holes.push(hole)
+      return shape
     }
     case 'i_beam': {
-      const fh = wall * 1.5
+      // Proper I-shape: two wide flanges + thin vertical web
+      // width = flange width, height = total depth, wall = flange thickness
+      const flangeThickness = Math.max(wall, height * 0.08)
+      const webThickness = Math.max(wall * 0.6, 0.05)
+      const hwf = hw  // half flange width
+      const hww = webThickness / 2  // half web thickness
       const shape = new THREE.Shape()
-      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + fh)
-      shape.lineTo(wall / 2, -hh + fh); shape.lineTo(wall / 2, hh - fh); shape.lineTo(hw, hh - fh)
-      shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.lineTo(-hw, hh - fh)
-      shape.lineTo(-wall / 2, hh - fh); shape.lineTo(-wall / 2, -hh + fh); shape.lineTo(-hw, -hh + fh)
-      shape.closePath(); return shape
+      // Start at bottom-left of bottom flange, go clockwise
+      shape.moveTo(-hwf, -hh)
+      shape.lineTo( hwf, -hh)
+      shape.lineTo( hwf, -hh + flangeThickness)
+      shape.lineTo( hww, -hh + flangeThickness)
+      shape.lineTo( hww,  hh - flangeThickness)
+      shape.lineTo( hwf,  hh - flangeThickness)
+      shape.lineTo( hwf,  hh)
+      shape.lineTo(-hwf,  hh)
+      shape.lineTo(-hwf,  hh - flangeThickness)
+      shape.lineTo(-hww,  hh - flangeThickness)
+      shape.lineTo(-hww, -hh + flangeThickness)
+      shape.lineTo(-hwf, -hh + flangeThickness)
+      shape.closePath()
+      return shape
     }
     case 'channel': {
-      const fh = wall * 1.5
+      // C-shape: one web on left side, two horizontal flanges top and bottom
+      const flangeThickness = Math.max(wall, height * 0.08)
+      const webThickness = Math.max(wall, 0.05)
       const shape = new THREE.Shape()
-      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + fh)
-      shape.lineTo(-hw + wall, -hh + fh); shape.lineTo(-hw + wall, hh - fh); shape.lineTo(hw, hh - fh)
-      shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath(); return shape
+      shape.moveTo(-hw, -hh)
+      shape.lineTo( hw, -hh)
+      shape.lineTo( hw, -hh + flangeThickness)
+      shape.lineTo(-hw + webThickness, -hh + flangeThickness)
+      shape.lineTo(-hw + webThickness,  hh - flangeThickness)
+      shape.lineTo( hw,  hh - flangeThickness)
+      shape.lineTo( hw,  hh)
+      shape.lineTo(-hw,  hh)
+      shape.closePath()
+      return shape
     }
     case 'angle': {
+      // L-shape: two legs meeting at 90 degrees in the bottom-left corner
       const shape = new THREE.Shape()
-      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, -hh + wall)
-      shape.lineTo(-hw + wall, -hh + wall); shape.lineTo(-hw + wall, hh); shape.lineTo(-hw, hh)
-      shape.closePath(); return shape
+      shape.moveTo(-hw, -hh)
+      shape.lineTo( hw, -hh)
+      shape.lineTo( hw, -hh + wall)
+      shape.lineTo(-hw + wall, -hh + wall)
+      shape.lineTo(-hw + wall,  hh)
+      shape.lineTo(-hw,  hh)
+      shape.closePath()
+      return shape
+    }
+    case 'flat_bar': {
+      // Solid thin rectangle: width = face width (hw), height = thickness (hh)
+      // parseSizeString("flat_bar","1/4x2") → {width:2, height:0.25} ✓
+      const shape = new THREE.Shape()
+      shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()
+      return shape
+    }
+    case 'sheet': {
+      // Thin flat panel: width from size = one face dimension, wallThickness = panel thickness
+      const halfFaceW = hw  // half the sheet width (e.g. 24 for a 48" wide sheet)
+      const halfThk = wall / 2
+      const shape = new THREE.Shape()
+      shape.moveTo(-halfFaceW, -halfThk); shape.lineTo(halfFaceW, -halfThk)
+      shape.lineTo(halfFaceW, halfThk); shape.lineTo(-halfFaceW, halfThk); shape.closePath()
+      return shape
+    }
+    case 'plate': {
+      // Flat plate: width from size = face width, wallThickness = actual plate thickness
+      const halfFaceW = hw
+      const halfThk = wall / 2
+      const shape = new THREE.Shape()
+      shape.moveTo(-halfFaceW, -halfThk); shape.lineTo(halfFaceW, -halfThk)
+      shape.lineTo(halfFaceW, halfThk); shape.lineTo(-halfFaceW, halfThk); shape.closePath()
+      return shape
     }
     default: {
       const shape = new THREE.Shape()

@@ -2,6 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import App from './App'
+import { validateMemberShapes } from './lib/validateShapes'
+
+if (import.meta.env.DEV) {
+  validateMemberShapes()
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
