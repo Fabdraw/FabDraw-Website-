@@ -7,9 +7,15 @@ import { calcWeight, formatWeight, totalWeight } from '../lib/weights';
 
 const monoStyle = { fontFamily: "'JetBrains Mono', monospace" };
 
+const CONNECTION_COLOR: Record<string, string> = {
+  weld: '#f97316',
+  bolted: '#22c55e',
+  flanged: '#a855f7',
+}
+
 export default function BOMPanel() {
   const { project } = useProjectStore();
-  const { members } = project;
+  const { members, connections } = project;
   const { isBOMCollapsed, toggleBOM, selectedIds, setSelectedIds } = useUIStore();
 
   const tw = useMemo(() => totalWeight(members), [members]);
@@ -154,6 +160,42 @@ export default function BOMPanel() {
             )}
           </tbody>
         </table>
+        {connections.length > 0 && (
+          <table className="w-full text-left border-t" style={{ ...monoStyle, fontSize: '11px', borderColor: '#2e3350' }}>
+            <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
+              <tr>
+                {['#', 'TYPE', 'MEMBER A', 'MEMBER B'].map(h => (
+                  <th
+                    key={h}
+                    className="px-2 py-1"
+                    style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {connections.map((c, i) => {
+                const mA = members.find(m => m.id === c.memberAId)
+                const mB = members.find(m => m.id === c.memberBId)
+                return (
+                  <tr key={c.id} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                    <td className="px-2 py-1" style={{ color: '#475569' }}>{i + 1}</td>
+                    <td className="px-2 py-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: CONNECTION_COLOR[c.type] }} />
+                        <span style={{ color: CONNECTION_COLOR[c.type] }}>{c.type}</span>
+                      </span>
+                    </td>
+                    <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mA ? `${mA.type.replace(/_/g, ' ')} ${mA.size}"` : '—'}</td>
+                    <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mB ? `${mB.type.replace(/_/g, ' ')} ${mB.size}"` : '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

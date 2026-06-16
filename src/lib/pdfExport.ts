@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import type { Member, TitleBlock } from '../types';
+import type { Member, TitleBlock, Dimension } from '../types';
 import { MATERIALS } from './materials';
 import { calcWeight, formatWeight, totalWeight } from './weights';
 import { parseSizeString } from './materials';
@@ -21,7 +21,8 @@ function hexToRgb(hex: string): [number, number, number] {
 export function exportPDF(
   members: Member[],
   titleBlock: TitleBlock,
-  projectName: string
+  projectName: string,
+  dimensions: Dimension[] = []
 ): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'tabloid' });
   const W = doc.internal.pageSize.getWidth();
@@ -207,6 +208,34 @@ export function exportPDF(
         doc.setDrawColor(100, 100, 100);
         doc.circle(hx, hy, hr, 'FD');
       }
+    }
+    // Draw dimensions
+    for (const d of dimensions) {
+      const sx = d.startX * scale + offX
+      const sy = d.startY * scale + offY
+      const ex = d.endX * scale + offX
+      const ey = d.endY * scale + offY
+      const dx = ex - sx, dy = ey - sy
+      const len = Math.sqrt(dx * dx + dy * dy)
+      if (len < 1) continue
+      const nx = -dy / len, ny = dx / len
+      const off = (d.offset ?? 3) * scale
+      const lsx = sx + nx * off, lsy = sy + ny * off
+      const lex = ex + nx * off, ley = ey + ny * off
+      doc.setDrawColor(96, 165, 250)
+      doc.setLineWidth(0.8)
+      doc.line(lsx, lsy, lex, ley)
+      doc.line(sx, sy, lsx, lsy)
+      doc.line(ex, ey, lex, ley)
+      const mx = (lsx + lex) / 2, my = (lsy + ley) / 2
+      const totalIn = Math.sqrt((d.endX - d.startX) ** 2 + (d.endY - d.startY) ** 2)
+      const ft = Math.floor(totalIn / 12)
+      const inch = totalIn % 12
+      const label = ft > 0 ? `${ft}'-${inch.toFixed(2).replace(/\.?0+$/, '')}"` : `${totalIn.toFixed(2).replace(/\.?0+$/, '')}"`;
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(96, 165, 250)
+      doc.text(label, mx, my - 2, { align: 'center' })
     }
   } else {
     doc.setTextColor(180, 180, 180);

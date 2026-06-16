@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { Copy, Trash2, Layers } from 'lucide-react';
+import { Copy, Trash2, Layers, Group, Ungroup } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
 
 export default function ContextMenu() {
   const { contextMenu, setContextMenu, selectedIds, setSelectedIds, setClipboard, clipboard } = useUIStore();
-  const { project, deleteMembers, addMember } = useProjectStore();
+  const { project, deleteMembers, addMember, groupMembers, ungroupMembers } = useProjectStore();
   const { members, connections } = project;
   const historyStore = useHistoryStore();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -104,6 +104,29 @@ export default function ContextMenu() {
           <MenuItem icon={<Copy size={14} />} label="Copy" onClick={handleCopy} />
           <MenuItem icon={<Layers size={14} />} label="Duplicate" onClick={handleDuplicate} />
           <Divider />
+          {selectedIds.length >= 2 && !selectedIds.every(id => members.find(m => m.id === id)?.groupId) && (
+            <MenuItem
+              icon={<Group size={14} />}
+              label={`Group (${selectedIds.length})`}
+              onClick={() => {
+                historyStore.push({ members, connections });
+                groupMembers(selectedIds, crypto.randomUUID());
+                close();
+              }}
+            />
+          )}
+          {member.groupId && (
+            <MenuItem
+              icon={<Ungroup size={14} />}
+              label="Ungroup"
+              onClick={() => {
+                historyStore.push({ members, connections });
+                ungroupMembers(member.groupId!);
+                close();
+              }}
+            />
+          )}
+          {(selectedIds.length >= 2 || member.groupId) && <Divider />}
           <MenuItem icon={<Trash2 size={14} />} label="Delete" onClick={handleDelete} danger />
         </>
       )}

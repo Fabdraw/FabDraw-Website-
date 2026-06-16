@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
-  Save, FolderOpen, FileText,
+  Save, FolderOpen, FileText, Ruler, Link2,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
@@ -26,11 +26,11 @@ export default function Toolbar() {
 
   const handleUndo = () => {
     const entry = undo()
-    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections })
+    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections, dimensions: entry.dimensions ?? project.dimensions, groupNames: entry.groupNames ?? project.groupNames })
   }
   const handleRedo = () => {
     const entry = redo()
-    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections })
+    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections, dimensions: entry.dimensions ?? project.dimensions, groupNames: entry.groupNames ?? project.groupNames })
   }
   const handleDelete = () => {
     if (selectedIds.length === 0) return
@@ -99,7 +99,7 @@ export default function Toolbar() {
   }
 
   const handleExportPDF = () => {
-    const url = exportPDF(members, project.titleBlock, project.name)
+    const url = exportPDF(members, project.titleBlock, project.name, project.dimensions ?? [])
     window.open(url, '_blank')
   }
 
@@ -178,6 +178,12 @@ export default function Toolbar() {
       </button>
       <button className={mode === 'pan' ? btnActive : btn} onClick={() => setMode('pan')} title="Pan (H / Space)">
         <Hand size={14} />
+      </button>
+      <button className={mode === 'dimension' ? btnActive : btn} onClick={() => setMode('dimension')} title="Dimension (D)">
+        <Ruler size={14} />
+      </button>
+      <button className={mode === 'connect' ? btnActive : btn} onClick={() => setMode('connect')} title="Connect (C)">
+        <Link2 size={14} />
       </button>
 
       {div}

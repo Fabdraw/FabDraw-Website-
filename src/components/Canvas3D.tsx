@@ -156,10 +156,16 @@ function MemberMesh({
   )
 }
 
+const CONNECTION_COLOR_3D: Record<string, string> = {
+  weld: '#f97316',
+  bolted: '#22c55e',
+  flanged: '#a855f7',
+}
+
 function Scene() {
   const { project, updateMember } = useProjectStore()
   const { members, connections } = project
-  const { selectedIds, setSelectedIds } = useUIStore()
+  const { selectedIds, selectedConnectionId, setSelectedIds, setSelectedConnectionId } = useUIStore()
   const { push } = useHistoryStore()
   const { camera, gl, controls } = useThree()
 
@@ -302,6 +308,21 @@ function Scene() {
           onPointerDown={(e) => handleMemberPointerDown(m, e)}
         />
       ))}
+
+      {connections.map(c => {
+        const color = CONNECTION_COLOR_3D[c.type] ?? '#ffffff'
+        const isSelected = selectedConnectionId === c.id
+        return (
+          <mesh
+            key={c.id}
+            position={[c.pointA.x, c.pointA.z ?? 0, c.pointA.y]}
+            onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(c.id) }}
+          >
+            <sphereGeometry args={[isSelected ? 0.6 : 0.4, 12, 12]} />
+            <meshPhongMaterial color={color} emissive={color} emissiveIntensity={isSelected ? 0.6 : 0.2} />
+          </mesh>
+        )
+      })}
 
       {/* Invisible backdrop — click miss deselects */}
       <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerMissed={handleMissed} visible={false}>

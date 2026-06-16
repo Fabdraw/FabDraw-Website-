@@ -1,11 +1,12 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
-import { Stage, Layer, Group, Rect, Circle, Line, Text, Ellipse } from 'react-konva'
+import { Stage, Layer, Group, Rect, Circle, Line, Text, Ellipse, Arrow } from 'react-konva'
 import type Konva from 'konva'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString } from '../lib/materials'
-import type { Member, Connection } from '../types'
+import type { Member, Connection, Dimension } from '../types'
+import ConnectionDialog from './ConnectionDialog'
 
 const SCALE = 8 // pixels per inch
 
@@ -29,20 +30,76 @@ function getMemberColor(m: Member, selected: boolean): string {
 
 function isUpright(m: Member) { return Math.abs(m.rotation.x) >= 45 }
 
+// Format inches to feet+inches string
+function formatDimension(totalInches: number): string {
+  const rounded = Math.round(totalInches * 16) / 16
+  const feet = Math.floor(rounded / 12)
+  const inches = rounded % 12
+  if (feet === 0) {
+    return `${inches}"`
+  }
+  if (inches === 0) {
+    return `${feet}'`
+  }
+  return `${feet}'-${inches}"`
+}
+
+// Snap to member endpoints and midpoints
+function snapToMemberPoints(
+  wx: number, wy: number,
+  members: Member[],
+  thresholdPx: number,
+  zoom: number,
+  panX: number,
+  panY: number
+): { x: number; y: number } | null {
+  const threshWx = thresholdPx / (zoom * SCALE)
+  let best: { x: number; y: number } | null = null
+  let bestDist = threshWx
+
+  for (const m of members) {
+    const angle = (m.rotation.y * Math.PI) / 180
+    const halfLen = m.length / 2
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+
+    const pts = [
+      { x: m.position.x - cos * halfLen, y: m.position.y - sin * halfLen }, // start
+      { x: m.position.x, y: m.position.y },                                    // mid
+      { x: m.position.x + cos * halfLen, y: m.position.y + sin * halfLen }, // end
+    ]
+
+    for (const pt of pts) {
+      const dx = pt.x - wx
+      const dy = pt.y - wy
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < bestDist) {
+        bestDist = dist
+        best = pt
+      }
+    }
+  }
+  return best
+}
+
+// Grid snap (0.25 inch)
+function snapToGrid(v: number): number {
+  return Math.round(v * 4) / 4
+}
+
 // Draw the cross-section shape for a member (centered at 0,0, along X axis)
 function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected: boolean }) {
   const { width, height } = parseSizeString(m.type, m.size)
   const wall = parseFloat(m.wallThickness) || 0.12
   const S = zoom * SCALE
   const len = m.length * S
-  const w = width * S   // visual height (perpendicular to length)
-  const h = height * S  // visual height
+  const w = width * S
+  const h = height * S
   const wt = Math.max(wall * S, 1)
   const color = getMemberColor(m, selected)
   const stroke = selected ? '#f97316' : color
   const strokeW = selected ? 2 : 1.5
 
-  // Upright: render as small square/circle overhead view
   if (isUpright(m)) {
     return (
       <Group>
@@ -58,7 +115,6 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
     case 'square_tube':
     case 'rect_tube': {
       const ih = Math.max(h - wt * 2, 2)
-      const iw = Math.max(w - wt * 2, 2)
       return (
         <Group>
           <Rect x={-hw} y={-h / 2} width={len} height={h} fill={color + '55'} stroke={stroke} strokeWidth={strokeW} />
@@ -78,16 +134,13 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
       )
     }
     case 'i_beam': {
-      const fw = w   // flange width (visual height)
+      const fw = w
       const fh = wt * 1.5
       const webH = fw - fh * 2
       return (
         <Group>
-          {/* Top flange */}
           <Rect x={-hw} y={-fw / 2} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
-          {/* Bottom flange */}
           <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
-          {/* Web */}
           <Rect x={-hw} y={-webH / 2} width={len} height={webH} fill={color + '44'} stroke={stroke} strokeWidth={strokeW} />
         </Group>
       )
@@ -97,11 +150,8 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
       const fh = wt * 1.5
       return (
         <Group>
-          {/* Top flange */}
           <Rect x={-hw} y={-fw / 2} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
-          {/* Bottom flange */}
           <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
-          {/* Web (left side) */}
           <Rect x={-hw} y={-fw / 2} width={wt} height={fw} fill={color + '66'} stroke={stroke} strokeWidth={strokeW} />
         </Group>
       )
@@ -111,9 +161,7 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
       const fh = wt * 1.5
       return (
         <Group>
-          {/* Horizontal leg */}
           <Rect x={-hw} y={fw / 2 - fh} width={len} height={fh} fill={color + '88'} stroke={stroke} strokeWidth={strokeW} />
-          {/* Vertical leg */}
           <Rect x={-hw} y={-fw / 2} width={wt} height={fw} fill={color + '66'} stroke={stroke} strokeWidth={strokeW} />
         </Group>
       )
@@ -128,114 +176,201 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
   }
 }
 
-function MemberNode({
-  m,
-  zoom,
-  panX,
-  panY,
-  selected,
-  onSelect,
-  onContextMenu,
-  onDragEnd,
+// Dimension line rendering
+function DimensionLine({
+  dim, zoom, panX, panY, selected,
+  onClick,
 }: {
-  m: Member
+  dim: Dimension
   zoom: number
   panX: number
   panY: number
   selected: boolean
-  onSelect: (id: string, shift: boolean) => void
-  onContextMenu: (id: string, x: number, y: number) => void
-  onDragEnd: (id: string, cx: number, cy: number) => void
+  onClick: (id: string) => void
 }) {
-  const cx = wx2cx(m.position.x, zoom, panX)
-  const cy = wy2cy(m.position.y, zoom, panY)
-  const angle = m.rotation.y
+  const S = zoom * SCALE
+  const offsetPx = dim.offset * S
 
-  const { width, height } = parseSizeString(m.type, m.size)
-  const h = height * zoom * SCALE
-  const len = m.length * zoom * SCALE
-  const showLabel = zoom > 0.3
+  const sx = wx2cx(dim.startX, zoom, panX)
+  const sy = wy2cy(dim.startY, zoom, panY)
+  const ex = wx2cx(dim.endX, zoom, panX)
+  const ey = wy2cy(dim.endY, zoom, panY)
+
+  // Direction of dimension line
+  const dx = ex - sx
+  const dy = ey - sy
+  const len = Math.sqrt(dx * dx + dy * dy)
+  if (len < 2) return null
+
+  // Perpendicular unit vector (upward = negative y in canvas)
+  const ux = -dy / len
+  const uy = dx / len
+
+  // Offset the dimension line endpoints
+  const dsx = sx + ux * offsetPx
+  const dsy = sy + uy * offsetPx
+  const dex = ex + ux * offsetPx
+  const dey = ey + uy * offsetPx
+
+  const midX = (dsx + dex) / 2
+  const midY = (dsy + dey) / 2
+
+  const totalInches = Math.sqrt(
+    (dim.endX - dim.startX) ** 2 + (dim.endY - dim.startY) ** 2
+  )
+  const label = formatDimension(totalInches)
+
+  const color = selected ? '#facc15' : '#e2e8f0'
+  const extLen = 8
 
   return (
-    <Group
-      x={cx}
-      y={cy}
-      rotation={angle}
-      draggable
-      onClick={(e) => {
-        e.cancelBubble = true
-        onSelect(m.id, e.evt.shiftKey)
-      }}
-      onContextMenu={(e) => {
-        e.evt.preventDefault()
-        e.cancelBubble = true
-        onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
-      }}
-      onDragEnd={(e) => {
-        onDragEnd(m.id, e.target.x(), e.target.y())
-        // Reset visual position — store will re-render with correct coords
-        e.target.x(cx)
-        e.target.y(cy)
-      }}
-    >
-      <MemberShape m={m} zoom={zoom} selected={selected} />
-
-      {/* Holes */}
-      {m.holes.map(hole => {
-        const t = hole.positionAlongMember / m.length - 0.5 // -0.5 to 0.5
-        const hx = t * len
-        const r = Math.max(hole.diameter / 2 * zoom * SCALE, 2)
-        return (
-          <Circle key={hole.id} x={hx} y={0} radius={r}
-            fill='rgba(0,0,0,0.8)' stroke='rgba(255,255,255,0.6)' strokeWidth={1} listening={false} />
-        )
-      })}
-
-      {/* Dimension label */}
-      {showLabel && (
-        <Text
-          x={0}
-          y={-h / 2 - 14}
-          text={`${m.length}"`}
-          fontSize={Math.max(10, 11 * zoom)}
-          fill='rgba(255,255,255,0.7)'
-          align='center'
-          offsetX={20}
-          listening={false}
-        />
-      )}
-
-      {/* Selection glow */}
-      {selected && (
-        <Rect
-          x={-m.length * zoom * SCALE / 2 - 4}
-          y={-height * zoom * SCALE / 2 - 4}
-          width={m.length * zoom * SCALE + 8}
-          height={height * zoom * SCALE + 8}
-          stroke='rgba(249,115,22,0.5)'
-          strokeWidth={6}
-          fill='transparent'
-          dash={[6, 4]}
-          listening={false}
-        />
-      )}
+    <Group onClick={() => onClick(dim.id)}>
+      {/* Extension lines */}
+      <Line
+        points={[sx, sy, dsx - ux * extLen, dsy - uy * extLen]}
+        stroke={color} strokeWidth={1} opacity={0.7} listening={false}
+      />
+      <Line
+        points={[ex, ey, dex - ux * extLen, dey - uy * extLen]}
+        stroke={color} strokeWidth={1} opacity={0.7} listening={false}
+      />
+      {/* Dimension arrow line */}
+      <Arrow
+        points={[dsx, dsy, dex, dey]}
+        stroke={color}
+        fill={color}
+        strokeWidth={1.5}
+        pointerAtBeginning={true}
+        pointerAtEnding={true}
+        pointerLength={8}
+        pointerWidth={5}
+        listening={false}
+      />
+      {/* Invisible hit target */}
+      <Line
+        points={[dsx, dsy, dex, dey]}
+        stroke='transparent'
+        strokeWidth={12}
+        hitStrokeWidth={12}
+      />
+      {/* Label */}
+      <Text
+        x={midX}
+        y={midY - 16}
+        text={label}
+        fontSize={Math.max(10, 11 * zoom)}
+        fill={color}
+        align='center'
+        offsetX={30}
+        listening={false}
+      />
     </Group>
   )
 }
 
-function ConnectionDot({ conn, zoom, panX, panY }: { conn: Connection; zoom: number; panX: number; panY: number }) {
+// Connection dot rendering
+function ConnectionDot({
+  conn, zoom, panX, panY, selected, onClick,
+}: {
+  conn: Connection
+  zoom: number
+  panX: number
+  panY: number
+  selected: boolean
+  onClick: (id: string) => void
+}) {
   const color = conn.type === 'weld' ? '#f97316' : conn.type === 'bolted' ? '#22c55e' : '#a855f7'
   const ax = wx2cx(conn.pointA.x, zoom, panX)
   const ay = wy2cy(conn.pointA.y, zoom, panY)
   const bx = wx2cx(conn.pointB.x, zoom, panX)
   const by = wy2cy(conn.pointB.y, zoom, panY)
   const r = Math.max(4, 5 * zoom)
+
   return (
-    <Group listening={false}>
+    <Group onClick={(e) => { e.cancelBubble = true; onClick(conn.id) }}>
+      {selected && (
+        <>
+          <Circle x={ax} y={ay} radius={r + 4} fill='transparent' stroke={color} strokeWidth={2} opacity={0.7} listening={false} />
+          <Circle x={bx} y={by} radius={r + 4} fill='transparent' stroke={color} strokeWidth={2} opacity={0.7} listening={false} />
+        </>
+      )}
       <Circle x={ax} y={ay} radius={r} fill={color} opacity={0.85} />
       <Circle x={bx} y={by} radius={r} fill={color} opacity={0.85} />
+      {/* Hit targets */}
+      <Circle x={ax} y={ay} radius={r + 6} fill='transparent' hitStrokeWidth={0} />
+      <Circle x={bx} y={by} radius={r + 6} fill='transparent' hitStrokeWidth={0} />
     </Group>
   )
+}
+
+// Group bounding box
+function GroupBoundingBox({
+  groupId, groupName, members, zoom, panX, panY,
+  onDoubleClick,
+}: {
+  groupId: string
+  groupName: string
+  members: Member[]
+  zoom: number
+  panX: number
+  panY: number
+  onDoubleClick: (groupId: string) => void
+}) {
+  const S = zoom * SCALE
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+
+  for (const m of members) {
+    const { width, height } = parseSizeString(m.type, m.size)
+    const halfLen = m.length / 2
+    const halfH = height / 2
+    const angle = (m.rotation.y * Math.PI) / 180
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+
+    // Four corners of the member rectangle in world space
+    const corners = [
+      [-halfLen, -halfH], [halfLen, -halfH],
+      [halfLen, halfH], [-halfLen, halfH],
+    ]
+    for (const [lx, ly] of corners) {
+      const wx = m.position.x + lx * cos - ly * sin
+      const wy = m.position.y + lx * sin + ly * cos
+      const cx = wx2cx(wx, zoom, panX)
+      const cy = wy2cy(wy, zoom, panY)
+      if (cx < minX) minX = cx
+      if (cy < minY) minY = cy
+      if (cx > maxX) maxX = cx
+      if (cy > maxY) maxY = cy
+    }
+  }
+
+  const pad = 8
+  return (
+    <Group onDblClick={() => onDoubleClick(groupId)}>
+      <Rect
+        x={minX - pad} y={minY - pad}
+        width={maxX - minX + pad * 2}
+        height={maxY - minY + pad * 2}
+        stroke='#a855f7'
+        strokeWidth={1.5}
+        dash={[6, 4]}
+        fill='rgba(168,85,247,0.04)'
+        listening={false}
+      />
+      <Text
+        x={minX - pad}
+        y={minY - pad - 18}
+        text={groupName}
+        fontSize={Math.max(10, 11 * zoom)}
+        fill='#a855f7'
+        listening={false}
+      />
+    </Group>
+  )
+}
+
+interface DragOffsets {
+  [memberId: string]: { dx: number; dy: number }
 }
 
 export default function Canvas2D() {
@@ -243,14 +378,43 @@ export default function Canvas2D() {
   const stageRef = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
 
-  const { project, updateMember } = useProjectStore()
-  const { members, connections } = project
   const {
-    panX, panY, zoom, setPan, setZoom, setPanZoom,
+    project, updateMember, deleteMembers, addConnection, deleteConnection,
+    addDimension, deleteDimension, groupMembers, ungroupMembers, renameGroup,
+  } = useProjectStore()
+  const { members, connections, dimensions = [], groupNames = {} } = project
+  const {
+    panX, panY, zoom, setPan, setZoom: _setZoom, setPanZoom,
     selectedIds, setSelectedIds, toggleSelectedId,
-    mode, setContextMenu,
+    selectedConnectionId, setSelectedConnectionId,
+    selectedDimensionId, setSelectedDimensionId,
+    connectFirstMemberId, setConnectFirstMemberId,
+    mode, setMode, setContextMenu,
   } = useUIStore()
   const { push } = useHistoryStore()
+
+  // Dimension tool state
+  const [dimStart, setDimStart] = useState<{ x: number; y: number } | null>(null)
+  const [dimPreview, setDimPreview] = useState<{ x: number; y: number } | null>(null)
+
+  // Connection dialog state
+  const [connDialog, setConnDialog] = useState<{
+    memberAId: string; memberBId: string
+  } | null>(null)
+
+  // Rename group state
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
+  // Selection rect state
+  const [selRect, setSelRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const selStart = useRef<{ x: number; y: number } | null>(null)
+  const isPanning = useRef(false)
+  const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const spaceDown = useRef(false)
+
+  // Multi-drag state
+  const dragOffsets = useRef<DragOffsets>({})
 
   // Resize observer
   useEffect(() => {
@@ -263,21 +427,82 @@ export default function Canvas2D() {
     return () => ro.disconnect()
   }, [])
 
-  // Selection rect state
-  const [selRect, setSelRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
-  const selStart = useRef<{ x: number; y: number } | null>(null)
-  const isPanning = useRef(false)
-  const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
-  const spaceDown = useRef(false)
-
-  // Keyboard: space for pan
+  // Keyboard
   useEffect(() => {
-    const onDown = (e: KeyboardEvent) => { if (e.code === 'Space') { e.preventDefault(); spaceDown.current = true } }
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') { e.preventDefault(); spaceDown.current = true }
+
+      if (e.code === 'Escape') {
+        setSelectedIds([])
+        setSelectedConnectionId(null)
+        setSelectedDimensionId(null)
+        setDimStart(null)
+        setDimPreview(null)
+        setConnectFirstMemberId(null)
+        return
+      }
+
+      if (e.code === 'Delete' || e.code === 'Backspace') {
+        // Don't delete if renaming
+        if (renamingGroupId) return
+        if (selectedDimensionId) {
+          push({ members, connections, dimensions, groupNames })
+          deleteDimension(selectedDimensionId)
+          setSelectedDimensionId(null)
+          return
+        }
+        if (selectedConnectionId) {
+          push({ members, connections, dimensions, groupNames })
+          deleteConnection(selectedConnectionId)
+          setSelectedConnectionId(null)
+          return
+        }
+        if (selectedIds.length > 0) {
+          push({ members, connections, dimensions, groupNames })
+          deleteMembers(selectedIds)
+          setSelectedIds([])
+          return
+        }
+      }
+
+      // Ctrl+G group
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyG' && !e.shiftKey) {
+        if (selectedIds.length >= 2) {
+          e.preventDefault()
+          push({ members, connections, dimensions, groupNames })
+          const groupId = crypto.randomUUID()
+          groupMembers(selectedIds, groupId)
+        }
+        return
+      }
+
+      // Ctrl+Shift+G ungroup
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyG') {
+        e.preventDefault()
+        // Find groups that have selected members
+        const groupIds = new Set(
+          members
+            .filter(m => selectedIds.includes(m.id) && m.groupId)
+            .map(m => m.groupId as string)
+        )
+        if (groupIds.size > 0) {
+          push({ members, connections, dimensions, groupNames })
+          groupIds.forEach(gid => ungroupMembers(gid))
+        }
+        return
+      }
+    }
     const onUp = (e: KeyboardEvent) => { if (e.code === 'Space') spaceDown.current = false }
     window.addEventListener('keydown', onDown)
     window.addEventListener('keyup', onUp)
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
-  }, [])
+  }, [
+    selectedIds, selectedConnectionId, selectedDimensionId, renamingGroupId,
+    members, connections, dimensions, groupNames,
+    deleteMembers, deleteConnection, deleteDimension, groupMembers, ungroupMembers,
+    setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
+    setConnectFirstMemberId, push,
+  ])
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
@@ -308,19 +533,54 @@ export default function Canvas2D() {
       return
     }
 
-    // Right mouse = selection rect (on stage background only)
+    // Right mouse on stage background = selection rect
     if (e.evt.button === 2 && e.target === stage) {
       selStart.current = { x: pos.x, y: pos.y }
       setSelRect({ x: pos.x, y: pos.y, w: 0, h: 0 })
       return
     }
 
-    // Left click on background = deselect
-    if (e.evt.button === 0 && e.target === stage) {
-      setSelectedIds([])
-      setContextMenu(null)
+    if (e.evt.button !== 0) return
+
+    const wx = cx2wx(pos.x, zoom, panX)
+    const wy = cy2wy(pos.y, zoom, panY)
+
+    // Dimension mode
+    if (mode === 'dimension') {
+      const snapped = snapToMemberPoints(wx, wy, members, 12, zoom, panX, panY)
+      const sx = snapped ? snapped.x : snapToGrid(wx)
+      const sy = snapped ? snapped.y : snapToGrid(wy)
+
+      if (!dimStart) {
+        setDimStart({ x: sx, y: sy })
+      } else {
+        const ex = snapped ? snapped.x : snapToGrid(wx)
+        const ey = snapped ? snapped.y : snapToGrid(wy)
+        push({ members, connections, dimensions, groupNames })
+        addDimension({
+          startX: dimStart.x, startY: dimStart.y,
+          endX: ex, endY: ey,
+          offset: 3,
+        })
+        setDimStart(null)
+        setDimPreview(null)
+      }
+      return
     }
-  }, [mode, panX, panY, setSelectedIds, setContextMenu])
+
+    // Left click on stage background = deselect
+    if (e.target === stage) {
+      setSelectedIds([])
+      setSelectedConnectionId(null)
+      setSelectedDimensionId(null)
+      setContextMenu(null)
+      setConnectFirstMemberId(null)
+    }
+  }, [
+    mode, panX, panY, zoom, dimStart, members, connections, dimensions, groupNames,
+    setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
+    setContextMenu, setConnectFirstMemberId, addDimension, push,
+  ])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current && panStart.current) {
@@ -339,13 +599,26 @@ export default function Canvas2D() {
         w: Math.abs(pos.x - selStart.current.x),
         h: Math.abs(pos.y - selStart.current.y),
       })
+      return
     }
-  }, [setPan])
+    // Dimension preview
+    if (mode === 'dimension' && dimStart) {
+      const stage = stageRef.current
+      const pos = stage?.getPointerPosition()
+      if (!pos) return
+      const wx = cx2wx(pos.x, zoom, panX)
+      const wy = cy2wy(pos.y, zoom, panY)
+      const snapped = snapToMemberPoints(wx, wy, members, 12, zoom, panX, panY)
+      setDimPreview({
+        x: snapped ? snapped.x : snapToGrid(wx),
+        y: snapped ? snapped.y : snapToGrid(wy),
+      })
+    }
+  }, [setPan, mode, dimStart, zoom, panX, panY, members])
 
-  const handleStageMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
     if (selStart.current && selRect) {
-      // Select members whose canvas center is inside the rect
       const ids = members.filter(m => {
         const cx = wx2cx(m.position.x, zoom, panX)
         const cy = wy2cy(m.position.y, zoom, panY)
@@ -365,30 +638,109 @@ export default function Canvas2D() {
   }, [setContextMenu])
 
   const handleMemberSelect = useCallback((id: string, shift: boolean) => {
+    if (mode === 'connect') {
+      if (!connectFirstMemberId) {
+        setConnectFirstMemberId(id)
+      } else if (connectFirstMemberId !== id) {
+        setConnDialog({ memberAId: connectFirstMemberId, memberBId: id })
+        setConnectFirstMemberId(null)
+      }
+      return
+    }
     if (shift) toggleSelectedId(id)
     else setSelectedIds([id])
+    setSelectedConnectionId(null)
+    setSelectedDimensionId(null)
     setContextMenu(null)
-  }, [toggleSelectedId, setSelectedIds, setContextMenu])
+  }, [
+    mode, connectFirstMemberId, setConnectFirstMemberId,
+    toggleSelectedId, setSelectedIds, setSelectedConnectionId,
+    setSelectedDimensionId, setContextMenu,
+  ])
 
   const handleMemberContextMenu = useCallback((id: string, x: number, y: number) => {
     if (!selectedIds.includes(id)) setSelectedIds([id])
     setContextMenu({ x, y, type: 'member', memberId: id })
   }, [selectedIds, setSelectedIds, setContextMenu])
 
+  const handleMemberDragStart = useCallback((id: string) => {
+    // Record offsets for all selected members relative to dragged member
+    const dragged = members.find(m => m.id === id)
+    if (!dragged) return
+    const ids = selectedIds.includes(id) ? selectedIds : [id]
+    const offsets: DragOffsets = {}
+    for (const sid of ids) {
+      const sm = members.find(m => m.id === sid)
+      if (sm) {
+        offsets[sid] = {
+          dx: sm.position.x - dragged.position.x,
+          dy: sm.position.y - dragged.position.y,
+        }
+      }
+    }
+    dragOffsets.current = offsets
+  }, [members, selectedIds])
+
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    const wx = cx2wx(canvasX, zoom, panX)
-    const wy = cy2wy(canvasY, zoom, panY)
-    // Snap to 1" grid
-    const snappedX = Math.round(wx)
-    const snappedY = Math.round(wy)
-    const m = members.find(m => m.id === id)
-    if (!m) return
-    push({ members, connections })
-    updateMember(id, { position: { ...m.position, x: snappedX, y: snappedY } })
-  }, [zoom, panX, panY, members, connections, push, updateMember])
+    const newWx = cx2wx(canvasX, zoom, panX)
+    const newWy = cy2wy(canvasY, zoom, panY)
+    const snappedX = snapToGrid(newWx)
+    const snappedY = snapToGrid(newWy)
+
+    push({ members, connections, dimensions, groupNames })
+    const offsets = dragOffsets.current
+    for (const [sid, off] of Object.entries(offsets)) {
+      const sm = members.find(m => m.id === sid)
+      if (!sm) continue
+      const tx = snappedX + off.dx
+      const ty = snappedY + off.dy
+      updateMember(sid, { position: { ...sm.position, x: snapToGrid(tx), y: snapToGrid(ty) } })
+    }
+    dragOffsets.current = {}
+  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember])
+
+  const handleConnectionClick = useCallback((id: string) => {
+    setSelectedConnectionId(id)
+    setSelectedIds([])
+    setSelectedDimensionId(null)
+  }, [setSelectedConnectionId, setSelectedIds, setSelectedDimensionId])
+
+  const handleDimensionClick = useCallback((id: string) => {
+    setSelectedDimensionId(id)
+    setSelectedIds([])
+    setSelectedConnectionId(null)
+  }, [setSelectedDimensionId, setSelectedIds, setSelectedConnectionId])
+
+  const handleConnectionDialogSelect = useCallback((type: 'weld' | 'bolted' | 'flanged') => {
+    if (!connDialog) return
+    const memberA = members.find(m => m.id === connDialog.memberAId)
+    const memberB = members.find(m => m.id === connDialog.memberBId)
+    if (!memberA || !memberB) { setConnDialog(null); return }
+    push({ members, connections, dimensions, groupNames })
+    addConnection({
+      memberAId: connDialog.memberAId,
+      memberBId: connDialog.memberBId,
+      type,
+      pointA: { ...memberA.position },
+      pointB: { ...memberB.position },
+    })
+    setConnDialog(null)
+    setMode('select')
+  }, [connDialog, members, connections, dimensions, groupNames, addConnection, push, setMode])
+
+  const handleGroupDoubleClick = useCallback((groupId: string) => {
+    setRenamingGroupId(groupId)
+    setRenameValue(groupNames[groupId] ?? '')
+  }, [groupNames])
+
+  const handleRenameConfirm = useCallback(() => {
+    if (!renamingGroupId) return
+    renameGroup(renamingGroupId, renameValue.trim() || groupNames[renamingGroupId])
+    setRenamingGroupId(null)
+  }, [renamingGroupId, renameValue, groupNames, renameGroup])
 
   // Grid dots
-  const gridSpacingPx = zoom * SCALE // 1 inch in pixels
+  const gridSpacingPx = zoom * SCALE
   const showGrid = gridSpacingPx >= 6
   const gridDots: React.ReactNode[] = []
   if (showGrid) {
@@ -396,7 +748,6 @@ export default function Canvas2D() {
     const startY = Math.floor(-panY / gridSpacingPx) * gridSpacingPx + panY
     const cols = Math.ceil(size.w / gridSpacingPx) + 2
     const rows = Math.ceil(size.h / gridSpacingPx) + 2
-    // Limit to 2500 dots
     const total = Math.min(cols * rows, 2500)
     for (let i = 0; i < total; i++) {
       const col = i % cols
@@ -408,8 +759,21 @@ export default function Canvas2D() {
     }
   }
 
+  // Collect unique groups
+  const groupIds = Array.from(new Set(members.filter(m => m.groupId).map(m => m.groupId as string)))
+
+  // Cursor style
+  let cursor = 'default'
+  if (mode === 'pan' || spaceDown.current) cursor = 'grab'
+  else if (mode === 'dimension') cursor = 'crosshair'
+  else if (mode === 'connect') cursor = 'cell'
+
   return (
-    <div ref={containerRef} className='w-full h-full' style={{ background: '#12151e', cursor: mode === 'pan' || spaceDown.current ? 'grab' : 'default' }}>
+    <div
+      ref={containerRef}
+      className='w-full h-full'
+      style={{ background: '#12151e', cursor, position: 'relative' }}
+    >
       <Stage
         ref={stageRef}
         width={size.w}
@@ -426,11 +790,40 @@ export default function Canvas2D() {
           {gridDots}
         </Layer>
 
-        {/* Members + connections */}
+        {/* Main layer */}
         <Layer>
+          {/* Group bounding boxes */}
+          {groupIds.map(gid => {
+            const gMembers = members.filter(m => m.groupId === gid)
+            if (gMembers.length === 0) return null
+            return (
+              <GroupBoundingBox
+                key={gid}
+                groupId={gid}
+                groupName={groupNames[gid] ?? gid.slice(0, 6)}
+                members={gMembers}
+                zoom={zoom}
+                panX={panX}
+                panY={panY}
+                onDoubleClick={handleGroupDoubleClick}
+              />
+            )
+          })}
+
+          {/* Connections */}
           {connections.map(conn => (
-            <ConnectionDot key={conn.id} conn={conn} zoom={zoom} panX={panX} panY={panY} />
+            <ConnectionDot
+              key={conn.id}
+              conn={conn}
+              zoom={zoom}
+              panX={panX}
+              panY={panY}
+              selected={selectedConnectionId === conn.id}
+              onClick={handleConnectionClick}
+            />
           ))}
+
+          {/* Members */}
           {members.map(m => (
             <MemberNode
               key={m.id}
@@ -439,11 +832,53 @@ export default function Canvas2D() {
               panX={panX}
               panY={panY}
               selected={selectedIds.includes(m.id)}
+              connectHighlight={connectFirstMemberId === m.id}
               onSelect={handleMemberSelect}
               onContextMenu={handleMemberContextMenu}
+              onDragStart={handleMemberDragStart}
               onDragEnd={handleMemberDragEnd}
             />
           ))}
+
+          {/* Dimensions */}
+          {dimensions.map(dim => (
+            <DimensionLine
+              key={dim.id}
+              dim={dim}
+              zoom={zoom}
+              panX={panX}
+              panY={panY}
+              selected={selectedDimensionId === dim.id}
+              onClick={handleDimensionClick}
+            />
+          ))}
+
+          {/* Dimension preview line */}
+          {mode === 'dimension' && dimStart && dimPreview && (
+            <Line
+              points={[
+                wx2cx(dimStart.x, zoom, panX), wy2cy(dimStart.y, zoom, panY),
+                wx2cx(dimPreview.x, zoom, panX), wy2cy(dimPreview.y, zoom, panY),
+              ]}
+              stroke='#facc15'
+              strokeWidth={1}
+              dash={[6, 3]}
+              opacity={0.6}
+              listening={false}
+            />
+          )}
+
+          {/* Connect mode first member indicator */}
+          {mode === 'connect' && connectFirstMemberId && (() => {
+            const m = members.find(mb => mb.id === connectFirstMemberId)
+            if (!m) return null
+            const cx = wx2cx(m.position.x, zoom, panX)
+            const cy = wy2cy(m.position.y, zoom, panY)
+            return (
+              <Circle x={cx} y={cy} radius={10} stroke='#22c55e' strokeWidth={2}
+                fill='transparent' dash={[4, 3]} listening={false} />
+            )
+          })()}
         </Layer>
 
         {/* Selection rectangle overlay */}
@@ -472,6 +907,159 @@ export default function Canvas2D() {
           </div>
         </div>
       )}
+
+      {/* Connection dialog */}
+      {connDialog && (
+        <ConnectionDialog
+          onSelect={handleConnectionDialogSelect}
+          onCancel={() => { setConnDialog(null); setConnectFirstMemberId(null) }}
+        />
+      )}
+
+      {/* Group rename input */}
+      {renamingGroupId && (() => {
+        const gMembers = members.filter(m => m.groupId === renamingGroupId)
+        if (gMembers.length === 0) return null
+        // Find approximate screen position
+        const avgX = gMembers.reduce((s, m) => s + wx2cx(m.position.x, zoom, panX), 0) / gMembers.length
+        const minY = Math.min(...gMembers.map(m => wy2cy(m.position.y, zoom, panY)))
+        return (
+          <div style={{
+            position: 'absolute',
+            left: avgX - 60,
+            top: minY - 50,
+            zIndex: 100,
+          }}>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onBlur={handleRenameConfirm}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRenameConfirm()
+                if (e.key === 'Escape') setRenamingGroupId(null)
+              }}
+              style={{
+                background: '#1a1d27',
+                border: '1px solid #a855f7',
+                borderRadius: 4,
+                color: '#e2e8f0',
+                padding: '2px 8px',
+                fontSize: 12,
+                outline: 'none',
+                width: 120,
+              }}
+            />
+          </div>
+        )
+      })()}
     </div>
+  )
+}
+
+// ---- MemberNode moved below to allow all helpers to be in scope ----
+function MemberNode({
+  m, zoom, panX, panY, selected, connectHighlight,
+  onSelect, onContextMenu, onDragStart, onDragEnd,
+}: {
+  m: Member
+  zoom: number
+  panX: number
+  panY: number
+  selected: boolean
+  connectHighlight: boolean
+  onSelect: (id: string, shift: boolean) => void
+  onContextMenu: (id: string, x: number, y: number) => void
+  onDragStart: (id: string) => void
+  onDragEnd: (id: string, cx: number, cy: number) => void
+}) {
+  const cx = wx2cx(m.position.x, zoom, panX)
+  const cy = wy2cy(m.position.y, zoom, panY)
+  const angle = m.rotation.y
+
+  const { height } = parseSizeString(m.type, m.size)
+  const h = height * zoom * SCALE
+  const len = m.length * zoom * SCALE
+  const showLabel = zoom > 0.3
+
+  return (
+    <Group
+      x={cx}
+      y={cy}
+      rotation={angle}
+      draggable
+      onClick={(e) => {
+        e.cancelBubble = true
+        onSelect(m.id, e.evt.shiftKey)
+      }}
+      onContextMenu={(e) => {
+        e.evt.preventDefault()
+        e.cancelBubble = true
+        onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
+      }}
+      onDragStart={() => onDragStart(m.id)}
+      onDragEnd={(e) => {
+        onDragEnd(m.id, e.target.x(), e.target.y())
+        e.target.x(cx)
+        e.target.y(cy)
+      }}
+    >
+      <MemberShape m={m} zoom={zoom} selected={selected} />
+
+      {/* Holes */}
+      {m.holes.map(hole => {
+        const t = hole.positionAlongMember / m.length - 0.5
+        const hx = t * len
+        const r = Math.max(hole.diameter / 2 * zoom * SCALE, 2)
+        return (
+          <Circle key={hole.id} x={hx} y={0} radius={r}
+            fill='rgba(0,0,0,0.8)' stroke='rgba(255,255,255,0.6)' strokeWidth={1} listening={false} />
+        )
+      })}
+
+      {/* Dimension label */}
+      {showLabel && (
+        <Text
+          x={0}
+          y={-h / 2 - 14}
+          text={`${m.length}"`}
+          fontSize={Math.max(10, 11 * zoom)}
+          fill='rgba(255,255,255,0.7)'
+          align='center'
+          offsetX={20}
+          listening={false}
+        />
+      )}
+
+      {/* Selection glow */}
+      {selected && (
+        <Rect
+          x={-len / 2 - 4}
+          y={-h / 2 - 4}
+          width={len + 8}
+          height={h + 8}
+          stroke='rgba(249,115,22,0.5)'
+          strokeWidth={6}
+          fill='transparent'
+          dash={[6, 4]}
+          listening={false}
+        />
+      )}
+
+      {/* Connect highlight */}
+      {connectHighlight && (
+        <Rect
+          x={-len / 2 - 6}
+          y={-h / 2 - 6}
+          width={len + 12}
+          height={h + 12}
+          stroke='#22c55e'
+          strokeWidth={2}
+          fill='transparent'
+          dash={[4, 3]}
+          listening={false}
+        />
+      )}
+    </Group>
   )
 }

@@ -134,7 +134,7 @@ export const useProjectStore = create<ProjectState>()(
           },
         })),
 
-      setProject: (p) => set({ project: { dimensions: [], groupNames: {}, ...p } }),
+      setProject: (p) => set({ project: { ...p, dimensions: p.dimensions ?? [], groupNames: p.groupNames ?? {} } }),
 
       setProjectName: (name) =>
         set((s) => ({ project: { ...s.project, name } })),
