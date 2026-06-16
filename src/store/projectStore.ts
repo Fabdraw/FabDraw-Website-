@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Member, Connection, Project, TitleBlock } from '../types';
+import type { Member, Connection, Project, TitleBlock, Dimension } from '../types';
 import { DEFAULT_TITLE_BLOCK } from '../types';
 
 const defaultProject: Project = {
@@ -8,6 +8,8 @@ const defaultProject: Project = {
   name: 'Untitled Project',
   members: [],
   connections: [],
+  dimensions: [],
+  groupNames: {},
   titleBlock: { ...DEFAULT_TITLE_BLOCK },
 };
 
@@ -19,6 +21,11 @@ interface ProjectState {
   deleteMembers: (ids: string[]) => void;
   addConnection: (c: Omit<Connection, 'id'>) => void;
   deleteConnection: (id: string) => void;
+  addDimension: (d: Omit<Dimension, 'id'>) => void;
+  deleteDimension: (id: string) => void;
+  groupMembers: (ids: string[], groupId: string) => void;
+  ungroupMembers: (groupId: string) => void;
+  renameGroup: (groupId: string, name: string) => void;
   setProject: (p: Project) => void;
   setProjectName: (name: string) => void;
   updateTitleBlock: (patch: Partial<TitleBlock>) => void;
@@ -77,7 +84,57 @@ export const useProjectStore = create<ProjectState>()(
           },
         })),
 
-      setProject: (p) => set({ project: p }),
+      addDimension: (d) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            dimensions: [...(s.project.dimensions ?? []), { ...d, id: crypto.randomUUID() }],
+          },
+        })),
+
+      deleteDimension: (id) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            dimensions: (s.project.dimensions ?? []).filter((d) => d.id !== id),
+          },
+        })),
+
+      groupMembers: (ids, groupId) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            members: s.project.members.map((m) =>
+              ids.includes(m.id) ? { ...m, groupId } : m
+            ),
+            groupNames: { ...(s.project.groupNames ?? {}), [groupId]: `Group ${groupId.slice(0, 4)}` },
+          },
+        })),
+
+      ungroupMembers: (groupId) =>
+        set((s) => {
+          const gn = { ...(s.project.groupNames ?? {}) }
+          delete gn[groupId]
+          return {
+            project: {
+              ...s.project,
+              members: s.project.members.map((m) =>
+                m.groupId === groupId ? { ...m, groupId: undefined } : m
+              ),
+              groupNames: gn,
+            },
+          }
+        }),
+
+      renameGroup: (groupId, name) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            groupNames: { ...(s.project.groupNames ?? {}), [groupId]: name },
+          },
+        })),
+
+      setProject: (p) => set({ project: { dimensions: [], groupNames: {}, ...p } }),
 
       setProjectName: (name) =>
         set((s) => ({ project: { ...s.project, name } })),
@@ -85,6 +142,6 @@ export const useProjectStore = create<ProjectState>()(
       updateTitleBlock: (patch) =>
         set((s) => ({ project: { ...s.project, titleBlock: { ...s.project.titleBlock, ...patch } } })),
     }),
-    { name: 'fabdraw-v2' }
+    { name: 'fabdraw-v3' }
   )
 );

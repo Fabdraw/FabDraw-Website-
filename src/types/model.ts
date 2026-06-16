@@ -19,6 +19,16 @@ export interface Member {
   position: { x: number; y: number; z: number }
   rotation: { x: number; y: number; z: number } // degrees
   holes: Hole[]
+  groupId?: string
+}
+
+export interface Dimension {
+  id: string
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  offset: number // perpendicular offset in inches (positive = above)
 }
 
 export interface Connection {
@@ -71,5 +81,7 @@ export interface Project {
   name: string
   members: Member[]
   connections: Connection[]
+  dimensions: Dimension[]
+  groupNames: Record<string, string>
   titleBlock: TitleBlock
 }

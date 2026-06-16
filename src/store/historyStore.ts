@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-import type { Member, Connection } from '../types';
+import type { Member, Connection, Dimension } from '../types';
 
 interface ProjectSnapshot {
   members: Member[];
   connections: Connection[];
+  dimensions?: Dimension[];
+  groupNames?: Record<string, string>;
 }
 
 interface HistoryState {

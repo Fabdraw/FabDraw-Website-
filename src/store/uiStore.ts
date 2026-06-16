@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Member } from '../types';
 
-export type Mode = 'select' | 'pan' | 'hole_add';
+export type Mode = 'select' | 'pan' | 'hole_add' | 'dimension' | 'connect';
 export type ActiveView = '2d' | '3d';
 export type ActiveRightTab = 'props' | 'holes' | 'notes';
 
@@ -17,6 +17,8 @@ interface UIState {
   mode: Mode;
   selectedIds: string[];
   selectedConnectionId: string | null;
+  selectedDimensionId: string | null;
+  connectFirstMemberId: string | null;
   activeView: ActiveView;
   activeRightTab: ActiveRightTab;
   isBOMCollapsed: boolean;
@@ -25,8 +27,6 @@ interface UIState {
   showAIModal: boolean;
   showPhotoModal: boolean;
   contextMenu: ContextMenu | null;
-
-  // Pan/zoom (separate from project data)
   panX: number;
   panY: number;
   zoom: number;
@@ -35,6 +35,8 @@ interface UIState {
   setSelectedIds: (ids: string[]) => void;
   toggleSelectedId: (id: string) => void;
   setSelectedConnectionId: (id: string | null) => void;
+  setSelectedDimensionId: (id: string | null) => void;
+  setConnectFirstMemberId: (id: string | null) => void;
   setActiveView: (view: ActiveView) => void;
   setActiveRightTab: (tab: ActiveRightTab) => void;
   toggleBOM: () => void;
@@ -42,9 +44,9 @@ interface UIState {
   setShowTitleBlockModal: (v: boolean) => void;
   setShowAIModal: (v: boolean) => void;
   setShowPhotoModal: (v: boolean) => void;
-  holeAddMode: boolean
-  holeTargetMemberId: string | null
-  setHoleAddMode: (active: boolean, memberId?: string | null) => void
+  holeAddMode: boolean;
+  holeTargetMemberId: string | null;
+  setHoleAddMode: (active: boolean, memberId?: string | null) => void;
   setContextMenu: (m: ContextMenu | null) => void;
   setPanZoom: (x: number, y: number, z: number) => void;
   setZoom: (z: number) => void;
@@ -55,6 +57,8 @@ export const useUIStore = create<UIState>((set) => ({
   mode: 'select',
   selectedIds: [],
   selectedConnectionId: null,
+  selectedDimensionId: null,
+  connectFirstMemberId: null,
   activeView: '2d',
   activeRightTab: 'props',
   isBOMCollapsed: false,
@@ -69,7 +73,7 @@ export const useUIStore = create<UIState>((set) => ({
   panY: 300,
   zoom: 1,
 
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => set({ mode, connectFirstMemberId: null }),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
   toggleSelectedId: (id) =>
     set((s) => ({
@@ -78,6 +82,8 @@ export const useUIStore = create<UIState>((set) => ({
         : [...s.selectedIds, id],
     })),
   setSelectedConnectionId: (id) => set({ selectedConnectionId: id }),
+  setSelectedDimensionId: (id) => set({ selectedDimensionId: id }),
+  setConnectFirstMemberId: (id) => set({ connectFirstMemberId: id }),
   setActiveView: (activeView) => set({ activeView }),
   setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
   toggleBOM: () => set((s) => ({ isBOMCollapsed: !s.isBOMCollapsed })),
