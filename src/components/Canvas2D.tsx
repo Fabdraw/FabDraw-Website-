@@ -965,13 +965,15 @@ export default function Canvas2D() {
     const memberB = members.find(m => m.id === connDialog.memberBId)
     if (!memberA || !memberB) { setConnDialog(null); return }
     push({ members, connections, dimensions, groupNames })
-    addConnection({
+    const newConn = {
       memberAId: connDialog.memberAId,
       memberBId: connDialog.memberBId,
       type,
       pointA: { ...memberA.position },
       pointB: { ...memberB.position },
-    })
+    }
+    console.log('[Connect] saving connection:', newConn)
+    addConnection(newConn)
     setConnDialog(null)
     setMode('select')
   }, [connDialog, members, connections, dimensions, groupNames, addConnection, push, setMode])
@@ -1042,19 +1044,6 @@ export default function Canvas2D() {
               />
             )
           })}
-
-          {/* Connections */}
-          {connections.map(conn => (
-            <ConnectionDot
-              key={conn.id}
-              conn={conn}
-              zoom={zoom}
-              panX={panX}
-              panY={panY}
-              selected={selectedConnectionId === conn.id}
-              onClick={handleConnectionClick}
-            />
-          ))}
 
           {/* Members */}
           {members.map(m => (
@@ -1158,6 +1147,19 @@ export default function Canvas2D() {
               )
             })
           )}
+
+          {/* Connections — rendered above members so dots are visible */}
+          {connections.map(conn => (
+            <ConnectionDot
+              key={conn.id}
+              conn={conn}
+              zoom={zoom}
+              panX={panX}
+              panY={panY}
+              selected={selectedConnectionId === conn.id}
+              onClick={handleConnectionClick}
+            />
+          ))}
 
           {/* Hole placement preview circle */}
           {activeRightTab === 'holes' && selectedIds.length === 1 && holePlacePreview && (
