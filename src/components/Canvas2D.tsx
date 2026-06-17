@@ -148,6 +148,7 @@ function DimensionLine({
   dim: Dimension; zoom: number; panX: number; panY: number
   selected: boolean; onClick: (id: string) => void
 }) {
+  if (!dim.pointA || !dim.pointB || !dim.offsetDirection) return null
   const S = zoom * SCALE
   const ax = wx2cx(dim.pointA.x, zoom, panX)
   const ay = wy2cy(dim.pointA.y, zoom, panY)

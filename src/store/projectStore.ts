@@ -142,6 +142,20 @@ export const useProjectStore = create<ProjectState>()(
       updateTitleBlock: (patch) =>
         set((s) => ({ project: { ...s.project, titleBlock: { ...s.project.titleBlock, ...patch } } })),
     }),
-    { name: 'fabdraw-v3' }
+    {
+      name: 'fabdraw-v3',
+      // Strip dimensions saved in the old format (pre-pointA/pointB schema) so they
+      // don't crash Canvas2D when accessed as dim.pointA.x
+      migrate: (persisted: unknown, _version: number) => {
+        const s = persisted as { project?: Project }
+        if (s?.project?.dimensions) {
+          s.project.dimensions = s.project.dimensions.filter(
+            (d) => d && typeof (d as unknown as Record<string, unknown>).pointA === 'object'
+          )
+        }
+        return s as { project: Project }
+      },
+      version: 1,
+    }
   )
 );
