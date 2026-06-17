@@ -127,16 +127,23 @@ function drawDimensionsOnView(
       doc.line(dbx, dby, dbx - ux * tw + uy * tw * 0.45, dby - uy * tw - ux * tw * 0.45)
     }
 
-    // White background rect behind label
-    doc.setFontSize(fontSize)
-    doc.setFont('helvetica', 'normal')
-    const textW = doc.getTextWidth(d.label) + 5
-    const textH = fontSize * 0.45 + 2
+    // Label — font/size must be set BEFORE getTextWidth so measurement is accurate
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    const labelW = doc.getTextWidth(d.label) + 4
+    const labelH = 5
+    // White background rect, centered on midpoint
     doc.setFillColor(255, 255, 255)
-    doc.setDrawColor(255, 255, 255)
-    doc.rect(midX - textW / 2, midY - textH, textW, textH + 1, 'F')
-    doc.setTextColor(96, 165, 250)
-    doc.text(d.label, midX, midY - 1, { align: 'center' })
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.2)
+    doc.rect(midX - labelW / 2, midY - labelH / 2, labelW, labelH, 'FD')
+    // Dark blue text centered on midpoint (baseline: middle anchors y at center)
+    doc.setTextColor(26, 58, 92)
+    doc.setFontSize(9)
+    doc.text(d.label, midX, midY, { align: 'center', baseline: 'middle' })
+    // Restore draw color for next iteration
+    doc.setDrawColor(96, 165, 250)
+    doc.setLineWidth(0.5)
   }
 }
 
