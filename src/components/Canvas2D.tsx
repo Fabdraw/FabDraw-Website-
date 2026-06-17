@@ -724,7 +724,12 @@ export default function Canvas2D() {
   }, [selectedIds, setSelectedIds, setContextMenu])
 
   const handleMemberDragStart = useCallback((id: string) => {
-    setAlignGuides({ hLines: [], vLines: [] }) // clear Konva guide lines before drag begins
+    setAlignGuides({ hLines: [], vLines: [] })
+    // Reset snap state so previous snap never carries into the new drag
+    snapResultRef.current = { active: false, point: null, lockedX: 0, lockedY: 0 }
+    // Clear snap overlay canvas
+    const sc = snapCanvasRef.current
+    if (sc) sc.getContext('2d')?.clearRect(0, 0, sc.width, sc.height)
     // Record offsets for all selected members relative to dragged member
     const dragged = members.find(m => m.id === id)
     if (!dragged) return
@@ -740,22 +745,27 @@ export default function Canvas2D() {
       }
     }
     dragOffsets.current = offsets
-  }, [members, selectedIds])
+  }, [members, selectedIds, snapResultRef])
 
   const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {
-    // No state updates here — any React re-render during a Konva drag causes the
-    // dragged node's x/y props to reset, making the member jump back to its store
-    // position. The snap canvas overlay (driven by handleStageMouseMove) already
-    // draws snap indicators and tracking lines on every mousemove without re-renders.
+    // No state updates here — any React re-render during a Konva drag resets the
+    // Konva node's x/y props to the store position, causing the member to jump.
+    // Snap indicators are handled by handleStageMouseMove + drawSnapLayer (no re-renders).
   }, [])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
     setAlignGuides({ hLines: [], vLines: [] })
-    // Clear snap overlay
     const sc = snapCanvasRef.current
     if (sc) sc.getContext('2d')?.clearRect(0, 0, sc.width, sc.height)
 
-    const sr = snapResultRef.current
+    // Recompute snap at the exact cursor position at moment of release.
+    // Don't use snapResultRef directly — it reflects the last mousemove which
+    // may have fired before the cursor moved away from a snap point.
+    const pointerPos = stageRef.current?.getPointerPosition()
+    const sr = pointerPos ? computeSnap(pointerPos.x, pointerPos.y) : { active: false, point: null, lockedX: 0, lockedY: 0 }
+    // Always clear indicators after computing final snap
+    drawSnapLayer(sr)
+
     const snappedX = sr.active ? sr.lockedX : snapToGrid(cx2wx(canvasX, zoom, panX))
     const snappedY = sr.active ? sr.lockedY : snapToGrid(cy2wy(canvasY, zoom, panY))
 
@@ -766,7 +776,7 @@ export default function Canvas2D() {
       updateMember(sid, { position: { ...sm.position, x: snapToGrid(snappedX + off.dx), y: snapToGrid(snappedY + off.dy) } })
     }
     dragOffsets.current = {}
-  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember, snapResultRef])
+  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember, computeSnap, drawSnapLayer])
 
   const handleConnectionClick = useCallback((id: string) => {
     setSelectedConnectionId(id)
