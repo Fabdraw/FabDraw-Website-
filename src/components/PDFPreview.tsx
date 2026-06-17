@@ -249,9 +249,12 @@ const PanelCapture = forwardRef<PanelHandle, { name: string }>(({ name }, ref) =
       const savedColor = new THREE.Color()
       gl.getClearColor(savedColor)
       const savedAlpha = gl.getClearAlpha()
+      // Also save/restore scene.background — it overrides gl clear color
+      const savedBg = scene.background
 
       // White background for PDF
       gl.setClearColor(new THREE.Color(1, 1, 1), 1)
+      scene.background = new THREE.Color(1, 1, 1)
       gl.setSize(1200, 900, false)
 
       // Adjust camera for new aspect
@@ -271,6 +274,7 @@ const PanelCapture = forwardRef<PanelHandle, { name: string }>(({ name }, ref) =
       const dataURL = gl.domElement.toDataURL('image/png')
 
       // Restore
+      scene.background = savedBg
       gl.setClearColor(savedColor, savedAlpha)
       gl.setSize(savedW, savedH, false)
       camera.projectionMatrix.copy(savedProj)

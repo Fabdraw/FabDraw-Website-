@@ -90,6 +90,35 @@ function computeToScreen(
   return { toScreen: (p: Pt2) => ({ x: p.x * scale + offX, y: p.y * scale + offY }), scale }
 }
 
+// Clip a line segment to an axis-aligned bounding box (Cohen-Sutherland).
+// Returns null if the segment is entirely outside.
+function clipLine(
+  x1: number, y1: number, x2: number, y2: number,
+  bx: number, by: number, bw: number, bh: number,
+): [number, number, number, number] | null {
+  const L = 1, R = 2, T = 4, B = 8
+  const bx2 = bx + bw, by2 = by + bh
+  const code = (x: number, y: number) => {
+    let c = 0
+    if (x < bx) c |= L; else if (x > bx2) c |= R
+    if (y < by) c |= T; else if (y > by2) c |= B
+    return c
+  }
+  let c1 = code(x1, y1), c2 = code(x2, y2)
+  for (;;) {
+    if (!(c1 | c2)) return [x1, y1, x2, y2]
+    if (c1 & c2) return null
+    const c = c1 || c2
+    let x = 0, y = 0
+    if (c & B)      { x = x1 + (x2 - x1) * (by2 - y1) / (y2 - y1); y = by2 }
+    else if (c & T) { x = x1 + (x2 - x1) * (by  - y1) / (y2 - y1); y = by  }
+    else if (c & R) { y = y1 + (y2 - y1) * (bx2 - x1) / (x2 - x1); x = bx2 }
+    else            { y = y1 + (y2 - y1) * (bx  - x1) / (x2 - x1); x = bx  }
+    if (c === c1) { x1 = x; y1 = y; c1 = code(x, y) }
+    else          { x2 = x; y2 = y; c2 = code(x, y) }
+  }
+}
+
 function drawDimensionsOnView(
   doc: jsPDF,
   dimensions: Dimension[],
@@ -97,6 +126,10 @@ function drawDimensionsOnView(
   toScreen: (p: Pt2) => Pt2,
   scale: number,
   cellW: number,
+  clipX: number,
+  clipY: number,
+  clipW: number,
+  clipH: number,
 ) {
   const fontSize = Math.min(12, Math.max(8, cellW / 55))
   const projFn = view === 'top' ? topProj : view === 'front' ? frontProj : view === 'side' ? sideProj : isoProj
@@ -112,36 +145,55 @@ function drawDimensionsOnView(
 
     doc.setDrawColor(96, 165, 250)
     doc.setLineWidth(0.5)
-    doc.line(sA.x, sA.y, dax, day)
-    doc.line(sB.x, sB.y, dbx, dby)
-    doc.line(dax, day, dbx, dby)
 
-    // Arrowhead ticks at ends of measurement line
+    // Draw each line segment clipped to the panel bounding box
+    const seg1 = clipLine(sA.x, sA.y, dax, day, clipX, clipY, clipW, clipH)
+    if (seg1) doc.line(seg1[0], seg1[1], seg1[2], seg1[3])
+    const seg2 = clipLine(sB.x, sB.y, dbx, dby, clipX, clipY, clipW, clipH)
+    if (seg2) doc.line(seg2[0], seg2[1], seg2[2], seg2[3])
+    const seg3 = clipLine(dax, day, dbx, dby, clipX, clipY, clipW, clipH)
+    if (seg3) doc.line(seg3[0], seg3[1], seg3[2], seg3[3])
+
+    // Arrowhead ticks at ends of measurement line — only if endpoint is inside clip
     const mLen = Math.hypot(dbx - dax, dby - day)
-    if (mLen > 0.5) {
+    if (mLen > 0.5 && seg3) {
       const ux = (dbx - dax) / mLen, uy = (dby - day) / mLen
       const tw = Math.min(fontSize * 0.5, 4)
-      doc.line(dax, day, dax + ux * tw - uy * tw * 0.45, day + uy * tw + ux * tw * 0.45)
-      doc.line(dax, day, dax + ux * tw + uy * tw * 0.45, day + uy * tw - ux * tw * 0.45)
-      doc.line(dbx, dby, dbx - ux * tw - uy * tw * 0.45, dby - uy * tw + ux * tw * 0.45)
-      doc.line(dbx, dby, dbx - ux * tw + uy * tw * 0.45, dby - uy * tw - ux * tw * 0.45)
+      const [ax0, ay0, ax1, ay1, ax2, ay2] = [
+        dax, day, dax + ux * tw - uy * tw * 0.45, day + uy * tw + ux * tw * 0.45,
+                  dax + ux * tw + uy * tw * 0.45, day + uy * tw - ux * tw * 0.45,
+      ]
+      const [bx0, by0, bx1, by1, bx2, by2] = [
+        dbx, dby, dbx - ux * tw - uy * tw * 0.45, dby - uy * tw + ux * tw * 0.45,
+                  dbx - ux * tw + uy * tw * 0.45, dby - uy * tw - ux * tw * 0.45,
+      ]
+      const ta1 = clipLine(ax0, ay0, ax1, ay1, clipX, clipY, clipW, clipH)
+      if (ta1) doc.line(ta1[0], ta1[1], ta1[2], ta1[3])
+      const ta2 = clipLine(ax0, ay0, ax2, ay2, clipX, clipY, clipW, clipH)
+      if (ta2) doc.line(ta2[0], ta2[1], ta2[2], ta2[3])
+      const tb1 = clipLine(bx0, by0, bx1, by1, clipX, clipY, clipW, clipH)
+      if (tb1) doc.line(tb1[0], tb1[1], tb1[2], tb1[3])
+      const tb2 = clipLine(bx0, by0, bx2, by2, clipX, clipY, clipW, clipH)
+      if (tb2) doc.line(tb2[0], tb2[1], tb2[2], tb2[3])
     }
 
-    // Label — font/size must be set BEFORE getTextWidth so measurement is accurate
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    const labelW = doc.getTextWidth(d.label) + 4
-    const labelH = 5
-    // White background rect, centered on midpoint
-    doc.setFillColor(255, 255, 255)
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.2)
-    doc.rect(midX - labelW / 2, midY - labelH / 2, labelW, labelH, 'FD')
-    // Dark blue text centered on midpoint (baseline: middle anchors y at center)
-    doc.setTextColor(26, 58, 92)
-    doc.setFontSize(9)
-    doc.text(d.label, midX, midY, { align: 'center', baseline: 'middle' })
-    // Restore draw color for next iteration
+    // Label — only draw if center is inside clip bounds
+    const labelInside = midX >= clipX && midX <= clipX + clipW && midY >= clipY && midY <= clipY + clipH
+    if (labelInside) {
+      // font/size must be set BEFORE getTextWidth so measurement is accurate
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      const labelW = doc.getTextWidth(d.label) + 4
+      const labelH = 5
+      doc.setFillColor(255, 255, 255)
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.2)
+      doc.rect(midX - labelW / 2, midY - labelH / 2, labelW, labelH, 'FD')
+      doc.setTextColor(26, 58, 92)
+      doc.setFontSize(9)
+      doc.text(d.label, midX, midY, { align: 'center', baseline: 'middle' })
+    }
+    // Restore draw state for next iteration
     doc.setDrawColor(96, 165, 250)
     doc.setLineWidth(0.5)
   }
@@ -292,9 +344,9 @@ function drawViewInCell(
     }
   }
 
-  // Dimension lines (all orthographic views)
+  // Dimension lines (all orthographic views) clipped to this cell
   if (view !== 'isometric' && dimensions.length > 0) {
-    drawDimensionsOnView(doc, dimensions, view, toScreen, scale, cellW);
+    drawDimensionsOnView(doc, dimensions, view, toScreen, scale, cellW, cellX, cellY, cellW, cellH);
   }
 }
 
@@ -456,12 +508,12 @@ export function exportPDFFromImages(
     const imgY2 = imgAreaY + (imgAreaH - imgH) / 2
     doc.addImage(dataURL, 'PNG', imgX, imgY2, imgW, imgH)
 
-    // Draw dimension annotations on top of the image
+    // Draw dimension annotations clipped to this cell's area
     if (dimensions.length > 0) {
       const viewType = viewNameToType(name)
       if (viewType !== 'isometric') {
         const ts = computeToScreen(members, viewType, imgX, imgY2, imgW, imgH)
-        if (ts) drawDimensionsOnView(doc, dimensions, viewType, ts.toScreen, ts.scale, w)
+        if (ts) drawDimensionsOnView(doc, dimensions, viewType, ts.toScreen, ts.scale, w, x, y, w, h)
       }
     }
   }
