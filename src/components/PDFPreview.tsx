@@ -381,60 +381,166 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
 )
 PanelView.displayName = 'PanelView'
 
+// ─── Resizable divider ────────────────────────────────────────────────────────
+
+function Divider({
+  direction,
+  containerRef,
+  onDelta,
+}: {
+  direction: 'v' | 'h'
+  containerRef: React.RefObject<HTMLDivElement | null>
+  onDelta: (pct: number) => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const isDragging = useRef(false)
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const total = direction === 'v' ? rect.width : rect.height
+      const pos = direction === 'v' ? ev.clientX - rect.left : ev.clientY - rect.top
+      const pct = Math.max(20, Math.min(80, (pos / total) * 100))
+      onDelta(pct)
+    }
+    const onUp = () => {
+      isDragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const isV = direction === 'v'
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onMouseDown={handleMouseDown}
+      style={{
+        width: isV ? 6 : '100%',
+        height: isV ? '100%' : 6,
+        background: hovered ? '#f97316' : '#2e3350',
+        cursor: isV ? 'col-resize' : 'row-resize',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+        transition: 'background 0.15s',
+      }}
+    >
+      {/* Grip dots */}
+      <div style={{
+        display: 'flex',
+        flexDirection: isV ? 'column' : 'row',
+        gap: 3, pointerEvents: 'none',
+      }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: 3, height: 3, borderRadius: '50%',
+            background: hovered ? '#fff' : '#475569',
+          }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Layout helpers ───────────────────────────────────────────────────────────
 
-function PanelGrid({ count, panelRefs, members, dimensions, panels, onPanelChange }: {
+function PanelGrid({ count, panelRefs, members, dimensions, panels, onPanelChange, splitH, setSplitH, splitV, setSplitV }: {
   count: number
   panelRefs: React.RefObject<PanelHandle | null>[]
   members: Member[]
   dimensions: Dimension[]
   panels: PanelState[]
   onPanelChange: (i: number, s: Partial<PanelState>) => void
+  splitH: number
+  setSplitH: (v: number) => void
+  splitV: number
+  setSplitV: (v: number) => void
 }) {
-  const GAP = 8
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const panelProps = (i: number) => ({
+    ref: panelRefs[i] as React.RefObject<PanelHandle | null>,
+    panelIndex: i,
+    members,
+    dimensions,
+    state: panels[i],
+    onStateChange: (s: Partial<PanelState>) => onPanelChange(i, s),
+  })
 
   if (count === 1) {
     return (
       <div style={{ width: '100%', height: '100%' }}>
-        <PanelView ref={panelRefs[0]} panelIndex={0} members={members} dimensions={dimensions}
-          state={panels[0]} onStateChange={s => onPanelChange(0, s)} />
+        <PanelView {...panelProps(0)} />
       </div>
     )
   }
 
   if (count === 2) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, width: '100%', height: '100%' }}>
-        {[0, 1].map(i => (
-          <PanelView key={i} ref={panelRefs[i]} panelIndex={i} members={members} dimensions={dimensions}
-            state={panels[i]} onStateChange={s => onPanelChange(i, s)} />
-        ))}
+      <div ref={containerRef} style={{ display: 'flex', width: '100%', height: '100%' }}>
+        <div style={{ flex: `0 0 ${splitH}%`, minWidth: '20%', maxWidth: '80%', height: '100%' }}>
+          <PanelView {...panelProps(0)} />
+        </div>
+        <Divider direction='v' containerRef={containerRef} onDelta={setSplitH} />
+        <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
+          <PanelView {...panelProps(1)} />
+        </div>
       </div>
     )
   }
 
   if (count === 3) {
     return (
-      <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gap: GAP, width: '100%', height: '100%' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP }}>
-          {[0, 1].map(i => (
-            <PanelView key={i} ref={panelRefs[i]} panelIndex={i} members={members} dimensions={dimensions}
-              state={panels[i]} onStateChange={s => onPanelChange(i, s)} />
-          ))}
+      <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+        <div style={{ flex: `0 0 ${splitV}%`, minHeight: '20%', display: 'flex' }}>
+          <div style={{ flex: `0 0 ${splitH}%`, minWidth: '20%', maxWidth: '80%', height: '100%' }}>
+            <PanelView {...panelProps(0)} />
+          </div>
+          <Divider direction='v' containerRef={containerRef} onDelta={setSplitH} />
+          <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
+            <PanelView {...panelProps(1)} />
+          </div>
         </div>
-        <PanelView ref={panelRefs[2]} panelIndex={2} members={members} dimensions={dimensions}
-          state={panels[2]} onStateChange={s => onPanelChange(2, s)} />
+        <Divider direction='h' containerRef={containerRef} onDelta={setSplitV} />
+        <div style={{ flex: 1, minHeight: '20%' }}>
+          <PanelView {...panelProps(2)} />
+        </div>
       </div>
     )
   }
 
-  // 4 panels
+  // 4 panels — 2×2
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: GAP, width: '100%', height: '100%' }}>
-      {[0, 1, 2, 3].map(i => (
-        <PanelView key={i} ref={panelRefs[i]} panelIndex={i} members={members} dimensions={dimensions}
-          state={panels[i]} onStateChange={s => onPanelChange(i, s)} />
-      ))}
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+      <div style={{ flex: `0 0 ${splitV}%`, minHeight: '20%', display: 'flex' }}>
+        <div style={{ flex: `0 0 ${splitH}%`, minWidth: '20%', maxWidth: '80%', height: '100%' }}>
+          <PanelView {...panelProps(0)} />
+        </div>
+        <Divider direction='v' containerRef={containerRef} onDelta={setSplitH} />
+        <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
+          <PanelView {...panelProps(1)} />
+        </div>
+      </div>
+      <Divider direction='h' containerRef={containerRef} onDelta={setSplitV} />
+      <div style={{ flex: 1, minHeight: '20%', display: 'flex' }}>
+        <div style={{ flex: `0 0 ${splitH}%`, minWidth: '20%', maxWidth: '80%', height: '100%' }}>
+          <PanelView {...panelProps(2)} />
+        </div>
+        <Divider direction='v' containerRef={containerRef} onDelta={setSplitH} />
+        <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
+          <PanelView {...panelProps(3)} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -449,6 +555,8 @@ export default function PDFPreview() {
   const [panelCount, setPanelCount] = useState(4)
   const [panels, setPanels] = useState<PanelState[]>(DEFAULT_PANELS[4])
   const [loading, setLoading] = useState(false)
+  const [splitH, setSplitH] = useState(50)  // horizontal (column) split %
+  const [splitV, setSplitV] = useState(50)  // vertical (row) split %
 
   const panelRefs = [
     useRef<PanelHandle>(null),
@@ -570,6 +678,10 @@ export default function PDFPreview() {
           dimensions={dimensions}
           panels={activePanels}
           onPanelChange={handlePanelChange}
+          splitH={splitH}
+          setSplitH={setSplitH}
+          splitV={splitV}
+          setSplitV={setSplitV}
         />
       </div>
     </div>

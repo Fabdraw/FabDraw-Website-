@@ -341,6 +341,9 @@ export default function Canvas2D() {
     canvasX: number; canvasY: number; posAlongMember: number
   } | null>(null)
 
+  // Selected hole: { memberId, holeId } — separate from member selection
+  const [selectedHole, setSelectedHole] = useState<{ memberId: string; holeId: string } | null>(null)
+
   // Alignment guides state
   const [alignGuides, setAlignGuides] = useState<{ hLines: number[]; vLines: number[] }>({ hLines: [], vLines: [] })
 
@@ -548,6 +551,7 @@ export default function Canvas2D() {
         setSelectedIds([])
         setSelectedConnectionId(null)
         setSelectedDimensionId(null)
+        setSelectedHole(null)
         setDimState('IDLE')
         setDimPointA(null)
         setDimPointB(null)
@@ -559,6 +563,15 @@ export default function Canvas2D() {
       if (e.code === 'Delete' || e.code === 'Backspace') {
         // Don't delete if renaming
         if (renamingGroupId) return
+        if (selectedHole) {
+          const m = members.find(mb => mb.id === selectedHole.memberId)
+          if (m) {
+            push({ members, connections, dimensions, groupNames })
+            updateMember(m.id, { holes: m.holes.filter(h => h.id !== selectedHole.holeId) })
+          }
+          setSelectedHole(null)
+          return
+        }
         if (selectedDimensionId) {
           push({ members, connections, dimensions, groupNames })
           deleteDimension(selectedDimensionId)
@@ -611,11 +624,11 @@ export default function Canvas2D() {
     window.addEventListener('keyup', onUp)
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
   }, [
-    selectedIds, selectedConnectionId, selectedDimensionId, renamingGroupId,
+    selectedIds, selectedConnectionId, selectedDimensionId, selectedHole, renamingGroupId,
     members, connections, dimensions, groupNames,
     deleteMembers, deleteConnection, deleteDimension, groupMembers, ungroupMembers,
     setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
-    setConnectFirstMemberId, push,
+    setConnectFirstMemberId, push, updateMember,
   ])
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -705,6 +718,7 @@ export default function Canvas2D() {
       setSelectedIds([])
       setSelectedConnectionId(null)
       setSelectedDimensionId(null)
+      setSelectedHole(null)
       setContextMenu(null)
       setConnectFirstMemberId(null)
     }
@@ -857,6 +871,7 @@ export default function Canvas2D() {
     else setSelectedIds([id])
     setSelectedConnectionId(null)
     setSelectedDimensionId(null)
+    setSelectedHole(null)
     setContextMenu(null)
   }, [
     mode, connectFirstMemberId, setConnectFirstMemberId,
@@ -934,12 +949,14 @@ export default function Canvas2D() {
     setSelectedConnectionId(id)
     setSelectedIds([])
     setSelectedDimensionId(null)
+    setSelectedHole(null)
   }, [setSelectedConnectionId, setSelectedIds, setSelectedDimensionId])
 
   const handleDimensionClick = useCallback((id: string) => {
     setSelectedDimensionId(id)
     setSelectedIds([])
     setSelectedConnectionId(null)
+    setSelectedHole(null)
   }, [setSelectedDimensionId, setSelectedIds, setSelectedConnectionId])
 
   const handleConnectionDialogSelect = useCallback((type: 'weld' | 'bolted' | 'flanged') => {
@@ -1113,6 +1130,35 @@ export default function Canvas2D() {
             )
           })()}
 
+          {/* Holes — rendered above members, interactive */}
+          {members.flatMap(m =>
+            (m.holes || []).map(hole => {
+              const isSelected = selectedHole?.memberId === m.id && selectedHole?.holeId === hole.id
+              return (
+                <HoleNode
+                  key={`${m.id}-${hole.id}`}
+                  m={m} hole={hole} zoom={zoom} panX={panX} panY={panY}
+                  selected={isSelected}
+                  onSelect={() => {
+                    setSelectedHole({ memberId: m.id, holeId: hole.id })
+                    setSelectedIds([])
+                    setSelectedConnectionId(null)
+                    setSelectedDimensionId(null)
+                  }}
+                  onDelete={() => {
+                    push({ members, connections, dimensions, groupNames })
+                    updateMember(m.id, { holes: m.holes.filter(h => h.id !== hole.id) })
+                    setSelectedHole(null)
+                  }}
+                  onDragEnd={(pos) => {
+                    push({ members, connections, dimensions, groupNames })
+                    updateMember(m.id, { holes: m.holes.map(h => h.id === hole.id ? { ...h, positionAlongMember: pos } : h) })
+                  }}
+                />
+              )
+            })
+          )}
+
           {/* Hole placement preview circle */}
           {activeRightTab === 'holes' && selectedIds.length === 1 && holePlacePreview && (
             <Circle
@@ -1238,6 +1284,82 @@ export default function Canvas2D() {
   )
 }
 
+// ─── HoleNode — interactive hole circle at world coords ──────────────────────
+function HoleNode({
+  m, hole, zoom, panX, panY, selected,
+  onSelect, onDelete, onDragEnd,
+}: {
+  m: Member; hole: Hole; zoom: number; panX: number; panY: number
+  selected: boolean
+  onSelect: () => void
+  onDelete: () => void
+  onDragEnd: (posAlongMember: number) => void
+}) {
+  const R = (m.rotation.y * Math.PI) / 180
+  const cosR = Math.cos(R), sinR = Math.sin(R)
+  const startX = m.position.x - cosR * m.length / 2
+  const startY = m.position.y - sinR * m.length / 2
+  const hWorldX = startX + cosR * hole.positionAlongMember
+  const hWorldY = startY + sinR * hole.positionAlongMember
+  const hCx = wx2cx(hWorldX, zoom, panX)
+  const hCy = wy2cy(hWorldY, zoom, panY)
+  const r = Math.max(hole.diameter / 2 * zoom * SCALE, 3)
+
+  // Constrain drag to member axis, snap to quarter-points
+  const dragBoundFunc = (pos: { x: number; y: number }) => {
+    const wx = (pos.x - panX) / (zoom * SCALE)
+    const wy = (pos.y - panY) / (zoom * SCALE)
+    const vx = wx - startX, vy = wy - startY
+    let t = Math.max(0, Math.min(m.length, vx * cosR + vy * sinR))
+    // Snap to endpoint, quarter, midpoint, three-quarter, endpoint
+    const snapPts = [0, m.length * 0.25, m.length * 0.5, m.length * 0.75, m.length]
+    for (const sp of snapPts) {
+      if (Math.abs(t - sp) * zoom * SCALE < 10) { t = sp; break }
+    }
+    return {
+      x: (startX + cosR * t) * zoom * SCALE + panX,
+      y: (startY + sinR * t) * zoom * SCALE + panY,
+    }
+  }
+
+  return (
+    <Group>
+      <Circle
+        x={hCx} y={hCy} radius={r}
+        fill='rgba(0,0,0,0.82)'
+        stroke={selected ? '#f97316' : 'rgba(255,255,255,0.45)'}
+        strokeWidth={selected ? 2.5 : 1}
+        draggable={selected}
+        dragBoundFunc={selected ? dragBoundFunc : undefined}
+        onClick={(e) => { e.cancelBubble = true; onSelect() }}
+        onDragEnd={(e) => {
+          const wx = (e.target.x() - panX) / (zoom * SCALE)
+          const wy = (e.target.y() - panY) / (zoom * SCALE)
+          const vx = wx - startX, vy = wy - startY
+          const t = Math.max(0, Math.min(m.length, vx * cosR + vy * sinR))
+          onDragEnd(t)
+          // Reset to original; re-render will show new position from store
+          e.target.x(hCx)
+          e.target.y(hCy)
+        }}
+      />
+      {/* Delete button when selected */}
+      {selected && (
+        <Group
+          x={hCx + r + 3} y={hCy - r - 3}
+          onClick={(e) => { e.cancelBubble = true; onDelete() }}
+        >
+          <Circle radius={7} fill='#ef4444' listening />
+          <Text text='×' fontSize={12} fill='#fff'
+            align='center' verticalAlign='middle'
+            offsetX={3.5} offsetY={6}
+            listening={false} />
+        </Group>
+      )}
+    </Group>
+  )
+}
+
 // ---- MemberNode moved below to allow all helpers to be in scope ----
 function MemberNode({
   m, zoom, panX, panY, selected, connectHighlight,
@@ -1288,17 +1410,6 @@ function MemberNode({
       }}
     >
       <MemberShape m={m} zoom={zoom} selected={selected} />
-
-      {/* Holes */}
-      {m.holes.map(hole => {
-        const t = hole.positionAlongMember / m.length - 0.5
-        const hx = t * len
-        const r = Math.max(hole.diameter / 2 * zoom * SCALE, 2)
-        return (
-          <Circle key={hole.id} x={hx} y={0} radius={r}
-            fill='rgba(0,0,0,0.8)' stroke='rgba(255,255,255,0.6)' strokeWidth={1} listening={false} />
-        )
-      })}
 
       {/* Dimension label */}
       {showLabel && (
