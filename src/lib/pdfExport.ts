@@ -319,36 +319,64 @@ export function exportPDFFromImages(
   const drawX = 28
   const drawW = W - 56
 
-  const cellW = (drawW - GAP) / 2
-  const cellH = (drawH - GAP) / 2
+  const count = Math.min(capturedViews.length, 4)
 
-  const positions = [
-    { x: drawX,           y: drawY },
-    { x: drawX + cellW + GAP, y: drawY },
-    { x: drawX,           y: drawY + cellH + GAP },
-    { x: drawX + cellW + GAP, y: drawY + cellH + GAP },
-  ]
+  // Compute cell positions based on count
+  type CellRect = { x: number; y: number; w: number; h: number }
+  let cells: CellRect[] = []
 
-  for (let i = 0; i < Math.min(capturedViews.length, 4); i++) {
+  if (count === 1) {
+    cells = [{ x: drawX, y: drawY, w: drawW, h: drawH }]
+  } else if (count === 2) {
+    const cw = (drawW - GAP) / 2
+    cells = [
+      { x: drawX,           y: drawY, w: cw, h: drawH },
+      { x: drawX + cw + GAP, y: drawY, w: cw, h: drawH },
+    ]
+  } else if (count === 3) {
+    const cw = (drawW - GAP) / 2
+    const ch = (drawH - GAP) / 2
+    cells = [
+      { x: drawX,            y: drawY,          w: cw,     h: ch },
+      { x: drawX + cw + GAP, y: drawY,          w: cw,     h: ch },
+      { x: drawX,            y: drawY + ch + GAP, w: drawW, h: ch },
+    ]
+  } else {
+    const cw = (drawW - GAP) / 2
+    const ch = (drawH - GAP) / 2
+    cells = [
+      { x: drawX,            y: drawY,            w: cw, h: ch },
+      { x: drawX + cw + GAP, y: drawY,            w: cw, h: ch },
+      { x: drawX,            y: drawY + ch + GAP, w: cw, h: ch },
+      { x: drawX + cw + GAP, y: drawY + ch + GAP, w: cw, h: ch },
+    ]
+  }
+
+  for (let i = 0; i < count; i++) {
     const { name, dataURL } = capturedViews[i]
-    const { x, y } = positions[i]
+    const { x, y, w, h } = cells[i]
 
     // Cell border
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.5)
-    doc.rect(x, y, cellW, cellH)
+    doc.rect(x, y, w, h)
 
     // Label
     doc.setFontSize(7); doc.setFont('helvetica', 'bold')
     doc.setTextColor(60, 60, 60)
     doc.text(name, x + 6, y + 13)
 
-    // Image: fit square image into cell, centered, leaving room for label
-    const imgY = y + 18
-    const imgH = cellH - 22
-    const imgSize = Math.min(cellW - 4, imgH)
-    const imgX = x + (cellW - imgSize) / 2
-    doc.addImage(dataURL, 'PNG', imgX, imgY + (imgH - imgSize) / 2, imgSize, imgSize)
+    // Image: captured at 1200:900 aspect — fit into cell maintaining that ratio
+    const imgAreaY = y + 18
+    const imgAreaH = h - 22
+    // image is 1200×900 → aspect 4:3
+    const imgAspect = 1200 / 900
+    let imgW = w - 4
+    let imgH = imgW / imgAspect
+    if (imgH > imgAreaH) { imgH = imgAreaH; imgW = imgH * imgAspect }
+    const imgX = x + (w - imgW) / 2
+    const imgY2 = imgAreaY + (imgAreaH - imgH) / 2
+    doc.addImage(dataURL, 'PNG', imgX, imgY2, imgW, imgH)
   }
 
   // Page 2: BOM

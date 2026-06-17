@@ -426,11 +426,27 @@ export default function Canvas2D() {
     const GREEN = '#00ff41'
 
     ctx.strokeStyle = GREEN
+    ctx.fillStyle = GREEN
     ctx.lineWidth = 1.5
     ctx.setLineDash([])
 
-    // Green square marker for all snap types
-    ctx.strokeRect(scx - 5, scy - 5, 10, 10)
+    // Distinct marker per snap type
+    switch (snap.type) {
+      case 'endpoint':
+        ctx.fillRect(scx - 5, scy - 5, 10, 10)
+        break
+      case 'corner':
+        ctx.strokeRect(scx - 5, scy - 5, 10, 10)
+        break
+      case 'center':
+        ctx.beginPath(); ctx.arc(scx, scy, 6, 0, Math.PI * 2); ctx.stroke()
+        break
+      case 'midpoint':
+        ctx.beginPath(); ctx.moveTo(scx, scy - 7); ctx.lineTo(scx + 6, scy + 4); ctx.lineTo(scx - 6, scy + 4); ctx.closePath(); ctx.stroke()
+        break
+      default:
+        ctx.strokeRect(scx - 5, scy - 5, 10, 10)
+    }
 
     // Tooltip: dark bg + white label
     const LABELS: Record<string, string> = {
