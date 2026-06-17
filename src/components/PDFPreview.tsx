@@ -478,7 +478,7 @@ export default function PDFPreview() {
         const result = await panelRefs[i].current?.capture()
         if (result) views.push(result)
       }
-      const url = exportPDFFromImages(views, members, project.titleBlock, project.name)
+      const url = exportPDFFromImages(views, members, project.titleBlock, project.name, project.dimensions ?? [])
       window.open(url, '_blank')
       setShowPDFExportModal(false)
     } catch (err) {

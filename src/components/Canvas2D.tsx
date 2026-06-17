@@ -5,7 +5,7 @@ import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString } from '../lib/materials'
-import type { Member, Connection, Dimension } from '../types'
+import type { Member, Connection, Dimension, Hole } from '../types'
 import ConnectionDialog from './ConnectionDialog'
 import { useSnapEngine } from '../hooks/useSnapEngine'
 import type { SnapResult, SnapPoint } from '../hooks/useSnapEngine'
@@ -45,6 +45,18 @@ function formatDimension(totalInches: number): string {
     return `${feet}'`
   }
   return `${feet}'-${inches}"`
+}
+
+// Project a world point onto a member axis, returning position along member (from start) and distance from axis
+function projectOntoMember(m: Member, wx: number, wy: number): { posAlongMember: number; dist: number } {
+  const R = (m.rotation.y * Math.PI) / 180
+  const cosR = Math.cos(R), sinR = Math.sin(R)
+  const startX = m.position.x - cosR * m.length / 2
+  const startY = m.position.y - sinR * m.length / 2
+  const vx = wx - startX, vy = wy - startY
+  const t = Math.max(0, Math.min(m.length, vx * cosR + vy * sinR))
+  const cpx = startX + cosR * t, cpy = startY + sinR * t
+  return { posAlongMember: t, dist: Math.hypot(wx - cpx, wy - cpy) }
 }
 
 // Grid snap (0.25 inch)
@@ -313,6 +325,7 @@ export default function Canvas2D() {
     selectedDimensionId, setSelectedDimensionId,
     connectFirstMemberId, setConnectFirstMemberId,
     mode, setMode, setContextMenu,
+    activeRightTab,
   } = useUIStore()
   const { push } = useHistoryStore()
 
@@ -322,6 +335,11 @@ export default function Canvas2D() {
   const [dimPointA, setDimPointA] = useState<{ x: number; y: number } | null>(null)
   const [dimPointB, setDimPointB] = useState<{ x: number; y: number } | null>(null)
   const [dimMouse, setDimMouse] = useState<{ x: number; y: number } | null>(null)
+
+  // Hole placement preview — position in canvas coords + positionAlongMember in inches
+  const [holePlacePreview, setHolePlacePreview] = useState<{
+    canvasX: number; canvasY: number; posAlongMember: number
+  } | null>(null)
 
   // Alignment guides state
   const [alignGuides, setAlignGuides] = useState<{ hLines: number[]; vLines: number[] }>({ hLines: [], vLines: [] })
@@ -734,7 +752,37 @@ export default function Canvas2D() {
         setDimMouse({ x: cx2wx(pos.x, zoom, panX), y: cy2wy(pos.y, zoom, panY) })
       }
     }
-  }, [setPan, updateSnap, snapResultRef, mode, dimState, zoom, panX, panY])
+
+    // Hole placement preview when Holes tab is active and one member is selected
+    if (activeRightTab === 'holes' && selectedIds.length === 1 && pos) {
+      const sr = snapResultRef.current
+      const wx = sr.active ? sr.lockedX : cx2wx(pos.x, zoom, panX)
+      const wy = sr.active ? sr.lockedY : cy2wy(pos.y, zoom, panY)
+      const m = members.find(mb => mb.id === selectedIds[0])
+      if (m) {
+        const { width, height } = parseSizeString(m.type, m.size)
+        const threshold = Math.max(width, height) / 2 + 0.5
+        const { posAlongMember, dist } = projectOntoMember(m, wx, wy)
+        if (dist < threshold) {
+          const R = (m.rotation.y * Math.PI) / 180
+          const startX = m.position.x - Math.cos(R) * m.length / 2
+          const startY = m.position.y - Math.sin(R) * m.length / 2
+          const holeWorldX = startX + Math.cos(R) * posAlongMember
+          const holeWorldY = startY + Math.sin(R) * posAlongMember
+          setHolePlacePreview({
+            canvasX: wx2cx(holeWorldX, zoom, panX),
+            canvasY: wy2cy(holeWorldY, zoom, panY),
+            posAlongMember,
+          })
+        } else {
+          if (holePlacePreview !== null) setHolePlacePreview(null)
+        }
+      }
+    } else if (holePlacePreview !== null && !(activeRightTab === 'holes' && selectedIds.length === 1)) {
+      setHolePlacePreview(null)
+    }
+  }, [setPan, updateSnap, snapResultRef, mode, dimState, zoom, panX, panY,
+      activeRightTab, selectedIds, members, holePlacePreview])
 
   const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
@@ -780,6 +828,22 @@ export default function Canvas2D() {
   }, [setContextMenu])
 
   const handleMemberSelect = useCallback((id: string, shift: boolean) => {
+    // Holes tab: clicking the already-selected member places a hole at preview position
+    if (activeRightTab === 'holes' && selectedIds.includes(id) && holePlacePreview) {
+      const m = members.find(mb => mb.id === id)
+      if (m) {
+        push({ members, connections, dimensions, groupNames })
+        const newHole: Hole = {
+          id: crypto.randomUUID(),
+          type: 'circle',
+          diameter: 0.5,
+          positionAlongMember: holePlacePreview.posAlongMember,
+          face: 'top',
+        }
+        updateMember(id, { holes: [...(m.holes || []), newHole] })
+      }
+      return
+    }
     if (mode === 'connect') {
       if (!connectFirstMemberId) {
         setConnectFirstMemberId(id)
@@ -798,6 +862,8 @@ export default function Canvas2D() {
     mode, connectFirstMemberId, setConnectFirstMemberId,
     toggleSelectedId, setSelectedIds, setSelectedConnectionId,
     setSelectedDimensionId, setContextMenu,
+    activeRightTab, selectedIds, holePlacePreview, members, connections, dimensions, groupNames,
+    push, updateMember,
   ])
 
   const handleMemberContextMenu = useCallback((id: string, x: number, y: number) => {
@@ -921,6 +987,7 @@ export default function Canvas2D() {
   if (mode === 'pan' || spaceDown.current) cursor = 'grab'
   else if (mode === 'dimension') cursor = 'crosshair'
   else if (mode === 'connect') cursor = 'cell'
+  else if (activeRightTab === 'holes' && selectedIds.length === 1 && holePlacePreview) cursor = 'crosshair'
 
   return (
     <div
@@ -1045,6 +1112,20 @@ export default function Canvas2D() {
               </>
             )
           })()}
+
+          {/* Hole placement preview circle */}
+          {activeRightTab === 'holes' && selectedIds.length === 1 && holePlacePreview && (
+            <Circle
+              x={holePlacePreview.canvasX}
+              y={holePlacePreview.canvasY}
+              radius={Math.max(6 * zoom, 4)}
+              stroke='#f97316'
+              strokeWidth={2}
+              fill='rgba(249,115,22,0.2)'
+              dash={[4, 3]}
+              listening={false}
+            />
+          )}
 
           {/* Connect mode first member indicator */}
           {mode === 'connect' && connectFirstMemberId && (() => {

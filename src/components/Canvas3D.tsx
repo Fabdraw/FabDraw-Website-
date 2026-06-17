@@ -173,7 +173,7 @@ function MemberMesh({
   const activeGeo = isUpright ? uprightGeo ?? geo : geo
 
   const holeGeos = useMemo(() => m.holes.map(hole => ({
-    geo: new THREE.CylinderGeometry(hole.diameter / 2, hole.diameter / 2, Math.max(width, height) + 0.2, 16),
+    geo: new THREE.CylinderGeometry(hole.diameter / 2, hole.diameter / 2, Math.max(width, height) * 1.1, 16),
     posInches: hole.positionAlongMember,
     id: hole.id,
   })), [m.holes, width, height])
@@ -202,8 +202,13 @@ function MemberMesh({
         <lineBasicMaterial color={selected ? '#ff8800' : hexColor.clone().multiplyScalar(0.6)} />
       </lineSegments>
       {holeGeos.map(({ geo: hGeo, posInches, id }) => (
-        <mesh key={id} geometry={hGeo} position={[-m.length / 2 + posInches, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <meshPhongMaterial color='#111111' />
+        <mesh
+          key={id}
+          geometry={hGeo}
+          position={isUpright ? [0, -m.length / 2 + posInches, 0] : [-m.length / 2 + posInches, 0, 0]}
+          rotation={isUpright ? [0, 0, Math.PI / 2] : [0, 0, 0]}
+        >
+          <meshPhongMaterial color='#0a0f1a' />
         </mesh>
       ))}
     </group>

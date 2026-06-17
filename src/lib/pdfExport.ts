@@ -49,6 +49,97 @@ const isoProj   = (p: Pt3): Pt2 => ({
   y: -p.y + (p.x + p.z) * Math.sin(Math.PI / 6),
 });
 
+function viewNameToType(name: string): ViewType {
+  if (name.includes('FRONT')) return 'front'
+  if (name.includes('SIDE')) return 'side'
+  if (name.includes('ISO')) return 'isometric'
+  return 'top'
+}
+
+function computeToScreen(
+  members: Member[], view: ViewType,
+  areaX: number, areaY: number, areaW: number, areaH: number,
+): { toScreen: (p: Pt2) => Pt2; scale: number } | null {
+  if (members.length === 0) return null
+  const projFn = view === 'top' ? topProj : view === 'front' ? frontProj : view === 'side' ? sideProj : isoProj
+  const allPts: Pt2[] = []
+  for (const m of members) {
+    const { start3, end3 } = get3DEndpoints(m)
+    allPts.push(projFn(start3), projFn(end3))
+    if (view === 'isometric') {
+      const { width } = parseSizeString(m.type, m.size)
+      const hw = (parseFloat(m.size) || width) / 2
+      const corners: Pt3[] = [
+        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
+        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
+        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
+        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
+      ]
+      corners.forEach(c => allPts.push(isoProj(c)))
+    }
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const p of allPts) {
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y)
+  }
+  const bw = (maxX - minX) || 1, bh = (maxY - minY) || 1
+  const scale = Math.min(areaW / (bw + 4), areaH / (bh + 4), 20)
+  const offX = areaX + (areaW - bw * scale) / 2 - minX * scale
+  const offY = areaY + (areaH - bh * scale) / 2 - minY * scale
+  return { toScreen: (p: Pt2) => ({ x: p.x * scale + offX, y: p.y * scale + offY }), scale }
+}
+
+function drawDimensionsOnView(
+  doc: jsPDF,
+  dimensions: Dimension[],
+  view: ViewType,
+  toScreen: (p: Pt2) => Pt2,
+  scale: number,
+  cellW: number,
+) {
+  const fontSize = Math.min(12, Math.max(8, cellW / 55))
+  const projFn = view === 'top' ? topProj : view === 'front' ? frontProj : view === 'side' ? sideProj : isoProj
+
+  for (const d of dimensions) {
+    if (!d.pointA || !d.pointB || !d.offsetDirection) continue
+    const sA = toScreen(projFn({ x: d.pointA.x, y: 0, z: d.pointA.y }))
+    const sB = toScreen(projFn({ x: d.pointB.x, y: 0, z: d.pointB.y }))
+    const off = d.offsetDistance * scale
+    const dax = sA.x + d.offsetDirection.x * off, day = sA.y + d.offsetDirection.y * off
+    const dbx = sB.x + d.offsetDirection.x * off, dby = sB.y + d.offsetDirection.y * off
+    const midX = (dax + dbx) / 2, midY = (day + dby) / 2
+
+    doc.setDrawColor(96, 165, 250)
+    doc.setLineWidth(0.5)
+    doc.line(sA.x, sA.y, dax, day)
+    doc.line(sB.x, sB.y, dbx, dby)
+    doc.line(dax, day, dbx, dby)
+
+    // Arrowhead ticks at ends of measurement line
+    const mLen = Math.hypot(dbx - dax, dby - day)
+    if (mLen > 0.5) {
+      const ux = (dbx - dax) / mLen, uy = (dby - day) / mLen
+      const tw = Math.min(fontSize * 0.5, 4)
+      doc.line(dax, day, dax + ux * tw - uy * tw * 0.45, day + uy * tw + ux * tw * 0.45)
+      doc.line(dax, day, dax + ux * tw + uy * tw * 0.45, day + uy * tw - ux * tw * 0.45)
+      doc.line(dbx, dby, dbx - ux * tw - uy * tw * 0.45, dby - uy * tw + ux * tw * 0.45)
+      doc.line(dbx, dby, dbx - ux * tw + uy * tw * 0.45, dby - uy * tw - ux * tw * 0.45)
+    }
+
+    // White background rect behind label
+    doc.setFontSize(fontSize)
+    doc.setFont('helvetica', 'normal')
+    const textW = doc.getTextWidth(d.label) + 5
+    const textH = fontSize * 0.45 + 2
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(255, 255, 255)
+    doc.rect(midX - textW / 2, midY - textH, textW, textH + 1, 'F')
+    doc.setTextColor(96, 165, 250)
+    doc.text(d.label, midX, midY - 1, { align: 'center' })
+  }
+}
+
 function drawPoly(
   doc: jsPDF,
   pts: Pt2[],
@@ -194,26 +285,9 @@ function drawViewInCell(
     }
   }
 
-  // Dimension lines (top view only)
-  if (view === 'top') {
-    for (const d of dimensions) {
-      const sA = toScreen(topProj({ x: d.pointA.x, y: 0, z: d.pointA.y }));
-      const sB = toScreen(topProj({ x: d.pointB.x, y: 0, z: d.pointB.y }));
-      const off = d.offsetDistance * scale;
-      const dax = sA.x + d.offsetDirection.x * off, day = sA.y + d.offsetDirection.y * off;
-      const dbx = sB.x + d.offsetDirection.x * off, dby = sB.y + d.offsetDirection.y * off;
-      doc.setDrawColor(96, 165, 250);
-      doc.setLineWidth(0.6);
-      // Extension lines
-      doc.line(sA.x, sA.y, dax, day);
-      doc.line(sB.x, sB.y, dbx, dby);
-      // Measurement line
-      doc.line(dax, day, dbx, dby);
-      doc.setFontSize(5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(96, 165, 250);
-      doc.text(d.label, (dax + dbx) / 2, (day + dby) / 2 - 2, { align: 'center' });
-    }
+  // Dimension lines (all orthographic views)
+  if (view !== 'isometric' && dimensions.length > 0) {
+    drawDimensionsOnView(doc, dimensions, view, toScreen, scale, cellW);
   }
 }
 
@@ -224,6 +298,7 @@ export function exportPDFFromImages(
   members: Member[],
   titleBlock: TitleBlock,
   projectName: string,
+  dimensions: Dimension[] = [],
 ): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
   const W = doc.internal.pageSize.getWidth()   // 792
@@ -373,6 +448,15 @@ export function exportPDFFromImages(
     const imgX = x + (w - imgW) / 2
     const imgY2 = imgAreaY + (imgAreaH - imgH) / 2
     doc.addImage(dataURL, 'PNG', imgX, imgY2, imgW, imgH)
+
+    // Draw dimension annotations on top of the image
+    if (dimensions.length > 0) {
+      const viewType = viewNameToType(name)
+      if (viewType !== 'isometric') {
+        const ts = computeToScreen(members, viewType, imgX, imgY2, imgW, imgH)
+        if (ts) drawDimensionsOnView(doc, dimensions, viewType, ts.toScreen, ts.scale, w)
+      }
+    }
   }
 
   // Page 2: BOM
