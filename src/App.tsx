@@ -17,8 +17,8 @@ import { useUIStore } from './store/uiStore';
 import { useHistoryStore } from './store/historyStore';
 
 export default function App() {
-  const { project, setProject, addMember, deleteMembers } = useProjectStore();
-  const { members, connections } = project;
+  const { project, setProject, addMember } = useProjectStore();
+  const { members, connections, dimensions, groupNames } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
     showTitleBlockModal, showAIModal, showPhotoModal, showTemplateModal,
@@ -27,6 +27,7 @@ export default function App() {
     clipboard, setClipboard,
     zoom, setZoom, setPan,
   } = useUIStore();
+  const prevModeRef = React.useRef(mode);
   const { undo, redo, push } = useHistoryStore();
 
   // Keyboard shortcuts
@@ -45,7 +46,7 @@ export default function App() {
         if (e.key === '3') { setMode('connect'); return; }
         if (e.key === 'd' || e.key === 'D') { setMode('dimension'); return; }
         if (e.key === 'c' || e.key === 'C') { setMode('connect'); return; }
-        if (e.key === 'h' || e.key === 'H' || e.key === ' ') { e.preventDefault(); setMode('pan'); return; }
+        if (e.key === 'h' || e.key === 'H' || e.key === ' ') { e.preventDefault(); prevModeRef.current = mode; setMode('pan'); return; }
         if (e.key === 'f' || e.key === 'F') {
           // Fit view — same logic as Toolbar handleFitView
           if (members.length === 0) { setZoom(1); setPan(200, 200); return; }
@@ -74,13 +75,13 @@ export default function App() {
       if (ctrl && e.shiftKey && e.key === 'z') {
         e.preventDefault();
         const snap = redo();
-        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections });
+        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections, dimensions: snap.dimensions ?? project.dimensions, groupNames: snap.groupNames ?? project.groupNames });
         return;
       }
       if (ctrl && e.key === 'z') {
         e.preventDefault();
         const snap = undo();
-        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections });
+        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections, dimensions: snap.dimensions ?? project.dimensions, groupNames: snap.groupNames ?? project.groupNames });
         return;
       }
 
@@ -92,7 +93,7 @@ export default function App() {
       if (ctrl && e.key === 'v') {
         e.preventDefault();
         if (clipboard.length > 0) {
-          push({ members, connections });
+          push({ members, connections, dimensions, groupNames });
           const newMembers = clipboard.map((m) => ({
             ...m,
             id: crypto.randomUUID(),
@@ -111,7 +112,7 @@ export default function App() {
       if (ctrl && e.key === 'd') {
         e.preventDefault();
         if (selectedIds.length > 0) {
-          push({ members, connections });
+          push({ members, connections, dimensions, groupNames });
           const duped = members
             .filter((m) => selectedIds.includes(m.id))
             .map((m) => ({
@@ -125,16 +126,10 @@ export default function App() {
         return;
       }
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
-        push({ members, connections });
-        deleteMembers(selectedIds);
-        setSelectedIds([]);
-        return;
-      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === ' ' && mode === 'pan') setMode('select');
+      if (e.key === ' ' && mode === 'pan') setMode(prevModeRef.current === 'pan' ? 'select' : prevModeRef.current);
     };
 
     window.addEventListener('keydown', handleKey);
@@ -145,7 +140,7 @@ export default function App() {
     };
   }, [mode, selectedIds, members, connections, clipboard, zoom,
     setMode, setSelectedIds, setZoom, setPan, setClipboard, setContextMenu,
-    undo, redo, push, addMember, deleteMembers, setProject, project]);
+    undo, redo, push, addMember, setProject, project, dimensions, groupNames]);
 
   return (
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">

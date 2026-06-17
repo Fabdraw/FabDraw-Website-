@@ -359,6 +359,7 @@ export default function Canvas2D() {
 
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
+  const grabOffsetRef = useRef<{ wx: number; wy: number }>({ wx: 0, wy: 0 })
 
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
@@ -400,12 +401,13 @@ export default function Canvas2D() {
     const cx = member.position.x, cy = member.position.y
     const start = { x: cx - cos * halfLen, y: cy - sin * halfLen }
     const end   = { x: cx + cos * halfLen, y: cy + sin * halfLen }
-    const size = parseFloat(member.size) / 2
-    const px = -sin * size, py = cos * size
+    const { height } = parseSizeString(member.type, member.size)
+    const halfH = height / 2
+    const px = -sin * halfH, py = cos * halfH
     return [
       { ...start, type: 'endpoint' },
       { ...end,   type: 'endpoint' },
-      { x: cx, y: cy, type: 'midpoint' },
+      { x: cx, y: cy, type: 'center' },
       { x: start.x + px, y: start.y + py, type: 'corner' },
       { x: start.x - px, y: start.y - py, type: 'corner' },
       { x: end.x + px,   y: end.y + py,   type: 'corner' },
@@ -657,8 +659,8 @@ export default function Canvas2D() {
     if (snapLayer) {
       snapLayer.destroyChildren()
       if (closest) {
-        const sx = closest.x * zoom * SCALE + panX
-        const sy = closest.y * zoom * SCALE + panY
+        const sx = wx2cx(closest.x, zoom, panX)
+        const sy = wy2cy(closest.y, zoom, panY)
         const stageW = stage!.width()
         const stageH = stage!.height()
 
@@ -667,8 +669,8 @@ export default function Canvas2D() {
 
         if (closest.type === 'endpoint' || closest.type === 'corner') {
           snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (closest.type === 'midpoint') {
-          snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
+        } else if (closest.type === 'midpoint' || closest.type === 'center') {
+          snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
         } else if (closest.type === 'intersection') {
           snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
           snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
@@ -825,9 +827,10 @@ export default function Canvas2D() {
     setContextMenu({ x, y, type: 'member', memberId: id })
   }, [selectedIds, setSelectedIds, setContextMenu])
 
-  const handleMemberDragStart = useCallback((id: string) => {
+  const handleMemberDragStart = useCallback((id: string, grabWx: number, grabWy: number) => {
     // Clear snap indicators during drag
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
+    grabOffsetRef.current = { wx: grabWx, wy: grabWy }
     const sl = snapLayerRef.current
     if (sl) { sl.destroyChildren(); sl.batchDraw() }
     // Record offsets for all selected members relative to dragged member
@@ -848,14 +851,53 @@ export default function Canvas2D() {
   }, [members, selectedIds])
 
   const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {
-    // No state updates here — any React re-render during a Konva drag resets the
-    // Konva node's x/y props to the store position, causing the member to jump.
-  }, [])
+    // Run snap detection via stage pointer — no React state updates to avoid jump
+    const snapLayer = snapLayerRef.current
+    if (!snapLayer) return
+    const stage = snapLayer.getStage()
+    const ptr = stage?.getPointerPosition()
+    if (!ptr) return
+    const worldX = cx2wx(ptr.x, zoom, panX)
+    const worldY = cy2wy(ptr.y, zoom, panY)
+    const aperture = 14 / zoom
+    const allSnapPoints = [
+      ...members.flatMap(m => getSnapPoints(m)),
+      ...findIntersections(members),
+    ]
+    let closest: { x: number; y: number; type: string } | null = null
+    let minDist = aperture
+    for (const pt of allSnapPoints) {
+      const dist = Math.hypot(pt.x - worldX, pt.y - worldY)
+      if (dist < minDist) { minDist = dist; closest = pt }
+    }
+    snapLayer.destroyChildren()
+    if (closest) {
+      const sx = wx2cx(closest.x, zoom, panX)
+      const sy = wy2cy(closest.y, zoom, panY)
+      const stageW = stage!.width()
+      const stageH = stage!.height()
+      snapLayer.add(new Konva.Line({ points: [0, sy, stageW, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
+      snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
+      if (closest.type === 'endpoint' || closest.type === 'corner') {
+        snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
+      } else if (closest.type === 'midpoint' || closest.type === 'center') {
+        snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
+      } else if (closest.type === 'intersection') {
+        snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
+        snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
+      }
+      snapResultRef.current = { active: true, worldX: closest.x, worldY: closest.y }
+    } else {
+      snapResultRef.current = { active: false, worldX, worldY }
+    }
+    snapLayer.batchDraw()
+  }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
     const sr = snapResultRef.current
-    const snappedX = sr.active ? sr.worldX : snapToGrid(cx2wx(canvasX, zoom, panX))
-    const snappedY = sr.active ? sr.worldY : snapToGrid(cy2wy(canvasY, zoom, panY))
+    const go = grabOffsetRef.current
+    const snappedX = sr.active ? sr.worldX - go.wx : snapToGrid(cx2wx(canvasX, zoom, panX))
+    const snappedY = sr.active ? sr.worldY - go.wy : snapToGrid(cy2wy(canvasY, zoom, panY))
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
 
     push({ members, connections, dimensions, groupNames })
@@ -977,6 +1019,7 @@ export default function Canvas2D() {
             <MemberNode
               key={m.id}
               m={m}
+              mode={mode}
               zoom={zoom}
               panX={panX}
               panY={panY}
@@ -1272,10 +1315,11 @@ function HoleNode({
 
 // ---- MemberNode moved below to allow all helpers to be in scope ----
 function MemberNode({
-  m, zoom, panX, panY, selected, connectHighlight,
+  m, mode, zoom, panX, panY, selected, connectHighlight,
   onSelect, onContextMenu, onDragStart, onDragMove, onDragEnd,
 }: {
   m: Member
+  mode: string
   zoom: number
   panX: number
   panY: number
@@ -1283,7 +1327,7 @@ function MemberNode({
   connectHighlight: boolean
   onSelect: (id: string, shift: boolean) => void
   onContextMenu: (id: string, x: number, y: number) => void
-  onDragStart: (id: string) => void
+  onDragStart: (id: string, grabWx: number, grabWy: number) => void
   onDragMove: (id: string, cx: number, cy: number) => void
   onDragEnd: (id: string, cx: number, cy: number) => void
 }) {
@@ -1301,7 +1345,7 @@ function MemberNode({
       x={cx}
       y={cy}
       rotation={angle}
-      draggable
+      draggable={mode === 'select'}
       onClick={(e) => {
         e.cancelBubble = true
         onSelect(m.id, e.evt.shiftKey)
@@ -1311,7 +1355,14 @@ function MemberNode({
         e.cancelBubble = true
         onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
       }}
-      onDragStart={() => onDragStart(m.id)}
+      onDragStart={(e) => {
+        const stage = e.target.getStage()
+        const ptr = stage?.getPointerPosition()
+        const gx = e.target.x(), gy = e.target.y()
+        const grabWx = ptr ? (ptr.x - gx) / zoom / SCALE : 0
+        const grabWy = ptr ? (ptr.y - gy) / zoom / SCALE : 0
+        onDragStart(m.id, grabWx, grabWy)
+      }}
       onDragMove={(e) => onDragMove(m.id, e.target.x(), e.target.y())}
       onDragEnd={(e) => {
         onDragEnd(m.id, e.target.x(), e.target.y())

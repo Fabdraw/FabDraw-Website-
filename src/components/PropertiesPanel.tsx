@@ -17,7 +17,7 @@ const GRADE_LABELS: Record<Grade, string> = {
 
 export default function PropertiesPanel() {
   const { project, updateMember, deleteMembers, deleteConnection } = useProjectStore();
-  const { members, connections } = project;
+  const { members, connections, dimensions, groupNames } = project;
   const { selectedIds, selectedConnectionId, activeRightTab, setActiveRightTab, setSelectedIds } = useUIStore();
   const historyStore = useHistoryStore();
 
@@ -70,7 +70,7 @@ export default function PropertiesPanel() {
           className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item"
           style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
           onClick={() => {
-            historyStore.push({ members, connections });
+            historyStore.push({ members, connections, dimensions, groupNames });
             deleteMembers(selectedIds);
             setSelectedIds([]);
           }}
@@ -368,7 +368,7 @@ export default function PropertiesPanel() {
               className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item mt-1"
               style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
               onClick={() => {
-                historyStore.push({ members, connections });
+                historyStore.push({ members, connections, dimensions, groupNames });
                 deleteMembers([selectedMember.id]);
                 setSelectedIds([]);
               }}
