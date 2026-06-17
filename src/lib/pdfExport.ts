@@ -221,6 +221,177 @@ function drawViewInCell(
   }
 }
 
+export interface CapturedView { name: string; dataURL: string }
+
+export function exportPDFFromImages(
+  capturedViews: CapturedView[],
+  members: Member[],
+  titleBlock: TitleBlock,
+  projectName: string,
+): string {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
+  const W = doc.internal.pageSize.getWidth()   // 792
+  const H = doc.internal.pageSize.getHeight()  // 612
+
+  // White background
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, W, H, 'F')
+
+  // Outer border
+  doc.setDrawColor(201, 64, 16)
+  doc.setLineWidth(2)
+  doc.rect(20, 20, W - 40, H - 40)
+
+  // Title block (60pt high at bottom)
+  const tbH = 60
+  const tbY = H - 20 - tbH
+  doc.setFillColor(245, 245, 245)
+  doc.rect(20, tbY, W - 40, tbH, 'F')
+  doc.setDrawColor(201, 64, 16)
+  doc.setLineWidth(1)
+  doc.line(20, tbY, W - 20, tbY)
+
+  const colW = (W - 40) / 6
+  doc.setTextColor(201, 64, 16)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text(titleBlock.company || 'FabDraw', 30, tbY + 16)
+
+  doc.setTextColor(60, 60, 60)
+  doc.setFontSize(7)
+  doc.setFont('helvetica', 'normal')
+  doc.text(titleBlock.address || '', 30, tbY + 26)
+  doc.text((titleBlock.phone || '') + (titleBlock.web ? '  |  ' + titleBlock.web : ''), 30, tbY + 36)
+
+  const pCol = 20 + colW * 1.5
+  doc.setDrawColor(200, 200, 200)
+  doc.line(pCol, tbY, pCol, tbY + tbH)
+  doc.setTextColor(100, 100, 100)
+  doc.setFontSize(7)
+  doc.text('PROJECT', pCol + 8, tbY + 13)
+  doc.setTextColor(20, 20, 20)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.text((titleBlock.project || projectName).substring(0, 35), pCol + 8, tbY + 24)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(60, 60, 60)
+  doc.text((titleBlock.description || '').substring(0, 50), pCol + 8, tbY + 35)
+
+  const dCol = 20 + colW * 3.2
+  doc.line(dCol, tbY, dCol, tbY + tbH)
+  doc.setTextColor(100, 100, 100); doc.setFontSize(7)
+  doc.text('DRAWN BY', dCol + 8, tbY + 13)
+  doc.setTextColor(20, 20, 20); doc.setFontSize(8)
+  doc.text(titleBlock.drawnBy || '—', dCol + 8, tbY + 24)
+
+  const sCol = 20 + colW * 4.2
+  doc.line(sCol, tbY, sCol, tbY + tbH)
+  doc.setTextColor(100, 100, 100); doc.setFontSize(7)
+  doc.text('DATE', sCol + 8, tbY + 13)
+  doc.setTextColor(20, 20, 20); doc.setFontSize(8)
+  doc.text(titleBlock.date || '', sCol + 8, tbY + 24)
+  doc.setTextColor(100, 100, 100); doc.setFontSize(7)
+  doc.text('SCALE', sCol + 8, tbY + 36)
+  doc.setTextColor(20, 20, 20); doc.setFontSize(8)
+  doc.text(titleBlock.scale || '1:1', sCol + 8, tbY + 47)
+
+  const rCol = 20 + colW * 5.1
+  doc.line(rCol, tbY, rCol, tbY + tbH)
+  doc.setTextColor(100, 100, 100); doc.setFontSize(7)
+  doc.text('DWG NO', rCol + 8, tbY + 13)
+  doc.setTextColor(20, 20, 20); doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.text(titleBlock.dwgNo || 'DWG-001', rCol + 8, tbY + 24)
+  doc.setTextColor(201, 64, 16); doc.setFontSize(13)
+  doc.text(titleBlock.revision || 'A', rCol + 8, tbY + 48)
+
+  // Title line
+  doc.setTextColor(201, 64, 16); doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+  doc.text(projectName, 30, 50)
+  doc.setTextColor(100, 100, 100); doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+  doc.text('FABRICATION DRAWING  •  3D VIEWS', 30, 62)
+
+  // Drawing area: from y=72 to tbY-4
+  const GAP = 8
+  const drawY = 72
+  const drawH = tbY - 4 - drawY
+  const drawX = 28
+  const drawW = W - 56
+
+  const cellW = (drawW - GAP) / 2
+  const cellH = (drawH - GAP) / 2
+
+  const positions = [
+    { x: drawX,           y: drawY },
+    { x: drawX + cellW + GAP, y: drawY },
+    { x: drawX,           y: drawY + cellH + GAP },
+    { x: drawX + cellW + GAP, y: drawY + cellH + GAP },
+  ]
+
+  for (let i = 0; i < Math.min(capturedViews.length, 4); i++) {
+    const { name, dataURL } = capturedViews[i]
+    const { x, y } = positions[i]
+
+    // Cell border
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.5)
+    doc.rect(x, y, cellW, cellH)
+
+    // Label
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold')
+    doc.setTextColor(60, 60, 60)
+    doc.text(name, x + 6, y + 13)
+
+    // Image: fit square image into cell, centered, leaving room for label
+    const imgY = y + 18
+    const imgH = cellH - 22
+    const imgSize = Math.min(cellW - 4, imgH)
+    const imgX = x + (cellW - imgSize) / 2
+    doc.addImage(dataURL, 'PNG', imgX, imgY + (imgH - imgSize) / 2, imgSize, imgSize)
+  }
+
+  // Page 2: BOM
+  doc.addPage()
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F')
+  doc.setDrawColor(201, 64, 16); doc.setLineWidth(2); doc.rect(20, 20, W - 40, H - 40)
+  doc.setTextColor(201, 64, 16); doc.setFontSize(16); doc.setFont('helvetica', 'bold')
+  doc.text('BILL OF MATERIALS', 30, 55)
+  doc.setTextColor(80, 80, 80); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+  doc.text(projectName, 30, 70)
+  doc.text(`Total Weight: ${formatWeight(totalWeight(members))}`, W - 30, 55, { align: 'right' })
+  doc.text(`${members.length} member${members.length !== 1 ? 's' : ''}`, W - 30, 70, { align: 'right' })
+
+  const cols = [30, 120, 220, 310, 390, 460, 570, 660]
+  const headers = ['#', 'TYPE', 'SIZE', 'WALL', 'GRADE', 'LENGTH', 'QTY', 'WEIGHT']
+  let rowY = 100
+  doc.setFillColor(240, 240, 240); doc.rect(25, rowY - 12, W - 50, 18, 'F')
+  doc.setTextColor(80, 80, 80); doc.setFontSize(8); doc.setFont('helvetica', 'bold')
+  headers.forEach((h, i) => doc.text(h, cols[i], rowY))
+  rowY += 12; doc.setFont('helvetica', 'normal')
+
+  const bomMap = new Map<string, { member: Member; qty: number; totalWeight: number }>()
+  for (const m of members) {
+    const key = `${m.type}|${m.size}|${m.wallThickness}|${m.grade}|${Math.round(m.length * 100)}`
+    const ex = bomMap.get(key)
+    if (ex) { ex.qty++; ex.totalWeight += calcWeight(m) }
+    else bomMap.set(key, { member: m, qty: 1, totalWeight: calcWeight(m) })
+  }
+
+  let idx = 0
+  for (const { member, qty, totalWeight: tw } of bomMap.values()) {
+    const mat = MATERIALS[member.type]
+    if (idx % 2 === 0) { doc.setFillColor(248, 248, 248); doc.rect(25, rowY - 10, W - 50, 16, 'F') }
+    doc.setTextColor(40, 40, 40); doc.setFontSize(8)
+    const row = [String(idx + 1), mat.label, `${member.size}"`, `${member.wallThickness}"`, member.grade, inchesToFtIn(member.length), String(qty), formatWeight(tw)]
+    row.forEach((v, ci) => doc.text(v, cols[ci], rowY))
+    rowY += 16; idx++
+    if (rowY > H - 60) break
+  }
+
+  return URL.createObjectURL(doc.output('blob'))
+}
+
 export function exportPDF(
   members: Member[],
   titleBlock: TitleBlock,

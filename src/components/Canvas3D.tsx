@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback, useEffect } from 'react'
+import React, { useRef, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
@@ -482,6 +482,75 @@ function Scene() {
   )
 }
 
+export interface CapturedView { name: string; dataURL: string }
+export interface Canvas3DHandle { captureViews(): Promise<CapturedView[]> }
+
+const ViewCapturer = forwardRef<Canvas3DHandle, { members: Member[] }>(({ members }, ref) => {
+  const { gl, scene, camera } = useThree()
+
+  useImperativeHandle(ref, () => ({
+    captureViews: () => new Promise<CapturedView[]>((resolve) => {
+      if (members.length === 0) { resolve([]); return }
+
+      // Compute 3D bounding box (Three.js space: X=pos.x, Y=pos.z height, Z=pos.y)
+      let minX = Infinity, minY = Infinity, minZ = Infinity
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
+      for (const m of members) {
+        const hw = m.length / 2
+        const isUpright = Math.abs(m.rotation.x) >= 45
+        const posY = isUpright ? (m.position.z ?? 0) + m.length / 2 : (m.position.z ?? 0)
+        minX = Math.min(minX, m.position.x - hw); maxX = Math.max(maxX, m.position.x + hw)
+        minZ = Math.min(minZ, m.position.y - hw); maxZ = Math.max(maxZ, m.position.y + hw)
+        minY = Math.min(minY, posY - hw);          maxY = Math.max(maxY, posY + hw)
+      }
+      const cx = (minX + maxX) / 2
+      const cy = (minY + maxY) / 2
+      const cz = (minZ + maxZ) / 2
+      const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 10)
+      const r = span * 1.4
+
+      const curSize = new THREE.Vector2()
+      gl.getSize(curSize)
+      gl.setSize(800, 800)
+
+      const makeOrtho = (px: number, py: number, pz: number, upX: number, upY: number, upZ: number) => {
+        const cam = new THREE.OrthographicCamera(-r, r, r, -r, 0.1, 50000)
+        cam.position.set(px, py, pz)
+        cam.lookAt(cx, cy, cz)
+        cam.up.set(upX, upY, upZ)
+        cam.updateProjectionMatrix()
+        return cam
+      }
+
+      const views = [
+        { name: 'TOP VIEW',       cam: makeOrtho(cx, cy + r * 3, cz, 0, 0, -1) },
+        { name: 'FRONT VIEW',     cam: makeOrtho(cx, cy, cz + r * 3, 0, 1, 0) },
+        { name: 'SIDE VIEW',      cam: makeOrtho(cx + r * 3, cy, cz, 0, 1, 0) },
+        { name: 'ISOMETRIC VIEW', cam: (() => {
+          const cam = new THREE.PerspectiveCamera(20, 1, 0.1, 50000)
+          cam.position.set(cx + r, cy + r, cz + r)
+          cam.lookAt(cx, cy, cz)
+          cam.updateProjectionMatrix()
+          return cam
+        })() },
+      ]
+
+      const results: CapturedView[] = []
+      for (const { name, cam } of views) {
+        gl.render(scene, cam)
+        results.push({ name, dataURL: gl.domElement.toDataURL('image/png') })
+      }
+
+      gl.setSize(curSize.x, curSize.y)
+      gl.render(scene, camera)
+      resolve(results)
+    }),
+  }))
+
+  return null
+})
+ViewCapturer.displayName = 'ViewCapturer'
+
 function CameraSetup({ members }: { members: Member[] }) {
   const { camera } = useThree()
   const initialized = useRef(false)
@@ -514,18 +583,24 @@ function CameraSetup({ members }: { members: Member[] }) {
   return null
 }
 
-export default function Canvas3D() {
+const Canvas3D = forwardRef<Canvas3DHandle>(function Canvas3D(_, ref) {
   const { project } = useProjectStore()
   const { members } = project
+  const viewCapturerRef = useRef<Canvas3DHandle>(null)
+
+  useImperativeHandle(ref, () => ({
+    captureViews: () => viewCapturerRef.current?.captureViews() ?? Promise.resolve([]),
+  }))
 
   return (
     <div className='w-full h-full relative' style={{ background: '#12151e' }}>
       <Canvas
         shadows
         camera={{ fov: 45, near: 0.1, far: 5000 }}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
         onCreated={({ gl }) => { gl.setClearColor(new THREE.Color('#12151e')) }}
       >
+        <ViewCapturer ref={viewCapturerRef} members={members} />
         <CameraSetup members={members} />
         <OrbitControls
           makeDefault
@@ -559,4 +634,6 @@ export default function Canvas3D() {
       )}
     </div>
   )
-}
+})
+Canvas3D.displayName = 'Canvas3D'
+export default Canvas3D

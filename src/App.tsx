@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+import type { Canvas3DHandle } from './components/Canvas3D';
 import Toolbar from './components/Toolbar';
 import LibraryPanel from './components/LibraryPanel';
 import Canvas2D from './components/Canvas2D';
@@ -17,6 +18,7 @@ import { useUIStore } from './store/uiStore';
 import { useHistoryStore } from './store/historyStore';
 
 export default function App() {
+  const canvas3dRef = useRef<Canvas3DHandle>(null);
   const { project, setProject, addMember, deleteMembers } = useProjectStore();
   const { members, connections } = project;
   const {
@@ -156,7 +158,11 @@ export default function App() {
 
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative min-h-0">
-            {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
+            {/* Canvas3D always mounted so the renderer is available for PDF export */}
+            <div style={{ position: 'absolute', inset: 0, display: activeView === '3d' ? 'block' : 'none' }}>
+              <Canvas3D ref={canvas3dRef} />
+            </div>
+            {activeView === '2d' && <Canvas2D />}
 
             <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
               <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
@@ -178,7 +184,7 @@ export default function App() {
       {showPhotoModal && <PhotoModal />}
       {showTemplateModal && <TemplateLibrary />}
       {showHelpModal && <HelpModal />}
-      {showPDFExportModal && <PDFExportModal />}
+      {showPDFExportModal && <PDFExportModal canvas3dRef={canvas3dRef} />}
       <ContextMenu />
     </div>
   );
