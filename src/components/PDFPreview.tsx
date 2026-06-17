@@ -104,6 +104,8 @@ const GRADE_COLOR: Record<string, string> = {
 }
 
 function PanelMemberMesh({ m }: { m: Member }) {
+  const { width, height } = parseSizeString(m.type, m.size)
+
   const geo = useMemo(() => {
     const shape = buildShape(m)
     const g = new THREE.ExtrudeGeometry(shape, { depth: m.length, bevelEnabled: false, steps: 1 })
@@ -121,6 +123,12 @@ function PanelMemberMesh({ m }: { m: Member }) {
     return g
   }, [m.type, m.size, m.wallThickness, m.length, m.rotation.x]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const holeGeos = useMemo(() => (m.holes || []).map(hole => ({
+    geo: new THREE.CylinderGeometry(hole.diameter / 2, hole.diameter / 2, Math.max(width, height) * 1.1, 16),
+    posInches: hole.positionAlongMember,
+    id: hole.id,
+  })), [m.holes, width, height]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const isUpright = Math.abs(m.rotation.x) >= 45
   const activeGeo = isUpright ? (uprightGeo ?? geo) : geo
   const color = GRADE_COLOR[m.grade] ?? '#4a90d9'
@@ -135,6 +143,16 @@ function PanelMemberMesh({ m }: { m: Member }) {
         <edgesGeometry args={[activeGeo]} />
         <lineBasicMaterial color={new THREE.Color(color).multiplyScalar(0.55)} />
       </lineSegments>
+      {holeGeos.map(({ geo: hGeo, posInches, id }) => (
+        <mesh
+          key={id}
+          geometry={hGeo}
+          position={isUpright ? [0, -m.length / 2 + posInches, 0] : [-m.length / 2 + posInches, 0, 0]}
+          rotation={isUpright ? [0, 0, Math.PI / 2] : [0, 0, 0]}
+        >
+          <meshPhongMaterial color='#0a0f1a' />
+        </mesh>
+      ))}
     </group>
   )
 }
