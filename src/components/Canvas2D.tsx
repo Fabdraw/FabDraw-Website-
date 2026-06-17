@@ -141,94 +141,51 @@ function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected:
   }
 }
 
-// Dimension line rendering
+/** Render a saved dimension: extension lines + measurement arrow + label */
 function DimensionLine({
-  dim, zoom, panX, panY, selected,
-  onClick,
+  dim, zoom, panX, panY, selected, onClick,
 }: {
-  dim: Dimension
-  zoom: number
-  panX: number
-  panY: number
-  selected: boolean
-  onClick: (id: string) => void
+  dim: Dimension; zoom: number; panX: number; panY: number
+  selected: boolean; onClick: (id: string) => void
 }) {
   const S = zoom * SCALE
-  const offsetPx = dim.offset * S
+  const ax = wx2cx(dim.pointA.x, zoom, panX)
+  const ay = wy2cy(dim.pointA.y, zoom, panY)
+  const bx = wx2cx(dim.pointB.x, zoom, panX)
+  const by = wy2cy(dim.pointB.y, zoom, panY)
 
-  const sx = wx2cx(dim.startX, zoom, panX)
-  const sy = wy2cy(dim.startY, zoom, panY)
-  const ex = wx2cx(dim.endX, zoom, panX)
-  const ey = wy2cy(dim.endY, zoom, panY)
+  const offPx = dim.offsetDistance * S
+  const odx = dim.offsetDirection.x
+  const ody = dim.offsetDirection.y
 
-  // Direction of dimension line
-  const dx = ex - sx
-  const dy = ey - sy
-  const len = Math.sqrt(dx * dx + dy * dy)
-  if (len < 2) return null
+  // Offset endpoints
+  const dax = ax + odx * offPx, day = ay + ody * offPx
+  const dbx = bx + odx * offPx, dby = by + ody * offPx
+  const midX = (dax + dbx) / 2, midY = (day + dby) / 2
 
-  // Perpendicular unit vector (upward = negative y in canvas)
-  const ux = -dy / len
-  const uy = dx / len
+  // Measurement line length check
+  const mLen = Math.hypot(dbx - dax, dby - day)
+  if (mLen < 4) return null
 
-  // Offset the dimension line endpoints
-  const dsx = sx + ux * offsetPx
-  const dsy = sy + uy * offsetPx
-  const dex = ex + ux * offsetPx
-  const dey = ey + uy * offsetPx
-
-  const midX = (dsx + dex) / 2
-  const midY = (dsy + dey) / 2
-
-  const totalInches = Math.sqrt(
-    (dim.endX - dim.startX) ** 2 + (dim.endY - dim.startY) ** 2
-  )
-  const label = formatDimension(totalInches)
-
-  const color = selected ? '#facc15' : '#e2e8f0'
-  const extLen = 8
+  const color = selected ? '#facc15' : '#60a5fa'
+  const labelW = Math.max(dim.label.length * 7, 42)
 
   return (
     <Group onClick={() => onClick(dim.id)}>
       {/* Extension lines */}
-      <Line
-        points={[sx, sy, dsx - ux * extLen, dsy - uy * extLen]}
-        stroke={color} strokeWidth={1} opacity={0.7} listening={false}
-      />
-      <Line
-        points={[ex, ey, dex - ux * extLen, dey - uy * extLen]}
-        stroke={color} strokeWidth={1} opacity={0.7} listening={false}
-      />
-      {/* Dimension arrow line */}
-      <Arrow
-        points={[dsx, dsy, dex, dey]}
-        stroke={color}
-        fill={color}
-        strokeWidth={1.5}
-        pointerAtBeginning={true}
-        pointerAtEnding={true}
-        pointerLength={8}
-        pointerWidth={5}
-        listening={false}
-      />
-      {/* Invisible hit target */}
-      <Line
-        points={[dsx, dsy, dex, dey]}
-        stroke='transparent'
-        strokeWidth={12}
-        hitStrokeWidth={12}
-      />
-      {/* Label */}
-      <Text
-        x={midX}
-        y={midY - 16}
-        text={label}
-        fontSize={Math.max(10, 11 * zoom)}
-        fill={color}
-        align='center'
-        offsetX={30}
-        listening={false}
-      />
+      <Line points={[ax, ay, dax, day]} stroke={color} strokeWidth={1} opacity={0.75} listening={false} />
+      <Line points={[bx, by, dbx, dby]} stroke={color} strokeWidth={1} opacity={0.75} listening={false} />
+      {/* Measurement line with arrows */}
+      <Arrow points={[dax, day, dbx, dby]} stroke={color} fill={color}
+        strokeWidth={1.5} pointerAtBeginning pointerAtEnding pointerLength={8} pointerWidth={5} listening={false} />
+      {/* Invisible hit area */}
+      <Line points={[dax, day, dbx, dby]} stroke='transparent' strokeWidth={14} hitStrokeWidth={14} />
+      {/* Label background + text */}
+      <Rect x={midX - labelW / 2} y={midY - 19} width={labelW} height={14}
+        fill='#0f1117' opacity={0.88} cornerRadius={2} listening={false} />
+      <Text x={midX} y={midY - 17} text={dim.label}
+        fontSize={Math.max(9, 10 * zoom)} fill={color}
+        align='center' offsetX={labelW / 2} width={labelW} listening={false} />
     </Group>
   )
 }
@@ -358,9 +315,12 @@ export default function Canvas2D() {
   } = useUIStore()
   const { push } = useHistoryStore()
 
-  // Dimension tool state
-  const [dimStart, setDimStart] = useState<{ x: number; y: number } | null>(null)
-  const [dimPreview, setDimPreview] = useState<{ x: number; y: number } | null>(null)
+  // Dimension tool state machine: IDLE → FIRST_POINT_SET → PULLING → IDLE
+  type DimState = 'IDLE' | 'FIRST_POINT_SET' | 'PULLING'
+  const [dimState, setDimState] = useState<DimState>('IDLE')
+  const [dimPointA, setDimPointA] = useState<{ x: number; y: number } | null>(null)
+  const [dimPointB, setDimPointB] = useState<{ x: number; y: number } | null>(null)
+  const [dimMouse, setDimMouse] = useState<{ x: number; y: number } | null>(null)
 
   // Alignment guides state
   const [alignGuides, setAlignGuides] = useState<{ hLines: number[]; vLines: number[] }>({ hLines: [], vLines: [] })
@@ -399,6 +359,16 @@ export default function Canvas2D() {
 
   // Ref to always-current drawSnapLayer, safe to call from timer callbacks
   const drawSnapLayerRef = useRef<(r: SnapResult) => void>(() => {})
+
+  // Reset dim tool when leaving dimension mode
+  useEffect(() => {
+    if (mode !== 'dimension') {
+      setDimState('IDLE')
+      setDimPointA(null)
+      setDimPointB(null)
+      setDimMouse(null)
+    }
+  }, [mode])
 
   // Resize observer
   useEffect(() => {
@@ -444,13 +414,20 @@ export default function Canvas2D() {
       case 'midpoint':
         ctx.beginPath(); ctx.moveTo(scx, scy - 7); ctx.lineTo(scx + 6, scy + 4); ctx.lineTo(scx - 6, scy + 4); ctx.closePath(); ctx.stroke()
         break
+      case 'intersection':
+        // X mark
+        ctx.beginPath()
+        ctx.moveTo(scx - 5, scy - 5); ctx.lineTo(scx + 5, scy + 5)
+        ctx.moveTo(scx + 5, scy - 5); ctx.lineTo(scx - 5, scy + 5)
+        ctx.stroke()
+        break
       default:
         ctx.strokeRect(scx - 5, scy - 5, 10, 10)
     }
 
     // Tooltip: dark bg + white label
     const LABELS: Record<string, string> = {
-      endpoint: 'Endpoint', corner: 'Corner', center: 'Center', midpoint: 'Midpoint',
+      endpoint: 'Endpoint', corner: 'Corner', center: 'Center', midpoint: 'Midpoint', intersection: 'Intersection',
     }
     const label = LABELS[snap.type] ?? snap.type
     ctx.font = '11px sans-serif'
@@ -552,8 +529,10 @@ export default function Canvas2D() {
         setSelectedIds([])
         setSelectedConnectionId(null)
         setSelectedDimensionId(null)
-        setDimStart(null)
-        setDimPreview(null)
+        setDimState('IDLE')
+        setDimPointA(null)
+        setDimPointB(null)
+        setDimMouse(null)
         setConnectFirstMemberId(null)
         return
       }
@@ -660,19 +639,44 @@ export default function Canvas2D() {
 
     if (e.evt.button !== 0) return
 
-    // Dimension mode — use snap-locked position
+    // Dimension mode — 3-state machine
     if (mode === 'dimension') {
       const sr = snapResultRef.current
-      const sx = sr.active ? sr.lockedX : snapToGrid(cx2wx(pos.x, zoom, panX))
-      const sy = sr.active ? sr.lockedY : snapToGrid(cy2wy(pos.y, zoom, panY))
+      const wx = sr.active ? sr.lockedX : snapToGrid(cx2wx(pos.x, zoom, panX))
+      const wy = sr.active ? sr.lockedY : snapToGrid(cy2wy(pos.y, zoom, panY))
 
-      if (!dimStart) {
-        setDimStart({ x: sx, y: sy })
-      } else {
+      if (dimState === 'IDLE') {
+        setDimPointA({ x: wx, y: wy })
+        setDimState('FIRST_POINT_SET')
+      } else if (dimState === 'FIRST_POINT_SET') {
+        if (!dimPointA) return
+        if (Math.hypot(wx - dimPointA.x, wy - dimPointA.y) < 0.05) return
+        setDimPointB({ x: wx, y: wy })
+        setDimState('PULLING')
+      } else if (dimState === 'PULLING') {
+        if (!dimPointA || !dimPointB) return
+        const mouse = dimMouse ?? { x: cx2wx(pos.x, zoom, panX), y: cy2wy(pos.y, zoom, panY) }
+        const abVec = { x: dimPointB.x - dimPointA.x, y: dimPointB.y - dimPointA.y }
+        const abLen = Math.sqrt(abVec.x ** 2 + abVec.y ** 2)
+        if (abLen < 0.01) return
+        const perpDir = { x: -abVec.y / abLen, y: abVec.x / abLen }
+        const mid = { x: (dimPointA.x + dimPointB.x) / 2, y: (dimPointA.y + dimPointB.y) / 2 }
+        const toMouse = { x: mouse.x - mid.x, y: mouse.y - mid.y }
+        const signedDist = toMouse.x * perpDir.x + toMouse.y * perpDir.y
+        const offsetDir = signedDist >= 0 ? perpDir : { x: -perpDir.x, y: -perpDir.y }
+        const offsetDist = Math.max(Math.abs(signedDist), 1)
         push({ members, connections, dimensions, groupNames })
-        addDimension({ startX: dimStart.x, startY: dimStart.y, endX: sx, endY: sy, offset: 3 })
-        setDimStart(null)
-        setDimPreview(null)
+        addDimension({
+          pointA: dimPointA,
+          pointB: dimPointB,
+          offsetDistance: offsetDist,
+          offsetDirection: offsetDir,
+          label: formatDimension(abLen),
+        })
+        setDimState('IDLE')
+        setDimPointA(null)
+        setDimPointB(null)
+        setDimMouse(null)
       }
       return
     }
@@ -686,8 +690,8 @@ export default function Canvas2D() {
       setConnectFirstMemberId(null)
     }
   }, [
-    mode, panX, panY, zoom, dimStart, members, connections, dimensions, groupNames,
-    snapResultRef,
+    mode, panX, panY, zoom, dimState, dimPointA, dimPointB, dimMouse,
+    members, connections, dimensions, groupNames, snapResultRef,
     setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
     setContextMenu, setConnectFirstMemberId, addDimension, push,
   ])
@@ -720,13 +724,16 @@ export default function Canvas2D() {
       return
     }
 
-    // Dimension preview — use snap-locked position
-    if (mode === 'dimension' && dimStart) {
-      if (!pos) return
-      const sr = snapResultRef.current
-      setDimPreview({ x: sr.lockedX, y: sr.lockedY })
+    // Dimension mouse tracking
+    if (mode === 'dimension' && pos) {
+      if (dimState === 'FIRST_POINT_SET') {
+        const sr = snapResultRef.current
+        setDimMouse({ x: sr.lockedX, y: sr.lockedY })
+      } else if (dimState === 'PULLING') {
+        setDimMouse({ x: cx2wx(pos.x, zoom, panX), y: cy2wy(pos.y, zoom, panY) })
+      }
     }
-  }, [setPan, updateSnap, snapResultRef, mode, dimStart])
+  }, [setPan, updateSnap, snapResultRef, mode, dimState, zoom, panX, panY])
 
   const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
@@ -995,20 +1002,48 @@ export default function Canvas2D() {
             />
           ))}
 
-          {/* Dimension preview line */}
-          {mode === 'dimension' && dimStart && dimPreview && (
+          {/* Dimension preview — FIRST_POINT_SET: dashed line to cursor */}
+          {mode === 'dimension' && dimState === 'FIRST_POINT_SET' && dimPointA && dimMouse && (
             <Line
-              points={[
-                wx2cx(dimStart.x, zoom, panX), wy2cy(dimStart.y, zoom, panY),
-                wx2cx(dimPreview.x, zoom, panX), wy2cy(dimPreview.y, zoom, panY),
-              ]}
-              stroke='#facc15'
-              strokeWidth={1}
-              dash={[6, 3]}
-              opacity={0.6}
-              listening={false}
+              points={[wx2cx(dimPointA.x, zoom, panX), wy2cy(dimPointA.y, zoom, panY),
+                       wx2cx(dimMouse.x, zoom, panX),  wy2cy(dimMouse.y, zoom, panY)]}
+              stroke='#facc15' strokeWidth={1} dash={[6, 3]} opacity={0.7} listening={false}
             />
           )}
+
+          {/* Dimension preview — PULLING: live extension lines + measurement line */}
+          {mode === 'dimension' && dimState === 'PULLING' && dimPointA && dimPointB && dimMouse && (() => {
+            const abVec = { x: dimPointB.x - dimPointA.x, y: dimPointB.y - dimPointA.y }
+            const abLen = Math.sqrt(abVec.x ** 2 + abVec.y ** 2)
+            if (abLen < 0.01) return null
+            const perpDir = { x: -abVec.y / abLen, y: abVec.x / abLen }
+            const mid = { x: (dimPointA.x + dimPointB.x) / 2, y: (dimPointA.y + dimPointB.y) / 2 }
+            const toMouse = { x: dimMouse.x - mid.x, y: dimMouse.y - mid.y }
+            const signedDist = toMouse.x * perpDir.x + toMouse.y * perpDir.y
+            const offsetDir = signedDist >= 0 ? perpDir : { x: -perpDir.x, y: -perpDir.y }
+            const offWorld = Math.max(Math.abs(signedDist), 0.1)
+            const S = zoom * SCALE, offPx = offWorld * S
+            const ax = wx2cx(dimPointA.x, zoom, panX), ay = wy2cy(dimPointA.y, zoom, panY)
+            const bx = wx2cx(dimPointB.x, zoom, panX), by = wy2cy(dimPointB.y, zoom, panY)
+            const dax = ax + offsetDir.x * offPx, day = ay + offsetDir.y * offPx
+            const dbx = bx + offsetDir.x * offPx, dby = by + offsetDir.y * offPx
+            const midX = (dax + dbx) / 2, midY = (day + dby) / 2
+            const label = formatDimension(abLen)
+            const labelW = Math.max(label.length * 7, 42)
+            return (
+              <>
+                <Line points={[ax, ay, dax, day]} stroke='#facc15' strokeWidth={1} listening={false} />
+                <Line points={[bx, by, dbx, dby]} stroke='#facc15' strokeWidth={1} listening={false} />
+                <Arrow points={[dax, day, dbx, dby]} stroke='#facc15' fill='#facc15'
+                  strokeWidth={1.5} pointerAtBeginning pointerAtEnding pointerLength={8} pointerWidth={5} listening={false} />
+                <Rect x={midX - labelW / 2} y={midY - 19} width={labelW} height={14}
+                  fill='#0f1117' opacity={0.88} cornerRadius={2} listening={false} />
+                <Text x={midX} y={midY - 17} text={label}
+                  fontSize={Math.max(9, 10 * zoom)} fill='#facc15'
+                  align='center' offsetX={labelW / 2} width={labelW} listening={false} />
+              </>
+            )
+          })()}
 
           {/* Connect mode first member indicator */}
           {mode === 'connect' && connectFirstMemberId && (() => {

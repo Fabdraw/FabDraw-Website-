@@ -216,9 +216,65 @@ const CONNECTION_COLOR_3D: Record<string, string> = {
   flanged: '#a855f7',
 }
 
+// ─── 3D Dimension rendering ──────────────────────────────────────────────────
+
+function DimLine3D({ dim }: { dim: import('../types').Dimension }) {
+  const geo = React.useMemo(() => {
+    const H = 0.18
+    const ax = dim.pointA.x, az = dim.pointA.y
+    const bx = dim.pointB.x, bz = dim.pointB.y
+    const odx = dim.offsetDirection.x, odz = dim.offsetDirection.y
+    const d = dim.offsetDistance
+    const verts = new Float32Array([
+      ax, H, az,             ax + odx * d, H, az + odz * d,
+      bx, H, bz,             bx + odx * d, H, bz + odz * d,
+      ax + odx * d, H, az + odz * d, bx + odx * d, H, bz + odz * d,
+    ])
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3))
+    return g
+  }, [dim.pointA.x, dim.pointA.y, dim.pointB.x, dim.pointB.y, dim.offsetDirection.x, dim.offsetDirection.y, dim.offsetDistance])
+
+  const labelPos = React.useMemo((): [number, number, number] => {
+    const d = dim.offsetDistance
+    return [
+      (dim.pointA.x + dim.pointB.x) / 2 + dim.offsetDirection.x * d,
+      0.4,
+      (dim.pointA.y + dim.pointB.y) / 2 + dim.offsetDirection.y * d,
+    ]
+  }, [dim.pointA.x, dim.pointA.y, dim.pointB.x, dim.pointB.y, dim.offsetDirection.x, dim.offsetDirection.y, dim.offsetDistance])
+
+  const labelTex = React.useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 256; c.height = 64
+    const ctx = c.getContext('2d')!
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'
+    ctx.fillRect(4, 4, 248, 56)
+    ctx.fillStyle = '#93c5fd'
+    ctx.font = 'bold 26px monospace'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(dim.label, 128, 32)
+    return new THREE.CanvasTexture(c)
+  }, [dim.label])
+
+  return (
+    <>
+      <lineSegments>
+        <primitive object={geo} attach="geometry" />
+        <lineBasicMaterial color="#60a5fa" />
+      </lineSegments>
+      <sprite position={labelPos} scale={[3, 0.75, 1]}>
+        <spriteMaterial map={labelTex} transparent depthTest={false} />
+      </sprite>
+    </>
+  )
+}
+
 function Scene() {
   const { project, updateMember } = useProjectStore()
   const { members, connections } = project
+  const dimensions = project.dimensions ?? []
   const { selectedIds, selectedConnectionId, setSelectedIds, setSelectedConnectionId } = useUIStore()
   const { push } = useHistoryStore()
   const { camera, gl, controls } = useThree()
@@ -472,6 +528,9 @@ function Scene() {
           </mesh>
         )
       })}
+
+      {/* Dimension lines */}
+      {dimensions.map(d => <DimLine3D key={d.id} dim={d} />)}
 
       {/* Invisible backdrop — click miss deselects */}
       <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerMissed={handleMissed} visible={false}>

@@ -24,11 +24,11 @@ export interface Member {
 
 export interface Dimension {
   id: string
-  startX: number
-  startY: number
-  endX: number
-  endY: number
-  offset: number // perpendicular offset in inches (positive = above)
+  pointA: { x: number; y: number }   // plan-view world coords (inches)
+  pointB: { x: number; y: number }
+  offsetDistance: number              // pull distance in world inches
+  offsetDirection: { x: number; y: number }  // normalized world direction
+  label: string                       // auto-calculated e.g. "4'-6""
 }
 
 export interface Connection {

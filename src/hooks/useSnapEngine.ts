@@ -7,7 +7,7 @@ export const SNAP_APERTURE_PX = 14
 export const SNAP_HOVER_MS = 180
 export const SNAP_MOVE_CANCEL_PX = 4
 
-export type SnapType = 'endpoint' | 'corner' | 'center' | 'midpoint'
+export type SnapType = 'endpoint' | 'corner' | 'center' | 'midpoint' | 'intersection'
 
 export interface SnapPoint {
   worldX: number
@@ -31,7 +31,6 @@ export function getSnapPoints(m: Member): SnapPoint[] {
   const { height } = parseSizeString(m.type, m.size)
   const halfH = height / 2
 
-  // Rotate a local (lx, ly) offset into world space
   const toWorld = (lx: number, ly: number) => ({
     x: m.position.x + lx * cosR - ly * sinR,
     y: m.position.y + lx * sinR + ly * cosR,
@@ -43,22 +42,59 @@ export function getSnapPoints(m: Member): SnapPoint[] {
   }
 
   return [
-    // Endpoints
     mk(-halfLen, 0, 'endpoint'),
     mk(halfLen, 0, 'endpoint'),
-    // Center
     mk(0, 0, 'center'),
-    // 4 corners of rotated bounding box
     mk(-halfLen, -halfH, 'corner'),
     mk(halfLen, -halfH, 'corner'),
     mk(halfLen, halfH, 'corner'),
     mk(-halfLen, halfH, 'corner'),
-    // Midpoints of 4 sides
-    mk(0, -halfH, 'midpoint'),     // top side
-    mk(0, halfH, 'midpoint'),      // bottom side
-    mk(-halfLen, 0, 'midpoint'),   // left side (coincides with start endpoint)
-    mk(halfLen, 0, 'midpoint'),    // right side (coincides with end endpoint)
+    mk(0, -halfH, 'midpoint'),
+    mk(0, halfH, 'midpoint'),
+    mk(-halfLen, 0, 'midpoint'),
+    mk(halfLen, 0, 'midpoint'),
   ]
+}
+
+/** Segment intersection — returns intersection point or null if segments don't cross */
+function segmentIntersect(
+  ax: number, ay: number, bx: number, by: number,
+  cx: number, cy: number, dx: number, dy: number,
+): { x: number; y: number } | null {
+  const dx1 = bx - ax, dy1 = by - ay
+  const dx2 = dx - cx, dy2 = dy - cy
+  const cross = dx1 * dy2 - dy1 * dx2
+  if (Math.abs(cross) < 1e-10) return null
+  const t = ((cx - ax) * dy2 - (cy - ay) * dx2) / cross
+  const s = ((cx - ax) * dy1 - (cy - ay) * dx1) / cross
+  if (t < -1e-6 || t > 1 + 1e-6 || s < -1e-6 || s > 1 + 1e-6) return null
+  return { x: ax + t * dx1, y: ay + t * dy1 }
+}
+
+/** Member centerline endpoints in plan view */
+function memberEndpoints(m: Member): [{ x: number; y: number }, { x: number; y: number }] {
+  const R = (m.rotation.y * Math.PI) / 180
+  const hw = m.length / 2
+  return [
+    { x: m.position.x - Math.cos(R) * hw, y: m.position.y - Math.sin(R) * hw },
+    { x: m.position.x + Math.cos(R) * hw, y: m.position.y + Math.sin(R) * hw },
+  ]
+}
+
+/** Compute all member-member intersection snap points */
+export function getIntersectionSnapPoints(members: Member[]): SnapPoint[] {
+  const pts: SnapPoint[] = []
+  for (let i = 0; i < members.length; i++) {
+    for (let j = i + 1; j < members.length; j++) {
+      const [as, ae] = memberEndpoints(members[i])
+      const [bs, be] = memberEndpoints(members[j])
+      const hit = segmentIntersect(as.x, as.y, ae.x, ae.y, bs.x, bs.y, be.x, be.y)
+      if (hit) {
+        pts.push({ worldX: hit.x, worldY: hit.y, type: 'intersection', memberId: members[i].id })
+      }
+    }
+  }
+  return pts
 }
 
 /**
@@ -68,10 +104,6 @@ export function getSnapPoints(m: Member): SnapPoint[] {
 export function useSnapEngine(members: Member[], zoom: number, panX: number, panY: number) {
   const snapResultRef = useRef<SnapResult>({ active: false, point: null, lockedX: 0, lockedY: 0 })
 
-  /**
-   * Find the nearest snap point within aperture (or null if none).
-   * Also returns raw mouse world position for use when not snapping.
-   */
   const findNearest = useCallback((canvasX: number, canvasY: number): {
     best: SnapPoint | null
     mouseWorldX: number
@@ -84,11 +116,18 @@ export function useSnapEngine(members: Member[], zoom: number, panX: number, pan
     let best: SnapPoint | null = null
     let bestDist = apertureWorld
 
+    // Member snap points
     for (const m of members) {
       for (const pt of getSnapPoints(m)) {
         const dist = Math.hypot(mouseWorldX - pt.worldX, mouseWorldY - pt.worldY)
         if (dist < bestDist) { bestDist = dist; best = pt }
       }
+    }
+
+    // Intersection snap points
+    for (const pt of getIntersectionSnapPoints(members)) {
+      const dist = Math.hypot(mouseWorldX - pt.worldX, mouseWorldY - pt.worldY)
+      if (dist < bestDist) { bestDist = dist; best = pt }
     }
 
     return { best, mouseWorldX, mouseWorldY }

@@ -197,26 +197,22 @@ function drawViewInCell(
   // Dimension lines (top view only)
   if (view === 'top') {
     for (const d of dimensions) {
-      const ds = toScreen(topProj({ x: d.startX, y: d.startY, z: 0 }));
-      const de = toScreen(topProj({ x: d.endX, y: d.endY, z: 0 }));
-      const dx = de.x - ds.x, dy = de.y - ds.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < 1) continue;
-      const nx = -dy / len, ny = dx / len;
-      const off = (d.offset ?? 3) * scale;
+      const sA = toScreen(topProj({ x: d.pointA.x, y: 0, z: d.pointA.y }));
+      const sB = toScreen(topProj({ x: d.pointB.x, y: 0, z: d.pointB.y }));
+      const off = d.offsetDistance * scale;
+      const dax = sA.x + d.offsetDirection.x * off, day = sA.y + d.offsetDirection.y * off;
+      const dbx = sB.x + d.offsetDirection.x * off, dby = sB.y + d.offsetDirection.y * off;
       doc.setDrawColor(96, 165, 250);
       doc.setLineWidth(0.6);
-      doc.line(ds.x + nx * off, ds.y + ny * off, de.x + nx * off, de.y + ny * off);
-      doc.line(ds.x, ds.y, ds.x + nx * off, ds.y + ny * off);
-      doc.line(de.x, de.y, de.x + nx * off, de.y + ny * off);
-      const totalIn = Math.sqrt((d.endX - d.startX) ** 2 + (d.endY - d.startY) ** 2);
-      const ft = Math.floor(totalIn / 12);
-      const inch = totalIn % 12;
-      const lbl = ft > 0 ? `${ft}'-${inch.toFixed(2).replace(/\.?0+$/, '')}"` : `${totalIn.toFixed(2).replace(/\.?0+$/, '')}"`;
+      // Extension lines
+      doc.line(sA.x, sA.y, dax, day);
+      doc.line(sB.x, sB.y, dbx, dby);
+      // Measurement line
+      doc.line(dax, day, dbx, dby);
       doc.setFontSize(5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(96, 165, 250);
-      doc.text(lbl, ds.x + nx * off + (de.x - ds.x) / 2, ds.y + ny * off + (de.y - ds.y) / 2 - 2, { align: 'center' });
+      doc.text(d.label, (dax + dbx) / 2, (day + dby) / 2 - 2, { align: 'center' });
     }
   }
 }

@@ -19,6 +19,7 @@ type ViewPreset = 'top' | 'front' | 'leftSide' | 'rightSide' | 'isometric' | 'cu
 interface PanelState {
   preset: ViewPreset
   showDimensions: boolean
+  mode: '2d' | '3d'   // 2d = force top-down ortho (plan view); 3d = full 3D preset
 }
 
 interface BBox {
@@ -39,12 +40,16 @@ const PRESET_LABELS: Record<ViewPreset, string> = {
 const VIEW_OPTIONS: ViewPreset[] = ['top', 'front', 'leftSide', 'rightSide', 'isometric', 'custom']
 
 const DEFAULT_PANELS: Record<number, PanelState[]> = {
-  1: [{ preset: 'isometric',  showDimensions: false }],
-  2: [{ preset: 'top',        showDimensions: false }, { preset: 'isometric', showDimensions: false }],
-  3: [{ preset: 'top',        showDimensions: false }, { preset: 'front',     showDimensions: false },
-      { preset: 'isometric',  showDimensions: false }],
-  4: [{ preset: 'top',        showDimensions: false }, { preset: 'front',     showDimensions: false },
-      { preset: 'leftSide',   showDimensions: false }, { preset: 'isometric', showDimensions: false }],
+  1: [{ preset: 'isometric', showDimensions: false, mode: '3d' }],
+  2: [{ preset: 'top',       showDimensions: false, mode: '2d' },
+      { preset: 'isometric', showDimensions: false, mode: '3d' }],
+  3: [{ preset: 'top',       showDimensions: false, mode: '2d' },
+      { preset: 'front',     showDimensions: false, mode: '3d' },
+      { preset: 'isometric', showDimensions: false, mode: '3d' }],
+  4: [{ preset: 'top',       showDimensions: false, mode: '2d' },
+      { preset: 'front',     showDimensions: false, mode: '3d' },
+      { preset: 'leftSide',  showDimensions: false, mode: '3d' },
+      { preset: 'isometric', showDimensions: false, mode: '3d' }],
 }
 
 function isOrthoPreset(p: ViewPreset) {
@@ -135,21 +140,27 @@ function PanelMemberMesh({ m }: { m: Member }) {
 }
 
 function DimensionLine3D({ dim }: { dim: Dimension }) {
-  const pts = useMemo(() => new Float32Array([
-    dim.startX, 0.1, dim.startY, dim.endX, 0.1, dim.endY,
-  ]), [dim.startX, dim.startY, dim.endX, dim.endY])
-
   const geo = useMemo(() => {
+    const H = 0.15
+    const ax = dim.pointA.x, az = dim.pointA.y
+    const bx = dim.pointB.x, bz = dim.pointB.y
+    const odx = dim.offsetDirection.x, odz = dim.offsetDirection.y
+    const d = dim.offsetDistance
+    const verts = new Float32Array([
+      ax, H, az,             ax + odx*d, H, az + odz*d,
+      bx, H, bz,             bx + odx*d, H, bz + odz*d,
+      ax + odx*d, H, az + odz*d, bx + odx*d, H, bz + odz*d,
+    ])
     const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.BufferAttribute(pts, 3))
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3))
     return g
-  }, [pts])
+  }, [dim.pointA.x, dim.pointA.y, dim.pointB.x, dim.pointB.y, dim.offsetDirection.x, dim.offsetDirection.y, dim.offsetDistance])
 
   return (
-    <line>
+    <lineSegments>
       <primitive object={geo} attach="geometry" />
       <lineBasicMaterial color="#60a5fa" />
-    </line>
+    </lineSegments>
   )
 }
 
@@ -170,12 +181,13 @@ function PanelScene({ members, dimensions, showDimensions }: {
 
 // ─── Camera Setup (runs once on mount inside each Canvas) ────────────────────
 
-function PanelCameraSetup({ preset, bbox }: { preset: ViewPreset; bbox: BBox }) {
+function PanelCameraSetup({ preset, bbox, mode }: { preset: ViewPreset; bbox: BBox; mode: '2d' | '3d' }) {
   const { camera, size } = useThree()
 
   useEffect(() => {
     const { cx, cy, cz, radius: r } = bbox
-    const isOrtho = isOrthoPreset(preset)
+    const effectivePreset = mode === '2d' ? 'top' : preset
+    const isOrtho = isOrthoPreset(effectivePreset)
 
     if (isOrtho && camera instanceof THREE.OrthographicCamera) {
       // Fit radius in view
@@ -186,10 +198,10 @@ function PanelCameraSetup({ preset, bbox }: { preset: ViewPreset; bbox: BBox }) 
         leftSide: [cx - r * 6, cy, cz],
         rightSide:[cx + r * 6, cy, cz],
       }
-      const [px, py, pz] = positions[preset] ?? [cx, cy + r * 6, cz]
+      const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + r * 6, cz]
       camera.position.set(px, py, pz)
       camera.lookAt(cx, cy, cz)
-      if (preset === 'top') camera.up.set(0, 0, -1)
+      if (effectivePreset === 'top') camera.up.set(0, 0, -1)
       else camera.up.set(0, 1, 0)
       camera.updateProjectionMatrix()
     } else if (!isOrtho && camera instanceof THREE.PerspectiveCamera) {
@@ -268,14 +280,16 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
   ({ members, dimensions, state, panelIndex, onStateChange }, ref) => {
     const captureRef = useRef<PanelHandle>(null)
     const bbox = useMemo(() => calcBBox(members), [members])
-    const isOrtho = isOrthoPreset(state.preset)
+    // In 2D mode, always use top ortho; in 3D mode use preset
+    const effectivePreset = state.mode === '2d' ? 'top' : state.preset
+    const isOrtho = isOrthoPreset(effectivePreset)
 
     useImperativeHandle(ref, () => ({
       capture: () => captureRef.current?.capture() ?? Promise.resolve({ name: '', dataURL: '' }),
     }), [])
 
-    // Remount Canvas when preset changes so camera type matches
-    const canvasKey = `p${panelIndex}-${state.preset}-${isOrtho}`
+    // Remount Canvas when effective preset or mode changes
+    const canvasKey = `p${panelIndex}-${effectivePreset}-${state.mode}-${isOrtho}`
 
     return (
       <div style={{
@@ -289,16 +303,34 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
           padding: '6px 10px', background: '#1a1d27',
           borderBottom: '1px solid #2e3350', flexShrink: 0,
         }}>
-          <select
-            value={state.preset}
-            onChange={e => onStateChange({ preset: e.target.value as ViewPreset })}
-            style={{
-              fontSize: 11, background: '#21253a', border: '1px solid #2e3350',
-              borderRadius: 4, padding: '2px 6px', color: '#e2e8f0', cursor: 'pointer',
-            }}
-          >
-            {VIEW_OPTIONS.map(v => <option key={v} value={v}>{PRESET_LABELS[v]}</option>)}
-          </select>
+          {/* 2D/3D mode toggle */}
+          <div style={{ display: 'flex', border: '1px solid #2e3350', borderRadius: 4, overflow: 'hidden' }}>
+            {(['2d', '3d'] as const).map(m => (
+              <button key={m} onClick={() => onStateChange({ mode: m })}
+                style={{
+                  fontSize: 10, padding: '2px 8px', border: 'none', cursor: 'pointer',
+                  background: state.mode === m ? '#f97316' : '#21253a',
+                  color: state.mode === m ? '#fff' : '#94a3b8',
+                  fontWeight: state.mode === m ? 700 : 400,
+                }}>
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* View preset (only in 3D mode) */}
+          {state.mode === '3d' && (
+            <select
+              value={state.preset}
+              onChange={e => onStateChange({ preset: e.target.value as ViewPreset })}
+              style={{
+                fontSize: 11, background: '#21253a', border: '1px solid #2e3350',
+                borderRadius: 4, padding: '2px 6px', color: '#e2e8f0', cursor: 'pointer',
+              }}
+            >
+              {VIEW_OPTIONS.map(v => <option key={v} value={v}>{PRESET_LABELS[v]}</option>)}
+            </select>
+          )}
 
           <button
             onClick={() => onStateChange({ showDimensions: !state.showDimensions })}
@@ -310,11 +342,11 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
               cursor: 'pointer',
             }}
           >
-            Dimensions
+            Dim
           </button>
 
           <span style={{ fontSize: 10, color: '#475569', marginLeft: 'auto' }}>
-            {isOrtho ? 'Pan: drag  •  Zoom: scroll' : 'Rotate: drag  •  Pan: right-drag  •  Zoom: scroll'}
+            {state.mode === '2d' ? 'Plan' : (isOrtho ? 'Pan: drag  •  Zoom: scroll' : 'Rotate/Pan/Zoom')}
           </span>
         </div>
 
@@ -331,12 +363,12 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
             style={{ width: '100%', height: '100%' }}
           >
             <PanelCapture ref={captureRef} name={PRESET_LABELS[state.preset]} />
-            <PanelCameraSetup preset={state.preset} bbox={bbox} />
+            <PanelCameraSetup preset={effectivePreset} bbox={bbox} mode={state.mode} />
             <PanelScene members={members} dimensions={dimensions} showDimensions={state.showDimensions} />
             <OrbitControls
-              enableRotate={!isOrtho}
+              enableRotate={!isOrtho && state.mode === '3d'}
               mouseButtons={{
-                LEFT: isOrtho ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE,
+                LEFT: (isOrtho || state.mode === '2d') ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE,
                 MIDDLE: THREE.MOUSE.DOLLY,
                 RIGHT: THREE.MOUSE.PAN,
               }}
