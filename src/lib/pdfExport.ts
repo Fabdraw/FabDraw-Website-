@@ -43,10 +43,10 @@ function get3DEndpoints(m: Member): { start3: Pt3; end3: Pt3 } {
 
 const topProj   = (p: Pt3): Pt2 => ({ x: p.x,  y: p.z });
 const frontProj = (p: Pt3): Pt2 => ({ x: p.x,  y: -p.y });
-const sideProj  = (p: Pt3): Pt2 => ({ x: -p.z, y: -p.y });
+const sideProj  = (p: Pt3): Pt2 => ({ x: p.z,  y: -p.y });
 const isoProj   = (p: Pt3): Pt2 => ({
   x: (p.x - p.z) * Math.cos(Math.PI / 6),
-  y: (p.x + p.z) * Math.sin(Math.PI / 6) - p.y,
+  y: -p.y + (p.x + p.z) * Math.sin(Math.PI / 6),
 });
 
 function drawPoly(
@@ -130,24 +130,48 @@ function drawViewInCell(
   const toScreen = (p: Pt2): Pt2 => ({ x: p.x * scale + offX, y: p.y * scale + offY });
 
   if (view !== 'isometric') {
-    // Orthographic views: draw a thick line from projected start to projected end
+    // Orthographic views: draw each member as a filled rectangle
     for (const m of members) {
       const { start3, end3 } = get3DEndpoints(m);
       const s = toScreen(projFn(start3));
       const e = toScreen(projFn(end3));
-      const { width } = parseSizeString(m.type, m.size);
-      doc.setDrawColor(26, 58, 92);
-      doc.setLineWidth(Math.max(width * scale * 0.6, 1));
-      doc.line(s.x, s.y, e.x, e.y);
+      const { width, height } = parseSizeString(m.type, m.size);
+      // thickness in screen units: use cross-section dimension perpendicular to member axis
+      const isUpright = Math.abs(m.rotation.x ?? 0) >= 45;
+      const crossSect = view === 'top'
+        ? (isUpright ? width : height)
+        : (isUpright ? m.length : height);
+      const thickPx = Math.max(crossSect * scale, 1.5);
+      const dx = e.x - s.x, dy = e.y - s.y;
+      const lenPx = Math.sqrt(dx * dx + dy * dy);
+      if (lenPx < 0.5) continue;
+      const nx = -dy / lenPx, ny = dx / lenPx;
+      const half = thickPx / 2;
+      // Rectangle corners
+      const rx = s.x + nx * half, ry = s.y + ny * half;
+      const rpts: Pt2[] = [
+        { x: s.x + nx * half,  y: s.y + ny * half },
+        { x: s.x - nx * half,  y: s.y - ny * half },
+        { x: e.x - nx * half,  y: e.y - ny * half },
+        { x: e.x + nx * half,  y: e.y + ny * half },
+      ];
+      void rx; void ry;
+      doc.setFillColor(26, 58, 92);
+      doc.setDrawColor(10, 26, 60);
+      doc.setLineWidth(0.5);
+      (doc as unknown as {
+        lines: (l: [number, number][], x: number, y: number, s: [number, number], style: string, closed: boolean) => void
+      }).lines(
+        rpts.slice(1).map((p, i) => [p.x - rpts[i].x, p.y - rpts[i].y] as [number, number]),
+        rpts[0].x, rpts[0].y, [1, 1], 'FD', true,
+      );
     }
   } else {
-    // Isometric: draw each member as a 3D box with 3 lit faces
+    // Isometric: draw each member as a 3D box with 3 lit faces — fixed colors
     for (const m of members) {
       const { start3, end3 } = get3DEndpoints(m);
       const { width } = parseSizeString(m.type, m.size);
       const hw = (parseFloat(m.size) || width) / 2;
-      const mat = MATERIALS[m.type];
-      const [br, bg, bb] = hexToRgb(mat.color);
 
       const c3: Pt3[] = [
         { x: start3.x - hw, y: start3.y - hw, z: start3.z },
@@ -161,12 +185,12 @@ function drawViewInCell(
       ];
       const p = c3.map(c => toScreen(isoProj(c)));
 
-      // TOP face (corners 0,1,5,4) — lightened
-      drawPoly(doc, [p[0], p[1], p[5], p[4]], br + 60, bg + 60, bb + 60);
-      // FRONT face (corners 0,1,2,3) — base color
-      drawPoly(doc, [p[0], p[1], p[2], p[3]], br + 20, bg + 20, bb + 20);
-      // SIDE face (corners 1,5,6,2) — darkened
-      drawPoly(doc, [p[1], p[5], p[6], p[2]], Math.round(br * 0.7), Math.round(bg * 0.7), Math.round(bb * 0.7));
+      // TOP face — #2a5a8c
+      drawPoly(doc, [p[0], p[1], p[5], p[4]], 0x2a, 0x5a, 0x8c);
+      // FRONT face — #1a3a5c
+      drawPoly(doc, [p[0], p[1], p[2], p[3]], 0x1a, 0x3a, 0x5c);
+      // SIDE face — #0f2040
+      drawPoly(doc, [p[1], p[5], p[6], p[2]], 0x0f, 0x20, 0x40);
     }
   }
 
@@ -204,7 +228,7 @@ export function exportPDF(
   dimensions: Dimension[] = [],
   views: ViewType[] = ['top'],
 ): string {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'tabloid' });
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
@@ -224,7 +248,7 @@ export function exportPDF(
   doc.rect(20, 20, W - 40, H - 40);
 
   // Title block
-  const tbH = 90;
+  const tbH = 60;
   const tbY = H - 20 - tbH;
   doc.setFillColor(245, 245, 245);
   doc.rect(20, tbY, W - 40, tbH, 'F');
@@ -330,36 +354,26 @@ export function exportPDF(
     isometric: 'ISOMETRIC VIEW',
   };
 
+  const GAP = 8;
   if (viewCount === 1) {
     drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, drawArea.w, drawArea.h, VIEW_LABELS[views[0]]);
   } else if (viewCount === 2) {
-    const hw = drawArea.w / 2;
-    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, drawArea.h, VIEW_LABELS[views[0]]);
-    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, drawArea.h, VIEW_LABELS[views[1]]);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.5);
-    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + drawArea.h);
+    const cw = (drawArea.w - GAP) / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, cw, drawArea.h, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + cw + GAP, drawArea.y, cw, drawArea.h, VIEW_LABELS[views[1]]);
   } else if (viewCount === 3) {
-    const hw = drawArea.w / 2;
-    const hh = drawArea.h / 2;
-    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, hh, VIEW_LABELS[views[0]]);
-    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, hh, VIEW_LABELS[views[1]]);
-    drawViewInCell(doc, members, dimensions, views[2], drawArea.x, drawArea.y + hh, drawArea.w, hh, VIEW_LABELS[views[2]]);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.5);
-    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + hh);
-    doc.line(drawArea.x, drawArea.y + hh, drawArea.x + drawArea.w, drawArea.y + hh);
+    const cw = (drawArea.w - GAP) / 2;
+    const ch = (drawArea.h - GAP) / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, cw, ch, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + cw + GAP, drawArea.y, cw, ch, VIEW_LABELS[views[1]]);
+    drawViewInCell(doc, members, dimensions, views[2], drawArea.x, drawArea.y + ch + GAP, drawArea.w, ch, VIEW_LABELS[views[2]]);
   } else if (viewCount >= 4) {
-    const hw = drawArea.w / 2;
-    const hh = drawArea.h / 2;
-    drawViewInCell(doc, members, dimensions, views[0], drawArea.x, drawArea.y, hw, hh, VIEW_LABELS[views[0]]);
-    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + hw, drawArea.y, hw, hh, VIEW_LABELS[views[1]]);
-    drawViewInCell(doc, members, dimensions, views[2], drawArea.x, drawArea.y + hh, hw, hh, VIEW_LABELS[views[2]]);
-    drawViewInCell(doc, members, dimensions, views[3], drawArea.x + hw, drawArea.y + hh, hw, hh, VIEW_LABELS[views[3]]);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.5);
-    doc.line(drawArea.x + hw, drawArea.y, drawArea.x + hw, drawArea.y + drawArea.h);
-    doc.line(drawArea.x, drawArea.y + hh, drawArea.x + drawArea.w, drawArea.y + hh);
+    const cw = (drawArea.w - GAP) / 2;
+    const ch = (drawArea.h - GAP) / 2;
+    drawViewInCell(doc, members, dimensions, views[0], drawArea.x,          drawArea.y,          cw, ch, VIEW_LABELS[views[0]]);
+    drawViewInCell(doc, members, dimensions, views[1], drawArea.x + cw + GAP, drawArea.y,        cw, ch, VIEW_LABELS[views[1]]);
+    drawViewInCell(doc, members, dimensions, views[2], drawArea.x,          drawArea.y + ch + GAP, cw, ch, VIEW_LABELS[views[2]]);
+    drawViewInCell(doc, members, dimensions, views[3], drawArea.x + cw + GAP, drawArea.y + ch + GAP, cw, ch, VIEW_LABELS[views[3]]);
   }
 
   // === PAGE 2: BOM ===
