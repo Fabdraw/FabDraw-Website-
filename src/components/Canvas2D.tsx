@@ -5,10 +5,9 @@ import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString } from '../lib/materials'
+import { SCALE } from '../lib/constants'
 import type { Member, Connection, Dimension, Hole } from '../types'
 import ConnectionDialog from './ConnectionDialog'
-
-const SCALE = 8 // pixels per inch
 
 // Canvas coordinate conversions
 function wx2cx(wx: number, zoom: number, panX: number) { return wx * zoom * SCALE + panX }
@@ -367,6 +366,8 @@ export default function Canvas2D() {
 
   // Snap result ref — updated on every mousemove, read on click/dragend
   const snapResultRef = useRef<{ active: boolean; worldX: number; worldY: number }>({ active: false, worldX: 0, worldY: 0 })
+  // Snap latch — once snap activates it stays locked until cursor moves >8 world-inches away
+  const snapLatchRef = useRef<{ active: boolean; worldX: number; worldY: number }>({ active: false, worldX: 0, worldY: 0 })
 
   // Snap indicator Konva layer ref — always on top, never blocks clicks
   const snapLayerRef = useRef<Konva.Layer>(null)
@@ -659,40 +660,51 @@ export default function Canvas2D() {
       if (dist < minDist) { minDist = dist; closest = pt }
     }
 
-    if (closest) {
-      console.log('SNAP HIT:', closest.type, 'at world:', closest.x.toFixed(3), closest.y.toFixed(3), '| screen:', wx2cx(closest.x, zoom, panX).toFixed(1), wy2cy(closest.y, zoom, panY).toFixed(1))
+    // Apply latch: once snap fires, keep it locked until cursor moves >8 world-in away
+    let snappedPoint: { x: number; y: number; type: string } | null = closest
+    if (!snappedPoint) {
+      const latch = snapLatchRef.current
+      if (latch.active) {
+        const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
+        if (distFromLatch <= 8) {
+          // Keep latch alive — re-use the latched point for indicator
+          snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
+        } else {
+          snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
+        }
+      }
     } else {
-      console.log('NO SNAP — mouse world:', worldX.toFixed(3), worldY.toFixed(3), '| aperture:', aperture.toFixed(3), '| points:', allSnapPoints.length)
+      snapLatchRef.current = { active: true, worldX: closest!.x, worldY: closest!.y }
     }
 
     const snapLayer = snapLayerRef.current
     if (snapLayer) {
       snapLayer.destroyChildren()
-      if (closest) {
-        const sx = wx2cx(closest.x, zoom, panX)
-        const sy = wy2cy(closest.y, zoom, panY)
+      if (snappedPoint) {
+        const sx = wx2cx(snappedPoint.x, zoom, panX)
+        const sy = wy2cy(snappedPoint.y, zoom, panY)
         const stageW = stage!.width()
         const stageH = stage!.height()
 
         snapLayer.add(new Konva.Line({ points: [0, sy, stageW, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
         snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
 
-        if (closest.type === 'endpoint' || closest.type === 'corner') {
+        if (snappedPoint.type === 'endpoint' || snappedPoint.type === 'corner') {
           snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (closest.type === 'center') {
+        } else if (snappedPoint.type === 'center' || snappedPoint.type === 'latched') {
           snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (closest.type === 'midpoint') {
+        } else if (snappedPoint.type === 'midpoint') {
           snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (closest.type === 'intersection') {
+        } else if (snappedPoint.type === 'intersection') {
           snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
           snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
         }
 
-        const label = closest.type.charAt(0).toUpperCase() + closest.type.slice(1)
+        const label = snappedPoint.type === 'latched' ? 'Center' : snappedPoint.type.charAt(0).toUpperCase() + snappedPoint.type.slice(1)
         snapLayer.add(new Konva.Rect({ x: sx + 8, y: sy - 10, width: label.length * 7 + 8, height: 16, fill: '#1a1d27', cornerRadius: 2, listening: false }))
         snapLayer.add(new Konva.Text({ x: sx + 12, y: sy - 7, text: label, fontSize: 11, fill: '#ffffff', listening: false }))
 
-        snapResultRef.current = { active: true, worldX: closest.x, worldY: closest.y }
+        snapResultRef.current = { active: true, worldX: snappedPoint.x, worldY: snappedPoint.y }
       } else {
         snapResultRef.current = { active: false, worldX, worldY }
       }
@@ -840,8 +852,9 @@ export default function Canvas2D() {
   }, [selectedIds, setSelectedIds, setContextMenu])
 
   const handleMemberDragStart = useCallback((id: string, grabWx: number, grabWy: number) => {
-    // Clear snap indicators during drag
+    // Clear snap state and latch at drag start
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
+    snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
     grabOffsetRef.current = { wx: grabWx, wy: grabWy }
     const sl = snapLayerRef.current
     if (sl) { sl.destroyChildren(); sl.batchDraw() }
@@ -871,7 +884,7 @@ export default function Canvas2D() {
     if (!ptr) return
     const worldX = cx2wx(ptr.x, zoom, panX)
     const worldY = cy2wy(ptr.y, zoom, panY)
-    const aperture = 14 / zoom
+    const aperture = 20 / zoom  // FIX 1: match hover aperture (was 14)
     const allSnapPoints = [
       ...members.flatMap(m => getSnapPoints(m)),
       ...findIntersections(members),
@@ -882,25 +895,42 @@ export default function Canvas2D() {
       const dist = Math.hypot(pt.x - worldX, pt.y - worldY)
       if (dist < minDist) { minDist = dist; closest = pt }
     }
+
+    // FIX 2: apply latch — keep snap locked until cursor moves >8 world-in away
+    let snappedPoint: { x: number; y: number; type: string } | null = closest
+    if (!snappedPoint) {
+      const latch = snapLatchRef.current
+      if (latch.active) {
+        const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
+        if (distFromLatch <= 8) {
+          snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
+        } else {
+          snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
+        }
+      }
+    } else {
+      snapLatchRef.current = { active: true, worldX: closest!.x, worldY: closest!.y }
+    }
+
     snapLayer.destroyChildren()
-    if (closest) {
-      const sx = wx2cx(closest.x, zoom, panX)
-      const sy = wy2cy(closest.y, zoom, panY)
+    if (snappedPoint) {
+      const sx = wx2cx(snappedPoint.x, zoom, panX)
+      const sy = wy2cy(snappedPoint.y, zoom, panY)
       const stageW = stage!.width()
       const stageH = stage!.height()
       snapLayer.add(new Konva.Line({ points: [0, sy, stageW, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
       snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
-      if (closest.type === 'endpoint' || closest.type === 'corner') {
+      if (snappedPoint.type === 'endpoint' || snappedPoint.type === 'corner') {
         snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (closest.type === 'center') {
+      } else if (snappedPoint.type === 'center' || snappedPoint.type === 'latched') {
         snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (closest.type === 'midpoint') {
+      } else if (snappedPoint.type === 'midpoint') {
         snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (closest.type === 'intersection') {
+      } else if (snappedPoint.type === 'intersection') {
         snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
         snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
       }
-      snapResultRef.current = { active: true, worldX: closest.x, worldY: closest.y }
+      snapResultRef.current = { active: true, worldX: snappedPoint.x, worldY: snappedPoint.y }
     } else {
       snapResultRef.current = { active: false, worldX, worldY }
     }
@@ -908,20 +938,27 @@ export default function Canvas2D() {
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    const sr = snapResultRef.current
+    // FIX 2: prefer latch over frame-by-frame snap result
+    const sr = snapLatchRef.current.active ? snapLatchRef.current : snapResultRef.current
     const go = grabOffsetRef.current
-    const snappedX = sr.active ? sr.worldX - go.wx : snapToGrid(cx2wx(canvasX, zoom, panX))
-    const snappedY = sr.active ? sr.worldY - go.wy : snapToGrid(cy2wy(canvasY, zoom, panY))
+    const objectSnap = sr.active
+    const snappedX = objectSnap ? sr.worldX - go.wx : snapToGrid(cx2wx(canvasX, zoom, panX))
+    const snappedY = objectSnap ? sr.worldY - go.wy : snapToGrid(cy2wy(canvasY, zoom, panY))
+    // Clear both refs
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
+    snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
 
     push({ members, connections, dimensions, groupNames })
     for (const [sid, off] of Object.entries(dragOffsets.current)) {
       const sm = members.find(m => m.id === sid)
       if (!sm) continue
-      updateMember(sid, { position: { ...sm.position, x: snapToGrid(snappedX + off.dx), y: snapToGrid(snappedY + off.dy) } })
+      // FIX 3: skip grid snap when object-snapping so sub-quarter-inch positions are preserved
+      const finalX = objectSnap ? snappedX + off.dx : snapToGrid(snappedX + off.dx)
+      const finalY = objectSnap ? snappedY + off.dy : snapToGrid(snappedY + off.dy)
+      updateMember(sid, { position: { ...sm.position, x: finalX, y: finalY } })
     }
     dragOffsets.current = {}
-  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember, snapResultRef])
+  }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember])
 
   const handleConnectionClick = useCallback((id: string) => {
     setSelectedConnectionId(id)

@@ -1,7 +1,7 @@
 import type { Member, Connection } from '../types';
 import { parseSizeString } from './materials';
-
-export const SCALE = 8; // pixels per inch
+export { SCALE } from './constants';
+import { SCALE } from './constants';
 
 export interface SnapPoint {
   id: string

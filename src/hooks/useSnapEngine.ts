@@ -1,8 +1,7 @@
 import { useRef, useCallback } from 'react'
 import type { Member } from '../types'
 import { parseSizeString } from '../lib/materials'
-
-const SCALE = 8
+import { SCALE } from '../lib/constants'
 export const SNAP_APERTURE_PX = 14
 export const SNAP_HOVER_MS = 180
 export const SNAP_MOVE_CANCEL_PX = 4

@@ -8,6 +8,20 @@ import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString } from '../lib/materials'
 import type { Member } from '../types'
 
+const GAUGE_MAP: Record<string, number> = {
+  '7ga': 0.179, '8ga': 0.164, '10ga': 0.134, '11ga': 0.120,
+  '12ga': 0.105, '14ga': 0.075, '16ga': 0.060, '18ga': 0.048,
+  '20ga': 0.036, '22ga': 0.030,
+}
+
+function parseWallThickness(wall: string): number {
+  if (!wall) return 0.125
+  const lower = wall.toLowerCase().trim()
+  if (GAUGE_MAP[lower] !== undefined) return GAUGE_MAP[lower]
+  const n = parseFloat(wall)
+  return isNaN(n) ? 0.125 : n
+}
+
 const GRADE_COLOR: Record<string, string> = {
   mild: '#4a90d9',
   stainless: '#a8b8c8',
@@ -22,7 +36,7 @@ function memberColor(m: Member, selected: boolean): string {
 // Build cross-section Shape for extrusion (in inches)
 function buildCrossSection(m: Member): THREE.Shape {
   const { width, height } = parseSizeString(m.type, m.size)
-  const wall = parseFloat(m.wallThickness) || 0.12
+  const wall = parseWallThickness(m.wallThickness) || 0.12
   const hw = width / 2
   const hh = height / 2
 
