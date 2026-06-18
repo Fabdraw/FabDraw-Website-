@@ -401,22 +401,17 @@ export default function Canvas2D() {
     const cx = member.position.x, cy = member.position.y
     const start = { x: cx - cos * halfLen, y: cy - sin * halfLen }
     const end   = { x: cx + cos * halfLen, y: cy + sin * halfLen }
-    const { height } = parseSizeString(member.type, member.size)
+    const { width, height } = parseSizeString(member.type, member.size)
     const halfH = height / 2
-    // perpendicular unit vector scaled by half cross-section height
+    const halfW = width / 2
+    void halfW
     const px = -sin * halfH, py = cos * halfH
     return [
-      // endpoints (start/end caps)
       { ...start, type: 'endpoint' },
       { ...end,   type: 'endpoint' },
-      // true world center
-      { x: cx, y: cy, type: 'center' },
-      // midpoints of all 4 sides of bounding box
-      { x: start.x, y: start.y, type: 'midpoint' },   // start cap mid
-      { x: end.x,   y: end.y,   type: 'midpoint' },   // end cap mid
-      { x: cx + px, y: cy + py, type: 'midpoint' },   // top long-edge mid
-      { x: cx - px, y: cy - py, type: 'midpoint' },   // bottom long-edge mid
-      // corners
+      { x: cx,      y: cy,      type: 'center'   },
+      { x: cx + px, y: cy + py, type: 'midpoint' },
+      { x: cx - px, y: cy - py, type: 'midpoint' },
       { x: start.x + px, y: start.y + py, type: 'corner' },
       { x: start.x - px, y: start.y - py, type: 'corner' },
       { x: end.x + px,   y: end.y + py,   type: 'corner' },
@@ -650,7 +645,7 @@ export default function Canvas2D() {
     // ── Instant snap detection ───────────────────────────────────────────────
     const worldX = cx2wx(pos.x, zoom, panX)
     const worldY = cy2wy(pos.y, zoom, panY)
-    const aperture = 14 / zoom
+    const aperture = 20 / zoom
 
     const allSnapPoints = [
       ...members.flatMap(m => getSnapPoints(m)),
@@ -662,6 +657,12 @@ export default function Canvas2D() {
     for (const pt of allSnapPoints) {
       const dist = Math.hypot(pt.x - worldX, pt.y - worldY)
       if (dist < minDist) { minDist = dist; closest = pt }
+    }
+
+    if (closest) {
+      console.log('SNAP HIT:', closest.type, 'at world:', closest.x.toFixed(3), closest.y.toFixed(3), '| screen:', wx2cx(closest.x, zoom, panX).toFixed(1), wy2cy(closest.y, zoom, panY).toFixed(1))
+    } else {
+      console.log('NO SNAP — mouse world:', worldX.toFixed(3), worldY.toFixed(3), '| aperture:', aperture.toFixed(3), '| points:', allSnapPoints.length)
     }
 
     const snapLayer = snapLayerRef.current
