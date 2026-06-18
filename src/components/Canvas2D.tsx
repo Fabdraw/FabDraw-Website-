@@ -403,11 +403,20 @@ export default function Canvas2D() {
     const end   = { x: cx + cos * halfLen, y: cy + sin * halfLen }
     const { height } = parseSizeString(member.type, member.size)
     const halfH = height / 2
+    // perpendicular unit vector scaled by half cross-section height
     const px = -sin * halfH, py = cos * halfH
     return [
+      // endpoints (start/end caps)
       { ...start, type: 'endpoint' },
       { ...end,   type: 'endpoint' },
+      // true world center
       { x: cx, y: cy, type: 'center' },
+      // midpoints of all 4 sides of bounding box
+      { x: start.x, y: start.y, type: 'midpoint' },   // start cap mid
+      { x: end.x,   y: end.y,   type: 'midpoint' },   // end cap mid
+      { x: cx + px, y: cy + py, type: 'midpoint' },   // top long-edge mid
+      { x: cx - px, y: cy - py, type: 'midpoint' },   // bottom long-edge mid
+      // corners
       { x: start.x + px, y: start.y + py, type: 'corner' },
       { x: start.x - px, y: start.y - py, type: 'corner' },
       { x: end.x + px,   y: end.y + py,   type: 'corner' },
@@ -669,8 +678,10 @@ export default function Canvas2D() {
 
         if (closest.type === 'endpoint' || closest.type === 'corner') {
           snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (closest.type === 'midpoint' || closest.type === 'center') {
+        } else if (closest.type === 'center') {
           snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
+        } else if (closest.type === 'midpoint') {
+          snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
         } else if (closest.type === 'intersection') {
           snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
           snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
@@ -880,8 +891,10 @@ export default function Canvas2D() {
       snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
       if (closest.type === 'endpoint' || closest.type === 'corner') {
         snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (closest.type === 'midpoint' || closest.type === 'center') {
+      } else if (closest.type === 'center') {
         snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
+      } else if (closest.type === 'midpoint') {
+        snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
       } else if (closest.type === 'intersection') {
         snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
         snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))

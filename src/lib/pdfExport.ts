@@ -67,13 +67,17 @@ function computeToScreen(
     const { start3, end3 } = get3DEndpoints(m)
     allPts.push(projFn(start3), projFn(end3))
     if (view === 'isometric') {
-      const { width } = parseSizeString(m.type, m.size)
-      const hw = (parseFloat(m.size) || width) / 2
+      const { width, height } = parseSizeString(m.type, m.size)
+      const hwx = width / 2, hwy = height / 2
       const corners: Pt3[] = [
-        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
-        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
-        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
-        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
+        { x: start3.x - hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x - hwx, y: start3.y + hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y + hwy, z: start3.z },
+        { x: end3.x - hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x - hwx,   y: end3.y + hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y + hwy,   z: end3.z },
       ]
       corners.forEach(c => allPts.push(isoProj(c)))
     }
@@ -256,13 +260,17 @@ function drawViewInCell(
     allPts.push(projFn(start3), projFn(end3));
     if (view === 'isometric') {
       // Include box corners for better bounds
-      const { width } = parseSizeString(m.type, m.size);
-      const hw = (parseFloat(m.size) || width) / 2;
+      const { width, height } = parseSizeString(m.type, m.size);
+      const hwx = width / 2, hwy = height / 2;
       const corners: Pt3[] = [
-        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
-        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
-        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
-        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
+        { x: start3.x - hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x - hwx, y: start3.y + hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y + hwy, z: start3.z },
+        { x: end3.x - hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x - hwx,   y: end3.y + hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y + hwy,   z: end3.z },
       ];
       corners.forEach(c => allPts.push(isoProj(c)));
     }
@@ -320,18 +328,19 @@ function drawViewInCell(
     // Isometric: draw each member as a 3D box with 3 lit faces — fixed colors
     for (const m of members) {
       const { start3, end3 } = get3DEndpoints(m);
-      const { width } = parseSizeString(m.type, m.size);
-      const hw = (parseFloat(m.size) || width) / 2;
+      const { width, height } = parseSizeString(m.type, m.size);
+      const hwx = width / 2;   // half cross-section width (X axis)
+      const hwy = height / 2;  // half cross-section height (Y axis — thin for sheet/plate)
 
       const c3: Pt3[] = [
-        { x: start3.x - hw, y: start3.y - hw, z: start3.z },
-        { x: start3.x + hw, y: start3.y - hw, z: start3.z },
-        { x: start3.x + hw, y: start3.y + hw, z: start3.z },
-        { x: start3.x - hw, y: start3.y + hw, z: start3.z },
-        { x: end3.x - hw,   y: end3.y - hw,   z: end3.z },
-        { x: end3.x + hw,   y: end3.y - hw,   z: end3.z },
-        { x: end3.x + hw,   y: end3.y + hw,   z: end3.z },
-        { x: end3.x - hw,   y: end3.y + hw,   z: end3.z },
+        { x: start3.x - hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y - hwy, z: start3.z },
+        { x: start3.x + hwx, y: start3.y + hwy, z: start3.z },
+        { x: start3.x - hwx, y: start3.y + hwy, z: start3.z },
+        { x: end3.x - hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y - hwy,   z: end3.z },
+        { x: end3.x + hwx,   y: end3.y + hwy,   z: end3.z },
+        { x: end3.x - hwx,   y: end3.y + hwy,   z: end3.z },
       ];
       const p = c3.map(c => toScreen(isoProj(c)));
 
@@ -344,9 +353,9 @@ function drawViewInCell(
     }
   }
 
-  // Dimension lines (all orthographic views) clipped to this cell
+  // Dimension lines (all orthographic views) clipped to draw area (not full cell)
   if (view !== 'isometric' && dimensions.length > 0) {
-    drawDimensionsOnView(doc, dimensions, view, toScreen, scale, cellW, cellX, cellY, cellW, cellH);
+    drawDimensionsOnView(doc, dimensions, view, toScreen, scale, cellW, drawArea.x, drawArea.y, drawArea.w, drawArea.h);
   }
 }
 
