@@ -304,6 +304,81 @@ interface DragOffsets {
   [memberId: string]: { dx: number; dy: number }
 }
 
+function getSnapPoints(members: Member[]): Array<{ x: number; y: number; type: string }> {
+  const points: Array<{ x: number; y: number; type: string }> = []
+  for (const m of members) {
+    const rad = (m.rotation.y ?? 0) * Math.PI / 180
+    const halfLen = m.length / 2
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    const cx = m.position.x
+    const cy = m.position.y
+    const startX = cx - cos * halfLen
+    const startY = cy - sin * halfLen
+    const endX = cx + cos * halfLen
+    const endY = cy + sin * halfLen
+    points.push({ x: startX, y: startY, type: 'endpoint' })
+    points.push({ x: endX,   y: endY,   type: 'endpoint' })
+    points.push({ x: cx, y: cy, type: 'center' })
+    const { height } = parseSizeString(m.type, m.size)
+    const halfH = height / 2
+    const px = -sin * halfH
+    const py =  cos * halfH
+    points.push({ x: cx + px, y: cy + py, type: 'midpoint' })
+    points.push({ x: cx - px, y: cy - py, type: 'midpoint' })
+    points.push({ x: startX + px, y: startY + py, type: 'corner' })
+    points.push({ x: startX - px, y: startY - py, type: 'corner' })
+    points.push({ x: endX + px,   y: endY + py,   type: 'corner' })
+    points.push({ x: endX - px,   y: endY - py,   type: 'corner' })
+  }
+  return points
+}
+
+function findClosestSnapPoint(
+  mouseWorldX: number,
+  mouseWorldY: number,
+  snapPoints: Array<{ x: number; y: number; type: string }>,
+  apertureWorld: number
+): { x: number; y: number; type: string } | null {
+  let closest: { x: number; y: number; type: string } | null = null
+  let minDist = apertureWorld
+  for (const pt of snapPoints) {
+    const dist = Math.hypot(pt.x - mouseWorldX, pt.y - mouseWorldY)
+    if (dist < minDist) { minDist = dist; closest = pt }
+  }
+  return closest
+}
+
+function drawSnapIndicators(
+  snapLayer: Konva.Layer,
+  snapPoint: { x: number; y: number; type: string } | null,
+  zoom: number,
+  panX: number,
+  panY: number,
+  stageWidth: number,
+  stageHeight: number
+) {
+  snapLayer.destroyChildren()
+  if (!snapPoint) { snapLayer.batchDraw(); return }
+  const sx = snapPoint.x * zoom * SCALE + panX
+  const sy = snapPoint.y * zoom * SCALE + panY
+  snapLayer.add(new Konva.Line({ points: [0, sy, stageWidth, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
+  snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageHeight], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
+  if (snapPoint.type === 'endpoint') {
+    snapLayer.add(new Konva.Rect({ x: sx-6, y: sy-6, width: 12, height: 12, stroke: '#00ff41', strokeWidth: 2, fill: 'transparent', listening: false }))
+  } else if (snapPoint.type === 'midpoint') {
+    snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 7, stroke: '#00ff41', strokeWidth: 2, fill: 'transparent', listening: false }))
+  } else if (snapPoint.type === 'center') {
+    snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 2, fill: 'transparent', listening: false }))
+  } else if (snapPoint.type === 'corner') {
+    snapLayer.add(new Konva.Rect({ x: sx-6, y: sy-6, width: 12, height: 12, stroke: '#ffff00', strokeWidth: 2, fill: 'transparent', listening: false }))
+  }
+  const label = snapPoint.type.charAt(0).toUpperCase() + snapPoint.type.slice(1)
+  snapLayer.add(new Konva.Rect({ x: sx+10, y: sy-10, width: label.length*7+8, height: 18, fill: '#1a1d27', cornerRadius: 2, listening: false }))
+  snapLayer.add(new Konva.Text({ x: sx+14, y: sy-6, text: label, fontSize: 11, fill: '#ffffff', listening: false }))
+  snapLayer.batchDraw()
+}
+
 export default function Canvas2D() {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -358,19 +433,14 @@ export default function Canvas2D() {
 
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
-  const dragStartWorldPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
   const rightDragStart = useRef<{ x: number; y: number } | null>(null)
 
-  // Snap result ref — updated on every mousemove, read on click/dragend
-  const snapResultRef = useRef<{ active: boolean; worldX: number; worldY: number }>({ active: false, worldX: 0, worldY: 0 })
-  // Snap latch — once snap activates it stays locked until cursor moves >8 world-inches away
-  const snapLatchRef = useRef<{ active: boolean; worldX: number; worldY: number }>({ active: false, worldX: 0, worldY: 0 })
-
   // Snap indicator Konva layer ref — always on top, never blocks clicks
   const snapLayerRef = useRef<Konva.Layer>(null)
+  const activeSnapPoint = useRef<{ x: number; y: number } | null>(null)
 
   // Reset dim tool when leaving dimension mode
   useEffect(() => {
@@ -392,57 +462,6 @@ export default function Canvas2D() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-
-  // ── Snap helpers ────────────────────────────────────────────────────────────
-
-  function getSnapPoints(member: Member): Array<{ x: number; y: number; type: string }> {
-    const rad = (member.rotation.y ?? 0) * Math.PI / 180
-    const halfLen = member.length / 2
-    const cos = Math.cos(rad), sin = Math.sin(rad)
-    const cx = member.position.x, cy = member.position.y
-    const start = { x: cx - cos * halfLen, y: cy - sin * halfLen }
-    const end   = { x: cx + cos * halfLen, y: cy + sin * halfLen }
-    const { width, height } = parseSizeString(member.type, member.size)
-    const halfH = height / 2
-    const halfW = width / 2
-    void halfW
-    const px = -sin * halfH, py = cos * halfH
-    return [
-      { ...start, type: 'endpoint' },
-      { ...end,   type: 'endpoint' },
-      { x: cx,      y: cy,      type: 'center'   },
-      { x: cx + px, y: cy + py, type: 'midpoint' },
-      { x: cx - px, y: cy - py, type: 'midpoint' },
-      { x: start.x + px, y: start.y + py, type: 'corner' },
-      { x: start.x - px, y: start.y - py, type: 'corner' },
-      { x: end.x + px,   y: end.y + py,   type: 'corner' },
-      { x: end.x - px,   y: end.y - py,   type: 'corner' },
-    ]
-  }
-
-  function findIntersections(ms: Member[]): Array<{ x: number; y: number; type: string }> {
-    const result: Array<{ x: number; y: number; type: string }> = []
-    for (let i = 0; i < ms.length; i++) {
-      for (let j = i + 1; j < ms.length; j++) {
-        const a = ms[i], b = ms[j]
-        const rA = (a.rotation.y ?? 0) * Math.PI / 180
-        const rB = (b.rotation.y ?? 0) * Math.PI / 180
-        const hA = a.length / 2, hB = b.length / 2
-        const ax1 = a.position.x - Math.cos(rA) * hA, ay1 = a.position.y - Math.sin(rA) * hA
-        const ax2 = a.position.x + Math.cos(rA) * hA, ay2 = a.position.y + Math.sin(rA) * hA
-        const bx1 = b.position.x - Math.cos(rB) * hB, by1 = b.position.y - Math.sin(rB) * hB
-        const bx2 = b.position.x + Math.cos(rB) * hB, by2 = b.position.y + Math.sin(rB) * hB
-        const denom = (ax1 - ax2) * (by1 - by2) - (ay1 - ay2) * (bx1 - bx2)
-        if (Math.abs(denom) < 0.001) continue
-        const t = ((ax1 - bx1) * (by1 - by2) - (ay1 - by1) * (bx1 - bx2)) / denom
-        const u = -((ax1 - ax2) * (ay1 - by1) - (ay1 - ay2) * (ax1 - bx1)) / denom
-        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-          result.push({ x: ax1 + t * (ax2 - ax1), y: ay1 + t * (ay2 - ay1), type: 'intersection' })
-        }
-      }
-    }
-    return result
-  }
 
   // Keyboard
   useEffect(() => {
@@ -575,9 +594,9 @@ export default function Canvas2D() {
 
     // Dimension mode — 3-state machine
     if (mode === 'dimension') {
-      const sr = snapResultRef.current
-      const wx = sr.active ? sr.worldX : snapToGrid(cx2wx(pos.x, zoom, panX))
-      const wy = sr.active ? sr.worldY : snapToGrid(cy2wy(pos.y, zoom, panY))
+      const snap = activeSnapPoint.current
+      const wx = snap ? snap.x : snapToGrid(cx2wx(pos.x, zoom, panX))
+      const wy = snap ? snap.y : snapToGrid(cy2wy(pos.y, zoom, panY))
 
       if (dimState === 'IDLE') {
         setDimPointA({ x: wx, y: wy })
@@ -626,7 +645,7 @@ export default function Canvas2D() {
     }
   }, [
     mode, panX, panY, zoom, dimState, dimPointA, dimPointB, dimMouse,
-    members, connections, dimensions, groupNames, snapResultRef,
+    members, connections, dimensions, groupNames,
     setSelectedIds, setSelectedConnectionId, setSelectedDimensionId,
     setContextMenu, setConnectFirstMemberId, addDimension, push,
   ])
@@ -643,68 +662,17 @@ export default function Canvas2D() {
     const pos = stage?.getPointerPosition()
     if (!pos) return
 
-    // ── Instant snap detection ───────────────────────────────────────────────
-    const worldX = cx2wx(pos.x, zoom, panX)
-    const worldY = cy2wy(pos.y, zoom, panY)
-    const aperture = 20 / zoom
-
-    const allSnapPoints = members.flatMap(m => getSnapPoints(m))
-    let closest: { x: number; y: number; type: string } | null = null
-    let minDist = aperture
-    for (const pt of allSnapPoints) {
-      const dist = Math.hypot(pt.x - worldX, pt.y - worldY)
-      if (dist < minDist) { minDist = dist; closest = pt }
-    }
-
-    // Apply latch: once snap fires, keep it locked until cursor moves >8 world-in away
-    let snappedPoint: { x: number; y: number; type: string } | null = closest
-    if (!snappedPoint) {
-      const latch = snapLatchRef.current
-      if (latch.active) {
-        const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
-        if (distFromLatch <= 3) {
-          // Keep latch alive — re-use the latched point for indicator
-          snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
-        } else {
-          snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
-        }
-      }
-    } else {
-      snapLatchRef.current = { active: true, worldX: closest!.x, worldY: closest!.y }
-    }
-
-    const snapLayer = snapLayerRef.current
-    if (snapLayer) {
-      snapLayer.destroyChildren()
-      if (snappedPoint) {
-        const sx = wx2cx(snappedPoint.x, zoom, panX)
-        const sy = wy2cy(snappedPoint.y, zoom, panY)
-        const stageW = stage!.width()
-        const stageH = stage!.height()
-
-        snapLayer.add(new Konva.Line({ points: [0, sy, stageW, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
-        snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
-
-        if (snappedPoint.type === 'endpoint' || snappedPoint.type === 'corner') {
-          snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (snappedPoint.type === 'center' || snappedPoint.type === 'latched') {
-          snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (snappedPoint.type === 'midpoint') {
-          snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-        } else if (snappedPoint.type === 'intersection') {
-          snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
-          snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
-        }
-
-        const label = snappedPoint.type === 'latched' ? 'Center' : snappedPoint.type.charAt(0).toUpperCase() + snappedPoint.type.slice(1)
-        snapLayer.add(new Konva.Rect({ x: sx + 8, y: sy - 10, width: label.length * 7 + 8, height: 16, fill: '#1a1d27', cornerRadius: 2, listening: false }))
-        snapLayer.add(new Konva.Text({ x: sx + 12, y: sy - 7, text: label, fontSize: 11, fill: '#ffffff', listening: false }))
-
-        snapResultRef.current = { active: true, worldX: snappedPoint.x, worldY: snappedPoint.y }
-      } else {
-        snapResultRef.current = { active: false, worldX, worldY }
-      }
-      snapLayer.batchDraw()
+    // ── Snap detection ────────────────────────────────────────────────────────
+    const worldX = (pos.x - panX) / (zoom * SCALE)
+    const worldY = (pos.y - panY) / (zoom * SCALE)
+    const apertureWorld = 20 / zoom
+    const snapPts = getSnapPoints(members)
+    const closest = findClosestSnapPoint(worldX, worldY, snapPts, apertureWorld)
+    activeSnapPoint.current = closest ? { x: closest.x, y: closest.y } : null
+    const snapLayerInst = snapLayerRef.current
+    const stageInst = stageRef.current
+    if (snapLayerInst && stageInst) {
+      drawSnapIndicators(snapLayerInst, closest, zoom, panX, panY, stageInst.width(), stageInst.height())
     }
     // ── End snap ─────────────────────────────────────────────────────────────
 
@@ -726,8 +694,8 @@ export default function Canvas2D() {
     // Dimension mouse tracking
     if (mode === 'dimension') {
       if (dimState === 'FIRST_POINT_SET') {
-        const sr = snapResultRef.current
-        setDimMouse({ x: sr.active ? sr.worldX : worldX, y: sr.active ? sr.worldY : worldY })
+        const snap = activeSnapPoint.current
+        setDimMouse({ x: snap ? snap.x : worldX, y: snap ? snap.y : worldY })
       } else if (dimState === 'PULLING') {
         setDimMouse({ x: worldX, y: worldY })
       }
@@ -735,9 +703,9 @@ export default function Canvas2D() {
 
     // Hole placement preview when Holes tab is active and one member is selected
     if (activeRightTab === 'holes' && selectedIds.length === 1) {
-      const sr = snapResultRef.current
-      const wx = sr.active ? sr.worldX : worldX
-      const wy = sr.active ? sr.worldY : worldY
+      const snap = activeSnapPoint.current
+      const wx = snap ? snap.x : worldX
+      const wy = snap ? snap.y : worldY
       const m = members.find(mb => mb.id === selectedIds[0])
       if (m) {
         const { width, height } = parseSizeString(m.type, m.size)
@@ -848,15 +816,13 @@ export default function Canvas2D() {
   }, [selectedIds, setSelectedIds, setContextMenu])
 
   const handleMemberDragStart = useCallback((id: string) => {
-    // Clear snap state and latch at drag start
-    snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
-    snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
-    const sl = snapLayerRef.current
-    if (sl) { sl.destroyChildren(); sl.batchDraw() }
+    // Clear snap state
+    activeSnapPoint.current = null
+    const snapLayerInst = snapLayerRef.current
+    if (snapLayerInst) { snapLayerInst.destroyChildren(); snapLayerInst.batchDraw() }
     // Record dragged member's world position and offsets of all selected members
     const dragged = members.find(m => m.id === id)
     if (!dragged) return
-    dragStartWorldPos.current = { x: dragged.position.x, y: dragged.position.y }
     const ids = selectedIds.includes(id) ? selectedIds : [id]
     const offsets: DragOffsets = {}
     for (const sid of ids) {
@@ -873,95 +839,48 @@ export default function Canvas2D() {
   }, [members, selectedIds])
 
   const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {
-    // Run snap detection via stage pointer — no React state updates to avoid jump
-    const snapLayer = snapLayerRef.current
-    if (!snapLayer) return
-    const stage = snapLayer.getStage()
-    const ptr = stage?.getPointerPosition()
+    const snapLayerInst = snapLayerRef.current
+    if (!snapLayerInst) return
+    const stageInst = snapLayerInst.getStage()
+    const ptr = stageInst?.getPointerPosition()
     if (!ptr) return
-    const worldX = cx2wx(ptr.x, zoom, panX)
-    const worldY = cy2wy(ptr.y, zoom, panY)
-    const aperture = 20 / zoom  // FIX 1: match hover aperture (was 14)
-    const allSnapPoints = members.flatMap(m => getSnapPoints(m))
-    let closest: { x: number; y: number; type: string } | null = null
-    let minDist = aperture
-    for (const pt of allSnapPoints) {
-      const dist = Math.hypot(pt.x - worldX, pt.y - worldY)
-      if (dist < minDist) { minDist = dist; closest = pt }
+    const worldX = (ptr.x - panX) / (zoom * SCALE)
+    const worldY = (ptr.y - panY) / (zoom * SCALE)
+    const apertureWorld = 20 / zoom
+    const snapPts = getSnapPoints(members)
+    const closest = findClosestSnapPoint(worldX, worldY, snapPts, apertureWorld)
+    activeSnapPoint.current = closest ? { x: closest.x, y: closest.y } : null
+    if (stageInst) {
+      drawSnapIndicators(snapLayerInst, closest, zoom, panX, panY, stageInst.width(), stageInst.height())
     }
-
-    // FIX 2: apply latch — keep snap locked until cursor moves >8 world-in away
-    let snappedPoint: { x: number; y: number; type: string } | null = closest
-    if (!snappedPoint) {
-      const latch = snapLatchRef.current
-      if (latch.active) {
-        const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
-        if (distFromLatch <= 3) {
-          snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
-        } else {
-          snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
-        }
-      }
-    } else {
-      snapLatchRef.current = { active: true, worldX: closest!.x, worldY: closest!.y }
-    }
-
-    snapLayer.destroyChildren()
-    if (snappedPoint) {
-      const sx = wx2cx(snappedPoint.x, zoom, panX)
-      const sy = wy2cy(snappedPoint.y, zoom, panY)
-      const stageW = stage!.width()
-      const stageH = stage!.height()
-      snapLayer.add(new Konva.Line({ points: [0, sy, stageW, sy], stroke: '#ff4444', strokeWidth: 1, dash: [6, 3], listening: false }))
-      snapLayer.add(new Konva.Line({ points: [sx, 0, sx, stageH], stroke: '#4444ff', strokeWidth: 1, dash: [6, 3], listening: false }))
-      if (snappedPoint.type === 'endpoint' || snappedPoint.type === 'corner') {
-        snapLayer.add(new Konva.Rect({ x: sx - 5, y: sy - 5, width: 10, height: 10, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (snappedPoint.type === 'center' || snappedPoint.type === 'latched') {
-        snapLayer.add(new Konva.Circle({ x: sx, y: sy, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (snappedPoint.type === 'midpoint') {
-        snapLayer.add(new Konva.RegularPolygon({ x: sx, y: sy, sides: 3, radius: 6, stroke: '#00ff41', strokeWidth: 1.5, fill: 'transparent', listening: false }))
-      } else if (snappedPoint.type === 'intersection') {
-        snapLayer.add(new Konva.Line({ points: [sx - 6, sy - 6, sx + 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
-        snapLayer.add(new Konva.Line({ points: [sx + 6, sy - 6, sx - 6, sy + 6], stroke: '#00ff41', strokeWidth: 1.5, listening: false }))
-      }
-      snapResultRef.current = { active: true, worldX: snappedPoint.x, worldY: snappedPoint.y }
-    } else {
-      snapResultRef.current = { active: false, worldX, worldY }
-    }
-    snapLayer.batchDraw()
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    console.log('=== DRAG END ===')
-    console.log('canvasX:', canvasX, 'canvasY:', canvasY)
-    console.log('zoom:', zoom, 'panX:', panX, 'panY:', panY)
-    console.log('snapLatchRef:', JSON.stringify(snapLatchRef.current))
-    console.log('snapResultRef:', JSON.stringify(snapResultRef.current))
-    console.log('dragOffsets:', JSON.stringify(dragOffsets.current))
-    console.log('members positions:', members.map(m => ({ id: m.id.slice(0,8), x: m.position.x, y: m.position.y })))
+    // Clear snap visuals
+    const snapLayerInst = snapLayerRef.current
+    if (snapLayerInst) { snapLayerInst.destroyChildren(); snapLayerInst.batchDraw() }
 
-    const sr = snapLatchRef.current.active ? snapLatchRef.current
-              : snapResultRef.current.active ? snapResultRef.current
-              : null
-    console.log('sr (snap result used):', JSON.stringify(sr))
+    const dragged = members.find(m => m.id === id)
+    if (!dragged) return
 
-    snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
-    snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
+    const snap = activeSnapPoint.current
+    activeSnapPoint.current = null
 
     push({ members, connections, dimensions, groupNames })
-    for (const [sid, off] of Object.entries(dragOffsets.current)) {
-      const sm = members.find(m => m.id === sid)
-      if (!sm) continue
-      if (sr) {
-        const nx = sr.worldX + off.dx, ny = sr.worldY + off.dy
-        console.log('updating member', sid.slice(0,8), '→ x:', nx, 'y:', ny, '(snap)')
-        updateMember(sid, { position: { ...sm.position, x: nx, y: ny } })
-      } else {
-        const worldX = cx2wx(canvasX, zoom, panX)
-        const worldY = cy2wy(canvasY, zoom, panY)
-        const nx = snapToGrid(worldX + off.dx), ny = snapToGrid(worldY + off.dy)
-        console.log('updating member', sid.slice(0,8), '→ x:', nx, 'y:', ny, '(grid)')
-        updateMember(sid, { position: { ...sm.position, x: nx, y: ny } })
+
+    if (snap) {
+      for (const [sid, off] of Object.entries(dragOffsets.current)) {
+        const sm = members.find(m => m.id === sid)
+        if (!sm) continue
+        updateMember(sid, { position: { ...sm.position, x: snap.x + off.dx, y: snap.y + off.dy } })
+      }
+    } else {
+      const worldX = (canvasX - panX) / (zoom * SCALE)
+      const worldY = (canvasY - panY) / (zoom * SCALE)
+      for (const [sid, off] of Object.entries(dragOffsets.current)) {
+        const sm = members.find(m => m.id === sid)
+        if (!sm) continue
+        updateMember(sid, { position: { ...sm.position, x: snapToGrid(worldX + off.dx), y: snapToGrid(worldY + off.dy) } })
       }
     }
     dragOffsets.current = {}
@@ -994,7 +913,6 @@ export default function Canvas2D() {
       pointA: { ...memberA.position },
       pointB: { ...memberB.position },
     }
-    console.log('[Connect] saving connection:', newConn)
     addConnection(newConn)
     setConnDialog(null)
     setMode('select')
@@ -1046,7 +964,7 @@ export default function Canvas2D() {
         onMouseUp={handleStageMouseUp}
         onContextMenu={handleContextMenu}
         onMouseLeave={() => {
-          snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
+          activeSnapPoint.current = null
           const sl = snapLayerRef.current
           if (sl) { sl.destroyChildren(); sl.batchDraw() }
         }}
