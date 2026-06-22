@@ -932,9 +932,19 @@ export default function Canvas2D() {
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
+    console.log('=== DRAG END ===')
+    console.log('canvasX:', canvasX, 'canvasY:', canvasY)
+    console.log('zoom:', zoom, 'panX:', panX, 'panY:', panY)
+    console.log('snapLatchRef:', JSON.stringify(snapLatchRef.current))
+    console.log('snapResultRef:', JSON.stringify(snapResultRef.current))
+    console.log('dragOffsets:', JSON.stringify(dragOffsets.current))
+    console.log('members positions:', members.map(m => ({ id: m.id.slice(0,8), x: m.position.x, y: m.position.y })))
+
     const sr = snapLatchRef.current.active ? snapLatchRef.current
               : snapResultRef.current.active ? snapResultRef.current
               : null
+    console.log('sr (snap result used):', JSON.stringify(sr))
+
     snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
 
@@ -943,13 +953,15 @@ export default function Canvas2D() {
       const sm = members.find(m => m.id === sid)
       if (!sm) continue
       if (sr) {
-        // Snap active: place dragged member exactly at snap point; others keep relative offset
-        updateMember(sid, { position: { ...sm.position, x: sr.worldX + off.dx, y: sr.worldY + off.dy } })
+        const nx = sr.worldX + off.dx, ny = sr.worldY + off.dy
+        console.log('updating member', sid.slice(0,8), '→ x:', nx, 'y:', ny, '(snap)')
+        updateMember(sid, { position: { ...sm.position, x: nx, y: ny } })
       } else {
-        // No snap: convert Konva canvas pos → world, grid-snap, apply offsets
         const worldX = cx2wx(canvasX, zoom, panX)
         const worldY = cy2wy(canvasY, zoom, panY)
-        updateMember(sid, { position: { ...sm.position, x: snapToGrid(worldX + off.dx), y: snapToGrid(worldY + off.dy) } })
+        const nx = snapToGrid(worldX + off.dx), ny = snapToGrid(worldY + off.dy)
+        console.log('updating member', sid.slice(0,8), '→ x:', nx, 'y:', ny, '(grid)')
+        updateMember(sid, { position: { ...sm.position, x: nx, y: ny } })
       }
     }
     dragOffsets.current = {}
