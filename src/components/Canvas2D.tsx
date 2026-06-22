@@ -358,7 +358,6 @@ export default function Canvas2D() {
 
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
-  const grabOffsetRef = useRef<{ wx: number; wy: number }>({ wx: 0, wy: 0 })
 
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
@@ -648,11 +647,7 @@ export default function Canvas2D() {
     const worldY = cy2wy(pos.y, zoom, panY)
     const aperture = 20 / zoom
 
-    const allSnapPoints = [
-      ...members.flatMap(m => getSnapPoints(m)),
-      ...findIntersections(members),
-    ]
-
+    const allSnapPoints = members.flatMap(m => getSnapPoints(m))
     let closest: { x: number; y: number; type: string } | null = null
     let minDist = aperture
     for (const pt of allSnapPoints) {
@@ -666,7 +661,7 @@ export default function Canvas2D() {
       const latch = snapLatchRef.current
       if (latch.active) {
         const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
-        if (distFromLatch <= 8) {
+        if (distFromLatch <= 3) {
           // Keep latch alive — re-use the latched point for indicator
           snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
         } else {
@@ -851,11 +846,10 @@ export default function Canvas2D() {
     setContextMenu({ x, y, type: 'member', memberId: id })
   }, [selectedIds, setSelectedIds, setContextMenu])
 
-  const handleMemberDragStart = useCallback((id: string, grabWx: number, grabWy: number) => {
+  const handleMemberDragStart = useCallback((id: string) => {
     // Clear snap state and latch at drag start
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
     snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
-    grabOffsetRef.current = { wx: grabWx, wy: grabWy }
     const sl = snapLayerRef.current
     if (sl) { sl.destroyChildren(); sl.batchDraw() }
     // Record offsets for all selected members relative to dragged member
@@ -885,10 +879,7 @@ export default function Canvas2D() {
     const worldX = cx2wx(ptr.x, zoom, panX)
     const worldY = cy2wy(ptr.y, zoom, panY)
     const aperture = 20 / zoom  // FIX 1: match hover aperture (was 14)
-    const allSnapPoints = [
-      ...members.flatMap(m => getSnapPoints(m)),
-      ...findIntersections(members),
-    ]
+    const allSnapPoints = members.flatMap(m => getSnapPoints(m))
     let closest: { x: number; y: number; type: string } | null = null
     let minDist = aperture
     for (const pt of allSnapPoints) {
@@ -902,7 +893,7 @@ export default function Canvas2D() {
       const latch = snapLatchRef.current
       if (latch.active) {
         const distFromLatch = Math.hypot(worldX - latch.worldX, worldY - latch.worldY)
-        if (distFromLatch <= 8) {
+        if (distFromLatch <= 3) {
           snappedPoint = { x: latch.worldX, y: latch.worldY, type: 'latched' }
         } else {
           snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
@@ -938,24 +929,32 @@ export default function Canvas2D() {
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    // FIX 2: prefer latch over frame-by-frame snap result
     const sr = snapLatchRef.current.active ? snapLatchRef.current : snapResultRef.current
-    const go = grabOffsetRef.current
-    const objectSnap = sr.active
-    const snappedX = objectSnap ? sr.worldX - go.wx : snapToGrid(cx2wx(canvasX, zoom, panX))
-    const snappedY = objectSnap ? sr.worldY - go.wy : snapToGrid(cy2wy(canvasY, zoom, panY))
-    // Clear both refs
-    snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
     snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
+    snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
 
-    push({ members, connections, dimensions, groupNames })
-    for (const [sid, off] of Object.entries(dragOffsets.current)) {
-      const sm = members.find(m => m.id === sid)
-      if (!sm) continue
-      // FIX 3: skip grid snap when object-snapping so sub-quarter-inch positions are preserved
-      const finalX = objectSnap ? snappedX + off.dx : snapToGrid(snappedX + off.dx)
-      const finalY = objectSnap ? snappedY + off.dy : snapToGrid(snappedY + off.dy)
-      updateMember(sid, { position: { ...sm.position, x: finalX, y: finalY } })
+    if (sr.active) {
+      // Object snap: move all selected members by the delta from current Konva position to snap point
+      const currentWorldX = cx2wx(canvasX, zoom, panX)
+      const currentWorldY = cy2wy(canvasY, zoom, panY)
+      const deltaX = sr.worldX - currentWorldX
+      const deltaY = sr.worldY - currentWorldY
+      push({ members, connections, dimensions, groupNames })
+      for (const [sid, off] of Object.entries(dragOffsets.current)) {
+        const sm = members.find(m => m.id === sid)
+        if (!sm) continue
+        updateMember(sid, { position: { ...sm.position, x: sm.position.x + deltaX + off.dx, y: sm.position.y + deltaY + off.dy } })
+      }
+    } else {
+      // No snap — grid-snap the dragged member's Konva position, apply offsets
+      const finalX = snapToGrid(cx2wx(canvasX, zoom, panX))
+      const finalY = snapToGrid(cy2wy(canvasY, zoom, panY))
+      push({ members, connections, dimensions, groupNames })
+      for (const [sid, off] of Object.entries(dragOffsets.current)) {
+        const sm = members.find(m => m.id === sid)
+        if (!sm) continue
+        updateMember(sid, { position: { ...sm.position, x: snapToGrid(finalX + off.dx), y: snapToGrid(finalY + off.dy) } })
+      }
     }
     dragOffsets.current = {}
   }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember])
@@ -1378,7 +1377,7 @@ function MemberNode({
   connectHighlight: boolean
   onSelect: (id: string, shift: boolean) => void
   onContextMenu: (id: string, x: number, y: number) => void
-  onDragStart: (id: string, grabWx: number, grabWy: number) => void
+  onDragStart: (id: string) => void
   onDragMove: (id: string, cx: number, cy: number) => void
   onDragEnd: (id: string, cx: number, cy: number) => void
 }) {
@@ -1406,14 +1405,7 @@ function MemberNode({
         e.cancelBubble = true
         onContextMenu(m.id, e.evt.clientX, e.evt.clientY)
       }}
-      onDragStart={(e) => {
-        const stage = e.target.getStage()
-        const ptr = stage?.getPointerPosition()
-        const gx = e.target.x(), gy = e.target.y()
-        const grabWx = ptr ? (ptr.x - gx) / zoom / SCALE : 0
-        const grabWy = ptr ? (ptr.y - gy) / zoom / SCALE : 0
-        onDragStart(m.id, grabWx, grabWy)
-      }}
+      onDragStart={() => onDragStart(m.id)}
       onDragMove={(e) => onDragMove(m.id, e.target.x(), e.target.y())}
       onDragEnd={(e) => {
         onDragEnd(m.id, e.target.x(), e.target.y())
