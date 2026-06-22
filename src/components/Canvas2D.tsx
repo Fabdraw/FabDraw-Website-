@@ -358,6 +358,7 @@ export default function Canvas2D() {
 
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
+  const dragStartWorldPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
@@ -852,14 +853,16 @@ export default function Canvas2D() {
     snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
     const sl = snapLayerRef.current
     if (sl) { sl.destroyChildren(); sl.batchDraw() }
-    // Record offsets for all selected members relative to dragged member
+    // Record dragged member's world position and offsets of all selected members
     const dragged = members.find(m => m.id === id)
     if (!dragged) return
+    dragStartWorldPos.current = { x: dragged.position.x, y: dragged.position.y }
     const ids = selectedIds.includes(id) ? selectedIds : [id]
     const offsets: DragOffsets = {}
     for (const sid of ids) {
       const sm = members.find(m => m.id === sid)
       if (sm) {
+        // off.dx = 0 for the dragged member itself; relative offset for others
         offsets[sid] = {
           dx: sm.position.x - dragged.position.x,
           dy: sm.position.y - dragged.position.y,
@@ -929,31 +932,24 @@ export default function Canvas2D() {
   }, [zoom, panX, panY, members])
 
   const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    const sr = snapLatchRef.current.active ? snapLatchRef.current : snapResultRef.current
+    const sr = snapLatchRef.current.active ? snapLatchRef.current
+              : snapResultRef.current.active ? snapResultRef.current
+              : null
     snapLatchRef.current = { active: false, worldX: 0, worldY: 0 }
     snapResultRef.current = { active: false, worldX: 0, worldY: 0 }
 
-    if (sr.active) {
-      // Object snap: move all selected members by the delta from current Konva position to snap point
-      const currentWorldX = cx2wx(canvasX, zoom, panX)
-      const currentWorldY = cy2wy(canvasY, zoom, panY)
-      const deltaX = sr.worldX - currentWorldX
-      const deltaY = sr.worldY - currentWorldY
-      push({ members, connections, dimensions, groupNames })
-      for (const [sid, off] of Object.entries(dragOffsets.current)) {
-        const sm = members.find(m => m.id === sid)
-        if (!sm) continue
-        updateMember(sid, { position: { ...sm.position, x: sm.position.x + deltaX + off.dx, y: sm.position.y + deltaY + off.dy } })
-      }
-    } else {
-      // No snap — grid-snap the dragged member's Konva position, apply offsets
-      const finalX = snapToGrid(cx2wx(canvasX, zoom, panX))
-      const finalY = snapToGrid(cy2wy(canvasY, zoom, panY))
-      push({ members, connections, dimensions, groupNames })
-      for (const [sid, off] of Object.entries(dragOffsets.current)) {
-        const sm = members.find(m => m.id === sid)
-        if (!sm) continue
-        updateMember(sid, { position: { ...sm.position, x: snapToGrid(finalX + off.dx), y: snapToGrid(finalY + off.dy) } })
+    push({ members, connections, dimensions, groupNames })
+    for (const [sid, off] of Object.entries(dragOffsets.current)) {
+      const sm = members.find(m => m.id === sid)
+      if (!sm) continue
+      if (sr) {
+        // Snap active: place dragged member exactly at snap point; others keep relative offset
+        updateMember(sid, { position: { ...sm.position, x: sr.worldX + off.dx, y: sr.worldY + off.dy } })
+      } else {
+        // No snap: convert Konva canvas pos → world, grid-snap, apply offsets
+        const worldX = cx2wx(canvasX, zoom, panX)
+        const worldY = cy2wy(canvasY, zoom, panY)
+        updateMember(sid, { position: { ...sm.position, x: snapToGrid(worldX + off.dx), y: snapToGrid(worldY + off.dy) } })
       }
     }
     dragOffsets.current = {}
