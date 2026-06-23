@@ -744,14 +744,14 @@ export default function Canvas2D() {
 
   const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {}, [])
 
-  const handleMemberDragEnd = useCallback((id: string, canvasX: number, canvasY: number) => {
-    const stage = stageRef.current
-    const ptr = stage?.getPointerPosition()
-    const rawX = ptr ? (ptr.x - panX) / (zoom * SCALE) : (canvasX - panX) / (zoom * SCALE)
-    const rawY = ptr ? (ptr.y - panY) / (zoom * SCALE) : (canvasY - panY) / (zoom * SCALE)
+  const handleMemberDragEnd = useCallback((id: string, nodeX: number, nodeY: number) => {
+    // nodeX and nodeY are e.target.x() and e.target.y() — the Konva node's canvas position
+    // Convert from canvas pixels to world inches
+    const worldX = (nodeX - panX) / (zoom * SCALE)
+    const worldY = (nodeY - panY) / (zoom * SCALE)
 
-    const finalX = Math.round(rawX * 4) / 4
-    const finalY = Math.round(rawY * 4) / 4
+    const finalX = Math.round(worldX * 4) / 4
+    const finalY = Math.round(worldY * 4) / 4
 
     push({ members, connections, dimensions, groupNames })
     for (const [sid, off] of Object.entries(dragOffsets.current)) {
@@ -1205,9 +1205,7 @@ function MemberNode({
       onDragStart={() => onDragStart(m.id)}
       onDragMove={(e) => onDragMove(m.id, e.target.x(), e.target.y())}
       onDragEnd={(e) => {
-        const stage = e.target.getStage()
-        const ptr = stage?.getPointerPosition()
-        onDragEnd(m.id, ptr?.x ?? e.target.x(), ptr?.y ?? e.target.y())
+        onDragEnd(m.id, e.target.x(), e.target.y())
         e.target.x(cx)
         e.target.y(cy)
       }}
