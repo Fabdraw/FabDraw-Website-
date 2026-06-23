@@ -1334,7 +1334,11 @@ function MemberNode({
       onDragStart={() => onDragStart(m.id)}
       onDragMove={(e) => onDragMove(m.id, e.target.x(), e.target.y())}
       onDragEnd={(e) => {
-        onDragEnd(m.id, e.target.x(), e.target.y())
+        const stage = e.target.getStage()
+        const ptr = stage?.getPointerPosition()
+        const finalX = ptr ? ptr.x : e.target.x()
+        const finalY = ptr ? ptr.y : e.target.y()
+        onDragEnd(m.id, finalX, finalY)
         e.target.x(cx)
         e.target.y(cy)
       }}
