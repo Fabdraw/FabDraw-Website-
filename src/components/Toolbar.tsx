@@ -3,16 +3,15 @@ import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
   Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate, HelpCircle,
-  Menu, PanelRight,
+  Menu,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import type { Project } from '../types'
 
-export default function Toolbar({ onToggleSidebar, onToggleProps }: {
+export default function Toolbar({ onToggleSidebar }: {
   onToggleSidebar?: () => void
-  onToggleProps?: () => void
 }) {
   const { project, setProjectName, deleteMembers, addMember, setProject } = useProjectStore()
   const { members, connections } = project
@@ -277,15 +276,6 @@ export default function Toolbar({ onToggleSidebar, onToggleProps }: {
       >
         <Camera size={12} />
         <span className="hidden lg:inline">Photo</span>
-      </button>
-
-      {/* Properties panel toggle — mobile only */}
-      <button
-        className="lg:hidden flex items-center justify-center w-11 h-11 rounded text-slate-400 hover:bg-white/5 hover:text-slate-200"
-        onClick={onToggleProps}
-        title="Properties"
-      >
-        <PanelRight size={16} />
       </button>
 
       {/* Help */}

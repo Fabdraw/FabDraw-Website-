@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Toolbar from './components/Toolbar';
 import LibraryPanel from './components/LibraryPanel';
 import Canvas2D from './components/Canvas2D';
@@ -34,6 +34,25 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [propsPanelOpen, setPropsPanelOpen] = useState(false);
 
+  // Props panel drag-to-resize (touch)
+  const propsPanelRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number | null>(null);
+  const dragStartH = useRef<number>(50);
+  const [propsPanelH, setPropsPanelH] = useState(50); // percent
+
+  const handleDragHandleTouchStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    dragStartH.current = propsPanelH;
+  };
+  const handleDragHandleTouchMove = (e: React.TouchEvent) => {
+    if (dragStartY.current === null) return;
+    const dy = dragStartY.current - e.touches[0].clientY;
+    const screenH = window.innerHeight;
+    const delta = (dy / screenH) * 100;
+    setPropsPanelH(Math.max(20, Math.min(90, dragStartH.current + delta)));
+  };
+  const handleDragHandleTouchEnd = () => { dragStartY.current = null; };
+
   // Auto-show properties panel on mobile when something is selected
   useEffect(() => {
     if (selectedIds.length > 0 && window.innerWidth < 1024) {
@@ -49,7 +68,6 @@ export default function App() {
 
       const ctrl = e.ctrlKey || e.metaKey;
 
-      // Mode shortcuts (not when ctrl is held)
       if (!ctrl) {
         if (e.key === 'v' || e.key === 'V') { setMode('select'); return; }
         if (e.key === '1') { setMode('select'); return; }
@@ -78,7 +96,6 @@ export default function App() {
       }
 
       if (e.key === 'Escape') { setMode('select'); setSelectedIds([]); setContextMenu(null); return; }
-
       if (e.key === '=' || e.key === '+') { setZoom(Math.min(10, zoom * 1.25)); return; }
       if (e.key === '-') { setZoom(Math.max(0.05, zoom * 0.8)); return; }
 
@@ -94,7 +111,6 @@ export default function App() {
         if (snap) setProject({ ...project, members: snap.members, connections: snap.connections, dimensions: snap.dimensions ?? project.dimensions, groupNames: snap.groupNames ?? project.groupNames });
         return;
       }
-
       if (ctrl && e.key === 'c') {
         e.preventDefault();
         setClipboard(members.filter((m) => selectedIds.includes(m.id)));
@@ -105,8 +121,7 @@ export default function App() {
         if (clipboard.length > 0) {
           push({ members, connections, dimensions, groupNames });
           const newMembers = clipboard.map((m) => ({
-            ...m,
-            id: crypto.randomUUID(),
+            ...m, id: crypto.randomUUID(),
             position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
           }));
           newMembers.forEach((m) => addMember(m));
@@ -126,8 +141,7 @@ export default function App() {
           const duped = members
             .filter((m) => selectedIds.includes(m.id))
             .map((m) => ({
-              ...m,
-              id: crypto.randomUUID(),
+              ...m, id: crypto.randomUUID(),
               position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
             }));
           duped.forEach((m) => addMember(m));
@@ -153,60 +167,104 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
-      <Toolbar onToggleSidebar={() => setSidebarOpen(o => !o)} onToggleProps={() => setPropsPanelOpen(o => !o)} />
+      <Toolbar onToggleSidebar={() => setSidebarOpen(o => !o)} />
 
-      <div className="flex flex-1 min-h-0 relative">
-        {/* Mobile backdrop */}
+      {/* ── DESKTOP layout (lg+): flex row, sidebars inline ── */}
+      <div className="hidden lg:flex flex-1 min-h-0">
+        <LibraryPanel />
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 relative min-h-0">
+            {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
+            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
+              <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
+              <span>{members.length} members</span>
+              {selectedIds.length > 0 && <span className="text-orange-400">{selectedIds.length} selected</span>}
+            </div>
+          </div>
+          <BOMPanel />
+        </div>
+        <PropertiesPanel />
+      </div>
+
+      {/* ── MOBILE layout (< lg): canvas full screen, overlays ── */}
+      <div className="flex lg:hidden flex-1 min-h-0 relative overflow-hidden">
+
+        {/* Canvas fills everything */}
+        <div className="absolute inset-0">
+          {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
+          <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
+            <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
+            <span>{members.length} members</span>
+            {selectedIds.length > 0 && <span className="text-orange-400">{selectedIds.length} selected</span>}
+          </div>
+        </div>
+
+        {/* Backdrop — shown when any overlay is open */}
         {(sidebarOpen || propsPanelOpen) && (
           <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="absolute inset-0 bg-black/50 z-40"
             onClick={() => { setSidebarOpen(false); setPropsPanelOpen(false); }}
           />
         )}
 
-        {/* Left sidebar — overlay on mobile, inline on desktop */}
-        <div className={[
-          'fixed top-0 left-0 h-full z-50 transition-transform duration-200',
-          'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        ].join(' ')}>
-          {/* Mobile close button */}
-          <button
-            className="absolute top-2 right-2 lg:hidden text-slate-400 hover:text-slate-100 w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
-            onClick={() => setSidebarOpen(false)}
-          >✕</button>
+        {/* LEFT SIDEBAR — slides in from left */}
+        <div
+          className="absolute top-0 left-0 h-full z-50 transition-transform duration-200 flex flex-col"
+          style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+        >
+          {/* Close button inside sidebar */}
+          <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ background: '#0f1117', borderBottom: '1px solid #2e3350' }}>
+            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">Library</span>
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10"
+              onClick={() => setSidebarOpen(false)}
+            >✕</button>
+          </div>
           <LibraryPanel />
         </div>
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative min-h-0">
-            {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
-
-            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
-              <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
-              <span>{members.length} members</span>
-              {selectedIds.length > 0 && (
-                <span className="text-orange-400">{selectedIds.length} selected</span>
-              )}
+        {/* PROPERTIES PANEL — slides up from bottom, 50% height */}
+        <div
+          ref={propsPanelRef}
+          className="absolute left-0 right-0 bottom-0 z-50 transition-transform duration-200 flex flex-col rounded-t-xl overflow-hidden"
+          style={{
+            height: `${propsPanelH}%`,
+            transform: propsPanelOpen ? 'translateY(0)' : 'translateY(100%)',
+            background: '#1a1d27',
+            borderTop: '1px solid #2e3350',
+          }}
+        >
+          {/* Drag handle */}
+          <div
+            className="flex flex-col items-center pt-2 pb-1 shrink-0 cursor-ns-resize"
+            style={{ background: '#1a1d27', touchAction: 'none' }}
+            onTouchStart={handleDragHandleTouchStart}
+            onTouchMove={handleDragHandleTouchMove}
+            onTouchEnd={handleDragHandleTouchEnd}
+          >
+            <div className="w-10 h-1 rounded-full bg-slate-600" />
+          </div>
+          {/* Close button row */}
+          <div className="flex items-center justify-end px-3 pb-1 shrink-0">
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10 text-sm"
+              onClick={() => setPropsPanelOpen(false)}
+            >✕</button>
+          </div>
+          {/* Panel content — scrollable, force full width on mobile */}
+          <div className="flex-1 overflow-y-auto">
+            <div style={{ width: '100%' }}>
+              <PropertiesPanel />
             </div>
           </div>
-
-          <BOMPanel />
         </div>
 
-        {/* Right properties panel — overlay on mobile, inline on desktop */}
-        <div className={[
-          'fixed top-0 right-0 h-full z-50 transition-transform duration-200',
-          'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
-          propsPanelOpen ? 'translate-x-0' : 'translate-x-full',
-        ].join(' ')}>
-          {/* Mobile close button */}
-          <button
-            className="absolute top-2 left-2 lg:hidden text-slate-400 hover:text-slate-100 w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
-            onClick={() => setPropsPanelOpen(false)}
-          >✕</button>
-          <PropertiesPanel />
-        </div>
+        {/* BOM — collapsed tab at bottom (only visible when props panel is closed) */}
+        {!propsPanelOpen && (
+          <div className="absolute bottom-0 left-0 right-0 z-30">
+            <BOMPanel />
+          </div>
+        )}
       </div>
 
       {showTitleBlockModal && <TitleBlockModal />}

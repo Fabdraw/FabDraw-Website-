@@ -43,10 +43,11 @@ export default function PropertiesPanel() {
     </div>
   );
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
   const panelStyle = {
-    width: '240px',
+    width: isMobile ? '100%' : '240px',
     background: '#1a1d27',
-    borderLeft: '1px solid #2e3350',
+    borderLeft: isMobile ? 'none' : '1px solid #2e3350',
   };
 
   if (selectedIds.length === 0 && !selectedConn) {
