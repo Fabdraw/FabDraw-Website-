@@ -357,6 +357,11 @@ export default function Canvas2D() {
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
   const spaceDown = useRef(false)
 
+  // Touch state
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null)
+  const pinchRef = useRef<{ dist: number; midX: number; midY: number; zoom: number; panX: number; panY: number } | null>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
 
@@ -667,6 +672,101 @@ export default function Canvas2D() {
     }
   }, [selRect, members, zoom, panX, panY, setSelectedIds])
 
+  // ── Touch handlers ──────────────────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt.touches
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+
+    if (touches.length === 1) {
+      const t = touches[0]
+      touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() }
+      pinchRef.current = null
+      // Long press → context menu
+      longPressTimer.current = setTimeout(() => {
+        longPressTimer.current = null
+        if (touchStartRef.current) {
+          setContextMenu({ x: touchStartRef.current.x, y: touchStartRef.current.y, type: 'canvas' })
+          touchStartRef.current = null
+        }
+      }, 500)
+    } else if (touches.length === 2) {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+      touchStartRef.current = null
+      const dx = touches[1].clientX - touches[0].clientX
+      const dy = touches[1].clientY - touches[0].clientY
+      pinchRef.current = {
+        dist: Math.hypot(dx, dy),
+        midX: (touches[0].clientX + touches[1].clientX) / 2,
+        midY: (touches[0].clientY + touches[1].clientY) / 2,
+        zoom,
+        panX,
+        panY,
+      }
+    }
+  }, [zoom, panX, panY, setContextMenu])
+
+  const handleTouchMove = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    e.evt.preventDefault()
+    const touches = e.evt.touches
+
+    if (touches.length === 1 && touchStartRef.current) {
+      const t = touches[0]
+      const moved = Math.hypot(t.clientX - touchStartRef.current.x, t.clientY - touchStartRef.current.y)
+      if (moved > 8 && longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    } else if (touches.length === 2 && pinchRef.current) {
+      const p = pinchRef.current
+      const dx = touches[1].clientX - touches[0].clientX
+      const dy = touches[1].clientY - touches[0].clientY
+      const newDist = Math.hypot(dx, dy)
+      const curMidX = (touches[0].clientX + touches[1].clientX) / 2
+      const curMidY = (touches[0].clientY + touches[1].clientY) / 2
+
+      const newZoom = Math.max(0.05, Math.min(10, p.zoom * (newDist / p.dist)))
+      const midWorldX = (p.midX - p.panX) / (p.zoom * SCALE)
+      const midWorldY = (p.midY - p.panY) / (p.zoom * SCALE)
+      const panDx = curMidX - p.midX
+      const panDy = curMidY - p.midY
+      const newPanX = curMidX - midWorldX * newZoom * SCALE + panDx * 0
+      const newPanY = curMidY - midWorldY * newZoom * SCALE + panDy * 0
+      // Combine pinch zoom + two-finger pan
+      const finalPanX = newPanX + (curMidX - p.midX)
+      const finalPanY = newPanY + (curMidY - p.midY)
+      setPanZoom(finalPanX, finalPanY, newZoom)
+    }
+  }, [setPanZoom])
+
+  const handleTouchEnd = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    if (e.evt.changedTouches.length === 1 && touchStartRef.current) {
+      const t = e.evt.changedTouches[0]
+      const moved = Math.hypot(t.clientX - touchStartRef.current.x, t.clientY - touchStartRef.current.y)
+      const elapsed = Date.now() - touchStartRef.current.t
+      if (moved < 8 && elapsed < 500) {
+        // Tap → select member under touch point
+        const stage = stageRef.current
+        if (stage) {
+          const pos = stage.getPointerPosition()
+          if (pos) {
+            const shape = stage.getIntersection(pos)
+            const memberGroup = shape?.findAncestor('Group')
+            if (memberGroup) {
+              const id = (memberGroup.attrs as { id?: string }).id
+              if (id) setSelectedIds([id])
+            } else {
+              setSelectedIds([])
+            }
+          }
+        }
+      }
+      touchStartRef.current = null
+    }
+    pinchRef.current = null
+  }, [stageRef, setSelectedIds])
+  // ── End touch ────────────────────────────────────────────────────────────────
+
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.evt.preventDefault()
     if (rightDragMoved.current) {
@@ -828,7 +928,7 @@ export default function Canvas2D() {
     <div
       ref={containerRef}
       className='w-full h-full'
-      style={{ background: '#12151e', cursor, position: 'relative', ...gridStyle }}
+      style={{ background: '#12151e', cursor, position: 'relative', touchAction: 'none', ...gridStyle }}
     >
       <Stage
         ref={stageRef}
@@ -840,6 +940,9 @@ export default function Canvas2D() {
         onMouseUp={handleStageMouseUp}
         onContextMenu={handleContextMenu}
         onMouseLeave={() => {}}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{ display: 'block' }}
       >
         {/* Main layer */}

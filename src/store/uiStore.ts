@@ -67,7 +67,7 @@ export const useUIStore = create<UIState>((set) => ({
   connectFirstMemberId: null,
   activeView: '2d',
   activeRightTab: 'props',
-  isBOMCollapsed: false,
+  isBOMCollapsed: typeof window !== 'undefined' && window.innerWidth < 1024,
   clipboard: [],
   showTitleBlockModal: false,
   showAIModal: false,

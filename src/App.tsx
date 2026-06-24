@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Toolbar from './components/Toolbar';
 import LibraryPanel from './components/LibraryPanel';
 import Canvas2D from './components/Canvas2D';
@@ -30,6 +30,17 @@ export default function App() {
   const prevModeRef = React.useRef(mode);
   const { undo, redo, push } = useHistoryStore();
 
+  // Mobile panel state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [propsPanelOpen, setPropsPanelOpen] = useState(false);
+
+  // Auto-show properties panel on mobile when something is selected
+  useEffect(() => {
+    if (selectedIds.length > 0 && window.innerWidth < 1024) {
+      setPropsPanelOpen(true);
+    }
+  }, [selectedIds]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -48,7 +59,6 @@ export default function App() {
         if (e.key === 'c' || e.key === 'C') { setMode('connect'); return; }
         if (e.key === 'h' || e.key === 'H' || e.key === ' ') { e.preventDefault(); prevModeRef.current = mode; setMode('pan'); return; }
         if (e.key === 'f' || e.key === 'F') {
-          // Fit view — same logic as Toolbar handleFitView
           if (members.length === 0) { setZoom(1); setPan(200, 200); return; }
           const canvas = document.querySelector('canvas');
           const W = canvas?.offsetWidth ?? 800, H = canvas?.offsetHeight ?? 600;
@@ -125,7 +135,6 @@ export default function App() {
         }
         return;
       }
-
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -144,10 +153,30 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
-      <Toolbar />
+      <Toolbar onToggleSidebar={() => setSidebarOpen(o => !o)} onToggleProps={() => setPropsPanelOpen(o => !o)} />
 
-      <div className="flex flex-1 min-h-0">
-        <LibraryPanel />
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Mobile backdrop */}
+        {(sidebarOpen || propsPanelOpen) && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => { setSidebarOpen(false); setPropsPanelOpen(false); }}
+          />
+        )}
+
+        {/* Left sidebar — overlay on mobile, inline on desktop */}
+        <div className={[
+          'fixed top-0 left-0 h-full z-50 transition-transform duration-200',
+          'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}>
+          {/* Mobile close button */}
+          <button
+            className="absolute top-2 right-2 lg:hidden text-slate-400 hover:text-slate-100 w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
+            onClick={() => setSidebarOpen(false)}
+          >✕</button>
+          <LibraryPanel />
+        </div>
 
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative min-h-0">
@@ -165,7 +194,19 @@ export default function App() {
           <BOMPanel />
         </div>
 
-        <PropertiesPanel />
+        {/* Right properties panel — overlay on mobile, inline on desktop */}
+        <div className={[
+          'fixed top-0 right-0 h-full z-50 transition-transform duration-200',
+          'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
+          propsPanelOpen ? 'translate-x-0' : 'translate-x-full',
+        ].join(' ')}>
+          {/* Mobile close button */}
+          <button
+            className="absolute top-2 left-2 lg:hidden text-slate-400 hover:text-slate-100 w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
+            onClick={() => setPropsPanelOpen(false)}
+          >✕</button>
+          <PropertiesPanel />
+        </div>
       </div>
 
       {showTitleBlockModal && <TitleBlockModal />}

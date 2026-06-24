@@ -3,13 +3,17 @@ import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
   Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate, HelpCircle,
+  Menu, PanelRight,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import type { Project } from '../types'
 
-export default function Toolbar() {
+export default function Toolbar({ onToggleSidebar, onToggleProps }: {
+  onToggleSidebar?: () => void
+  onToggleProps?: () => void
+}) {
   const { project, setProjectName, deleteMembers, addMember, setProject } = useProjectStore()
   const { members, connections } = project
   const {
@@ -98,32 +102,41 @@ export default function Toolbar() {
     e.target.value = ''
   }
 
-  // Button variants
-  const base = 'flex items-center justify-center w-7 h-7 rounded transition-colors focus:outline-none'
+  // Button variants — min 44×44px on mobile for touch, compact on desktop
+  const base = 'flex items-center justify-center min-w-[44px] min-h-[44px] lg:w-7 lg:h-7 lg:min-w-0 lg:min-h-0 rounded transition-colors focus:outline-none'
   const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
   const btnActive = `${base} bg-orange-500/15 text-orange-400`
   const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
-  const div = <div className="w-px h-4 mx-1.5 bg-[#2e3350] shrink-0" />
+  const div = <div className="w-px h-4 mx-0.5 lg:mx-1.5 bg-[#2e3350] shrink-0" />
 
   return (
     <div
-      className="flex items-center gap-0.5 px-3 select-none shrink-0"
-      style={{ height: '44px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
+      className="flex items-center gap-0.5 px-2 lg:px-3 select-none shrink-0"
+      style={{ height: '48px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
     >
+      {/* Hamburger — mobile only */}
+      <button
+        className="lg:hidden flex items-center justify-center w-11 h-11 rounded text-slate-400 hover:bg-white/5 hover:text-slate-200 mr-1"
+        onClick={onToggleSidebar}
+        title="Library"
+      >
+        <Menu size={18} />
+      </button>
+
       {/* Logo */}
-      <div className="flex items-center gap-2 mr-3 shrink-0">
+      <div className="flex items-center gap-2 mr-2 lg:mr-3 shrink-0">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <rect width="8" height="8" rx="1.5" fill="#f97316" />
           <rect x="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
           <rect y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
           <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".25" />
         </svg>
-        <span className="text-sm font-bold tracking-widest text-slate-100">FABDRAW</span>
+        <span className="text-sm font-bold tracking-widest text-slate-100 hidden lg:inline">FABDRAW</span>
       </div>
 
-      {/* Project name */}
+      {/* Project name — hidden on mobile */}
       <input
-        className="bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
+        className="hidden lg:block bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
         style={{
           border: 'none',
           borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent',
@@ -188,7 +201,7 @@ export default function Toolbar() {
         <ZoomOut size={14} />
       </button>
       <span
-        className="text-slate-500 text-xs tabular-nums w-10 text-center"
+        className="hidden lg:inline text-slate-500 text-xs tabular-nums w-10 text-center"
         style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}
       >
         {(zoom * 100).toFixed(0)}%
@@ -248,22 +261,31 @@ export default function Toolbar() {
 
       {/* AI */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 justify-center"
         style={{ border: '1px solid #f97316', color: '#f97316' }}
         onClick={() => setShowAIModal(true)}
       >
         <Sparkles size={12} />
-        AI
+        <span className="hidden lg:inline">AI</span>
       </button>
 
       {/* Photo */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ml-1 transition-colors hover:bg-teal-500/10"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ml-1 transition-colors hover:bg-teal-500/10 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 justify-center"
         style={{ border: '1px solid #14b8a6', color: '#14b8a6' }}
         onClick={() => setShowPhotoModal(true)}
       >
         <Camera size={12} />
-        Photo
+        <span className="hidden lg:inline">Photo</span>
+      </button>
+
+      {/* Properties panel toggle — mobile only */}
+      <button
+        className="lg:hidden flex items-center justify-center w-11 h-11 rounded text-slate-400 hover:bg-white/5 hover:text-slate-200"
+        onClick={onToggleProps}
+        title="Properties"
+      >
+        <PanelRight size={16} />
       </button>
 
       {/* Help */}
