@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Plus, X } from 'lucide-react';
+import { Trash2, Plus, X, ChevronRight } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
@@ -15,7 +15,7 @@ const GRADE_LABELS: Record<Grade, string> = {
 };
 
 
-export default function PropertiesPanel() {
+export default function PropertiesPanel({ onClose }: { onClose?: () => void }) {
   const { project, updateMember, deleteMembers, deleteConnection } = useProjectStore();
   const { members, connections, dimensions, groupNames } = project;
   const { selectedIds, selectedConnectionId, activeRightTab, setActiveRightTab, setSelectedIds } = useUIStore();
@@ -51,10 +51,20 @@ export default function PropertiesPanel() {
 
   if (selectedIds.length === 0 && !selectedConn) {
     return (
-      <div className="shrink-0 flex items-center justify-center" style={panelStyle}>
-        <div className="text-center p-4">
-          <div className="text-3xl mb-2" style={{ color: '#2d3748' }}>◻</div>
-          <div style={{ color: '#475569', fontSize: '12px' }}>Select a member</div>
+      <div className="shrink-0 flex flex-col" style={panelStyle}>
+        {onClose && (
+          <div className="flex items-center justify-between px-3 py-2 lg:hidden" style={{ borderBottom: '1px solid #2e3350' }}>
+            <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>PROPERTIES</span>
+            <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-slate-200 hover:bg-white/5">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center p-4">
+            <div className="text-3xl mb-2" style={{ color: '#2d3748' }}>◻</div>
+            <div style={{ color: '#475569', fontSize: '12px' }}>Select a member</div>
+          </div>
         </div>
       </div>
     );
@@ -143,6 +153,16 @@ export default function PropertiesPanel() {
 
   return (
     <div className="shrink-0 flex flex-col" style={panelStyle}>
+      {/* Mobile close button */}
+      {onClose && (
+        <div className="flex items-center justify-between px-3 py-2 lg:hidden" style={{ borderBottom: '1px solid #2e3350' }}>
+          <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>PROPERTIES</span>
+          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-slate-200 hover:bg-white/5">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #2e3350' }}>
         <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>

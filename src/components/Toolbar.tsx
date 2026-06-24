@@ -3,6 +3,7 @@ import {
   MousePointer2, Hand, Undo2, Redo2, Trash2, Copy, Clipboard,
   LayoutGrid, Sparkles, Camera, ZoomIn, ZoomOut, Maximize2,
   Save, FolderOpen, FileText, Ruler, Link2, LayoutTemplate, HelpCircle,
+  Menu, PanelRight,
 } from 'lucide-react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
@@ -19,6 +20,8 @@ export default function Toolbar() {
     setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowTemplateModal,
     setShowHelpModal, setShowPDFExportModal,
     zoom, setZoom, setPan,
+    sidebarOpen, setSidebarOpen,
+    propertiesPanelOpen, setPropertiesPanelOpen,
   } = useUIStore()
   const { canUndo, canRedo, undo, redo, push } = useHistoryStore()
   const [editingName, setEditingName] = useState(false)
@@ -98,32 +101,43 @@ export default function Toolbar() {
     e.target.value = ''
   }
 
-  // Button variants
-  const base = 'flex items-center justify-center w-7 h-7 rounded transition-colors focus:outline-none'
+  // Button variants — min 44px touch targets on mobile
+  const base = 'flex items-center justify-center min-w-[44px] min-h-[44px] lg:w-7 lg:h-7 lg:min-w-0 lg:min-h-0 rounded transition-colors focus:outline-none'
   const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
   const btnActive = `${base} bg-orange-500/15 text-orange-400`
   const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
-  const div = <div className="w-px h-4 mx-1.5 bg-[#2e3350] shrink-0" />
+  const div = <div className="w-px h-4 mx-1 lg:mx-1.5 bg-[#2e3350] shrink-0 hidden lg:block" />
+  const divMobile = <div className="w-px h-4 mx-0.5 bg-[#2e3350] shrink-0" />
 
   return (
     <div
-      className="flex items-center gap-0.5 px-3 select-none shrink-0"
-      style={{ height: '44px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
+      className="flex items-center gap-0 lg:gap-0.5 px-1 lg:px-3 select-none shrink-0 overflow-x-auto"
+      style={{ height: '48px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
     >
+      {/* Hamburger — mobile only */}
+      <button
+        className={`${btn} lg:hidden`}
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        title="Library"
+        aria-label="Toggle library panel"
+      >
+        <Menu size={18} />
+      </button>
+
       {/* Logo */}
-      <div className="flex items-center gap-2 mr-3 shrink-0">
+      <div className="flex items-center gap-1.5 mx-1 lg:mx-0 lg:gap-2 lg:mr-3 shrink-0">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <rect width="8" height="8" rx="1.5" fill="#f97316" />
           <rect x="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
           <rect y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
           <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".25" />
         </svg>
-        <span className="text-sm font-bold tracking-widest text-slate-100">FABDRAW</span>
+        <span className="text-sm font-bold tracking-widest text-slate-100 hidden sm:inline">FABDRAW</span>
       </div>
 
-      {/* Project name */}
+      {/* Project name — hidden on small mobile */}
       <input
-        className="bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
+        className="bg-transparent text-slate-200 text-sm focus:outline-none w-24 lg:w-36 px-1 rounded hidden sm:block"
         style={{
           border: 'none',
           borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent',
@@ -174,10 +188,10 @@ export default function Toolbar() {
       <button className={mode === 'pan' ? btnActive : btn} onClick={() => setMode('pan')} title="Pan (H / Space)">
         <Hand size={14} />
       </button>
-      <button className={mode === 'dimension' ? btnActive : btn} onClick={() => setMode('dimension')} title="Dimension (D)">
+      <button className={`${mode === 'dimension' ? btnActive : btn} hidden lg:flex`} onClick={() => setMode('dimension')} title="Dimension (D)">
         <Ruler size={14} />
       </button>
-      <button className={mode === 'connect' ? btnActive : btn} onClick={() => setMode('connect')} title="Connect (C)">
+      <button className={`${mode === 'connect' ? btnActive : btn} hidden lg:flex`} onClick={() => setMode('connect')} title="Connect (C)">
         <Link2 size={14} />
       </button>
 
@@ -188,7 +202,7 @@ export default function Toolbar() {
         <ZoomOut size={14} />
       </button>
       <span
-        className="text-slate-500 text-xs tabular-nums w-10 text-center"
+        className="text-slate-500 text-xs tabular-nums w-10 text-center hidden sm:inline"
         style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}
       >
         {(zoom * 100).toFixed(0)}%
@@ -206,73 +220,73 @@ export default function Toolbar() {
       <button
         className={activeView === '2d' ? btnActive : btn}
         onClick={() => setActiveView('2d')}
-        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+        style={{ fontSize: '11px', fontWeight: 700, width: '44px' }}
       >
         2D
       </button>
       <button
         className={activeView === '3d' ? btnActive : btn}
         onClick={() => setActiveView('3d')}
-        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+        style={{ fontSize: '11px', fontWeight: 700, width: '44px' }}
       >
         3D
       </button>
 
       {div}
 
-      {/* Title block */}
-      <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block">
+      {/* Title block — hidden on mobile */}
+      <button className={`${btn} hidden lg:flex`} onClick={() => setShowTitleBlockModal(true)} title="Title Block">
         <LayoutGrid size={14} />
       </button>
 
-      {/* Templates */}
-      <button className={btn} onClick={() => setShowTemplateModal(true)} title="Template Library">
+      {/* Templates — hidden on mobile */}
+      <button className={`${btn} hidden lg:flex`} onClick={() => setShowTemplateModal(true)} title="Template Library">
         <LayoutTemplate size={14} />
       </button>
 
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* File ops */}
-      <button className={btn} onClick={handleSave} title="Save (.fabdraw.json)">
+      {/* File ops — hidden on mobile */}
+      <button className={`${btn} hidden lg:flex`} onClick={handleSave} title="Save (.fabdraw.json)">
         <Save size={14} />
       </button>
-      <button className={btn} onClick={handleLoad} title="Load (.fabdraw.json)">
+      <button className={`${btn} hidden lg:flex`} onClick={handleLoad} title="Load (.fabdraw.json)">
         <FolderOpen size={14} />
       </button>
-      <button className={btn} onClick={() => setShowPDFExportModal(true)} title="Export PDF">
+      <button className={`${btn} hidden lg:flex`} onClick={() => setShowPDFExportModal(true)} title="Export PDF">
         <FileText size={14} />
       </button>
 
       {div}
 
-      {/* AI */}
+      {/* AI — hidden on small mobile */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10"
-        style={{ border: '1px solid #f97316', color: '#f97316' }}
+        className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10"
+        style={{ border: '1px solid #f97316', color: '#f97316', minHeight: '44px', minWidth: '44px' }}
         onClick={() => setShowAIModal(true)}
       >
         <Sparkles size={12} />
-        AI
-      </button>
-
-      {/* Photo */}
-      <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ml-1 transition-colors hover:bg-teal-500/10"
-        style={{ border: '1px solid #14b8a6', color: '#14b8a6' }}
-        onClick={() => setShowPhotoModal(true)}
-      >
-        <Camera size={12} />
-        Photo
+        <span className="hidden lg:inline">AI</span>
       </button>
 
       {/* Help */}
       <button
-        className={`${btn} ml-1`}
+        className={`${btn} hidden lg:flex ml-1`}
         onClick={() => setShowHelpModal(true)}
         title="Help (?)"
       >
         <HelpCircle size={14} />
+      </button>
+
+      {/* Properties panel toggle — mobile only */}
+      <button
+        className={`${propertiesPanelOpen ? btnActive : btn} lg:hidden`}
+        onClick={() => setPropertiesPanelOpen(!propertiesPanelOpen)}
+        title="Properties"
+        aria-label="Toggle properties panel"
+      >
+        <PanelRight size={18} />
       </button>
 
       <input ref={fileInputRef} type="file" accept=".json,.fabdraw.json" className="hidden" onChange={handleFileChange} />

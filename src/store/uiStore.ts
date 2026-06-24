@@ -33,6 +33,9 @@ interface UIState {
   panX: number;
   panY: number;
   zoom: number;
+  // Mobile/tablet responsive state
+  sidebarOpen: boolean;
+  propertiesPanelOpen: boolean;
 
   setMode: (mode: Mode) => void;
   setSelectedIds: (ids: string[]) => void;
@@ -57,6 +60,8 @@ interface UIState {
   setPanZoom: (x: number, y: number, z: number) => void;
   setZoom: (z: number) => void;
   setPan: (x: number, y: number) => void;
+  setSidebarOpen: (open: boolean) => void;
+  setPropertiesPanelOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -67,7 +72,7 @@ export const useUIStore = create<UIState>((set) => ({
   connectFirstMemberId: null,
   activeView: '2d',
   activeRightTab: 'props',
-  isBOMCollapsed: false,
+  isBOMCollapsed: typeof window !== 'undefined' && window.innerWidth < 1024,
   clipboard: [],
   showTitleBlockModal: false,
   showAIModal: false,
@@ -81,6 +86,8 @@ export const useUIStore = create<UIState>((set) => ({
   panX: 400,
   panY: 300,
   zoom: 1,
+  sidebarOpen: false,
+  propertiesPanelOpen: false,
 
   setMode: (mode) => set({ mode, connectFirstMemberId: null }),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
@@ -108,4 +115,6 @@ export const useUIStore = create<UIState>((set) => ({
   setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),
   setZoom: (zoom) => set({ zoom }),
   setPan: (panX, panY) => set({ panX, panY }),
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  setPropertiesPanelOpen: (propertiesPanelOpen) => set({ propertiesPanelOpen }),
 }));

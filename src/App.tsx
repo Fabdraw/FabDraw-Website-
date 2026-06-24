@@ -26,7 +26,17 @@ export default function App() {
     setContextMenu,
     clipboard, setClipboard,
     zoom, setZoom, setPan,
+    sidebarOpen, setSidebarOpen,
+    propertiesPanelOpen, setPropertiesPanelOpen,
   } = useUIStore();
+
+  // Auto-open properties panel on mobile when something is selected
+  useEffect(() => {
+    const isMobile = window.innerWidth < 1024;
+    if (isMobile && selectedIds.length > 0) {
+      setPropertiesPanelOpen(true);
+    }
+  }, [selectedIds, setPropertiesPanelOpen]);
   const prevModeRef = React.useRef(mode);
   const { undo, redo, push } = useHistoryStore();
 
@@ -146,8 +156,26 @@ export default function App() {
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
       <Toolbar />
 
-      <div className="flex flex-1 min-h-0">
-        <LibraryPanel />
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Mobile backdrop for sidebars */}
+        {(sidebarOpen || propertiesPanelOpen) && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => { setSidebarOpen(false); setPropertiesPanelOpen(false); }}
+          />
+        )}
+
+        {/* Left Library Panel — overlay on mobile, static on desktop */}
+        <div
+          className={[
+            'fixed top-0 left-0 h-full z-50 transition-transform duration-200',
+            'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          ].join(' ')}
+          style={{ paddingTop: sidebarOpen ? '0' : undefined }}
+        >
+          <LibraryPanel onClose={() => setSidebarOpen(false)} />
+        </div>
 
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative min-h-0">
@@ -165,7 +193,16 @@ export default function App() {
           <BOMPanel />
         </div>
 
-        <PropertiesPanel />
+        {/* Right Properties Panel — overlay on mobile, static on desktop */}
+        <div
+          className={[
+            'fixed top-0 right-0 h-full z-50 transition-transform duration-200',
+            'lg:relative lg:translate-x-0 lg:z-auto lg:flex',
+            propertiesPanelOpen ? 'translate-x-0' : 'translate-x-full',
+          ].join(' ')}
+        >
+          <PropertiesPanel onClose={() => setPropertiesPanelOpen(false)} />
+        </div>
       </div>
 
       {showTitleBlockModal && <TitleBlockModal />}

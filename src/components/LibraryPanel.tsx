@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
@@ -9,6 +9,7 @@ import { inputCls, labelCls } from '../styles/tokens';
 
 interface LibProps {
   collapsed?: boolean;
+  onClose?: () => void;
 }
 
 const materialGroups = [
@@ -30,7 +31,7 @@ const materialGroups = [
 ];
 
 
-export default function LibraryPanel({ collapsed }: LibProps) {
+export default function LibraryPanel({ collapsed, onClose }: LibProps) {
   const { project, addMember } = useProjectStore();
   const { members, connections } = project;
   const { setSelectedIds, panX, panY, zoom } = useUIStore();
@@ -97,6 +98,19 @@ export default function LibraryPanel({ collapsed }: LibProps) {
         borderRight: '1px solid #2e3350',
       }}
     >
+      {/* Mobile close button */}
+      {onClose && (
+        <div className="flex items-center justify-between px-3 py-2 lg:hidden" style={{ borderBottom: '1px solid #2e3350' }}>
+          <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>LIBRARY</span>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-slate-200 hover:bg-white/5"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Material list */}
       <div className="flex-1 overflow-y-auto">
         {materialGroups.map(group => (
