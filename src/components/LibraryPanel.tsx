@@ -11,6 +11,13 @@ interface LibProps {
   collapsed?: boolean;
 }
 
+// All 10 material types in one flat list for the chip row
+const ALL_TYPES: MemberType[] = [
+  'square_tube', 'round_tube', 'rect_tube', 'pipe',
+  'angle', 'channel', 'i_beam',
+  'flat_bar', 'sheet', 'plate',
+];
+
 const materialGroups = [
   {
     label: 'STRUCTURAL TUBE',
@@ -28,7 +35,6 @@ const materialGroups = [
     types: ['flat_bar', 'sheet', 'plate'] as MemberType[],
   },
 ];
-
 
 export default function LibraryPanel({ collapsed }: LibProps) {
   const { project, addMember } = useProjectStore();
@@ -58,7 +64,6 @@ export default function LibraryPanel({ collapsed }: LibProps) {
     const wy = (ch / 2 - panY) / (zoom * SCALE);
 
     historyStore.push({ members, connections });
-    const newId = crypto.randomUUID();
     addMember({
       type: selectedType,
       size: selectedSize,
@@ -73,14 +78,13 @@ export default function LibraryPanel({ collapsed }: LibProps) {
       rotation: { x: 0, y: 0, z: 0 },
       holes: [],
     });
-    // We can't get the new id before add, so select by finding last member
-    // Instead just clear selection - that's fine for now
     setSelectedIds([]);
   };
 
   if (collapsed) return null;
 
   const mat = MATERIALS[selectedType];
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
 
   const feetInches = (inches: number) => {
     const ft = Math.floor(inches / 12);
@@ -88,6 +92,176 @@ export default function LibraryPanel({ collapsed }: LibProps) {
     return ft > 0 ? `${ft}'-${inPart}"` : `${inPart}"`;
   };
 
+  // ── MOBILE layout: chip row + scrollable config + sticky Add button ──
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: '#1a1d27',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Horizontal chip row — all 10 types, swipe to scroll */}
+        <div
+          style={{
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            borderBottom: '1px solid #2e3350',
+            padding: '10px 12px',
+            display: 'flex',
+            gap: '8px',
+            flexShrink: 0,
+          } as React.CSSProperties}
+        >
+          <style>{`.lib-chip-row::-webkit-scrollbar { display: none; }`}</style>
+          {ALL_TYPES.map(type => {
+            const m = MATERIALS[type];
+            const isSelected = selectedType === type;
+            return (
+              <button
+                key={type}
+                onClick={() => handleTypeSelect(type)}
+                style={{
+                  flexShrink: 0,
+                  padding: '6px 14px',
+                  borderRadius: '999px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  background: isSelected ? 'rgba(249,115,22,0.15)' : '#21253a',
+                  color: isSelected ? '#f97316' : '#94a3b8',
+                  border: isSelected ? '1px solid rgba(249,115,22,0.5)' : '1px solid #2e3350',
+                  minHeight: '36px',
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Scrollable config area */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            padding: '14px 12px',
+            paddingBottom: '80px',
+          } as React.CSSProperties}
+        >
+          {/* SVG preview */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '44px',
+              background: '#21253a',
+              borderRadius: '6px',
+              border: '1px solid #2e3350',
+              marginBottom: '14px',
+            }}
+            dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
+          />
+
+          {/* Size */}
+          <div style={{ marginBottom: '12px' }}>
+            <label className={labelCls}>Size</label>
+            <select className={inputCls} value={selectedSize} onChange={e => setSelectedSize(e.target.value)}>
+              {mat.sizes.map(s => <option key={s} value={s}>{s}"</option>)}
+            </select>
+          </div>
+
+          {/* Wall */}
+          <div style={{ marginBottom: '12px' }}>
+            <label className={labelCls}>Wall Thickness</label>
+            <select className={inputCls} value={selectedWall} onChange={e => setSelectedWall(e.target.value)}>
+              {mat.walls.map(w => <option key={w} value={String(w)}>{w}"</option>)}
+            </select>
+          </div>
+
+          {/* Length */}
+          <div style={{ marginBottom: '12px' }}>
+            <label className={labelCls}>Length (inches)</label>
+            <input
+              type="number"
+              className={inputCls}
+              value={length}
+              min={0.1}
+              step={0.25}
+              onChange={e => setLength(parseFloat(e.target.value) || 1)}
+            />
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#475569', marginTop: '2px' }}>
+              {feetInches(length)}
+            </div>
+          </div>
+
+          {/* Grade */}
+          <div style={{ marginBottom: '12px' }}>
+            <label className={labelCls}>Grade</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {([
+                { key: 'mild' as Grade, label: 'Mild Steel' },
+                { key: 'stainless' as Grade, label: 'Stainless' },
+                { key: 'aluminum' as Grade, label: 'Aluminum' },
+              ]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedGrade(key)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    background: selectedGrade === key ? 'rgba(249,115,22,0.15)' : 'transparent',
+                    color: selectedGrade === key ? '#f97316' : '#64748b',
+                    border: selectedGrade === key ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2e3350',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky Add button — always visible at bottom */}
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            padding: '10px 12px',
+            background: '#1a1d27',
+            borderTop: '1px solid #2e3350',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={handleAddMember}
+            className="w-full flex items-center justify-center gap-2 rounded-md text-white font-medium"
+            style={{
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              fontSize: '14px',
+              height: '48px',
+            }}
+          >
+            <Plus size={16} />
+            Add to Drawing
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── DESKTOP layout: original vertical list + config card ──
   return (
     <div
       className="flex flex-col h-full shrink-0 overflow-hidden"
@@ -135,10 +309,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                     if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                   }}
                 >
-                  <span
-                    className="shrink-0"
-                    dangerouslySetInnerHTML={{ __html: m.svgIcon }}
-                  />
+                  <span className="shrink-0" dangerouslySetInnerHTML={{ __html: m.svgIcon }} />
                   <span className="truncate">{m.label}</span>
                 </button>
               );
@@ -148,54 +319,24 @@ export default function LibraryPanel({ collapsed }: LibProps) {
       </div>
 
       {/* Configuration card */}
-      <div
-        className="shrink-0 space-y-2.5"
-        style={{
-          padding: '12px',
-          borderTop: '1px solid #2e3350',
-        }}
-      >
-        {/* SVG preview */}
+      <div className="shrink-0 space-y-2.5" style={{ padding: '12px', borderTop: '1px solid #2e3350' }}>
         <div
           className="flex items-center justify-center"
-          style={{
-            height: '40px',
-            background: '#21253a',
-            borderRadius: '6px',
-            border: '1px solid #2e3350',
-          }}
+          style={{ height: '40px', background: '#21253a', borderRadius: '6px', border: '1px solid #2e3350' }}
           dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
         />
-
-        {/* Size */}
         <div>
           <label className={labelCls}>Size</label>
-          <select
-            className={inputCls}
-            value={selectedSize}
-            onChange={e => setSelectedSize(e.target.value)}
-          >
-            {mat.sizes.map(s => (
-              <option key={s} value={s}>{s}"</option>
-            ))}
+          <select className={inputCls} value={selectedSize} onChange={e => setSelectedSize(e.target.value)}>
+            {mat.sizes.map(s => <option key={s} value={s}>{s}"</option>)}
           </select>
         </div>
-
-        {/* Wall */}
         <div>
           <label className={labelCls}>Wall Thickness</label>
-          <select
-            className={inputCls}
-            value={selectedWall}
-            onChange={e => setSelectedWall(e.target.value)}
-          >
-            {mat.walls.map(w => (
-              <option key={w} value={String(w)}>{w}"</option>
-            ))}
+          <select className={inputCls} value={selectedWall} onChange={e => setSelectedWall(e.target.value)}>
+            {mat.walls.map(w => <option key={w} value={String(w)}>{w}"</option>)}
           </select>
         </div>
-
-        {/* Length */}
         <div>
           <label className={labelCls}>Length (inches)</label>
           <input
@@ -206,19 +347,10 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             step={0.25}
             onChange={e => setLength(parseFloat(e.target.value) || 1)}
           />
-          <div
-            className="mt-0.5"
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '10px',
-              color: '#475569',
-            }}
-          >
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#475569', marginTop: '2px' }}>
             {feetInches(length)}
           </div>
         </div>
-
-        {/* Grade pills */}
         <div>
           <label className={labelCls}>Grade</label>
           <div className="flex gap-1">
@@ -242,20 +374,12 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             ))}
           </div>
         </div>
-
-        {/* Add button */}
         <button
           onClick={handleAddMember}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-white text-[13px] font-medium"
-          style={{
-            background: 'linear-gradient(135deg, #f97316, #ea580c)',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
-          }}
+          style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(249,115,22,0.3)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
         >
           <Plus size={14} />
           Add to Drawing
