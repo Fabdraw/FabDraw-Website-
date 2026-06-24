@@ -38,7 +38,7 @@ export default function App() {
   const propsPanelRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const dragStartH = useRef<number>(50);
-  const [propsPanelH, setPropsPanelH] = useState(50); // percent
+  const [propsPanelH, setPropsPanelH] = useState(55); // percent of screen height
 
   const handleDragHandleTouchStart = (e: React.TouchEvent) => {
     dragStartY.current = e.touches[0].clientY;
@@ -210,52 +210,65 @@ export default function App() {
         {/* LEFT SIDEBAR — slides in from left */}
         <div
           className="absolute top-0 left-0 h-full z-50 transition-transform duration-200 flex flex-col"
-          style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+          style={{
+            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            width: '280px',
+            maxWidth: '85vw',
+            background: '#1a1d27',
+          }}
         >
-          {/* Close button inside sidebar */}
+          {/* Close button header */}
           <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ background: '#0f1117', borderBottom: '1px solid #2e3350' }}>
             <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">Library</span>
             <button
-              className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10"
+              className="w-11 h-11 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10"
               onClick={() => setSidebarOpen(false)}
             >✕</button>
           </div>
-          <LibraryPanel />
+          {/* LibraryPanel fills remaining height, manages its own internal scroll */}
+          <div className="flex-1 min-h-0" style={{ display: 'flex', flexDirection: 'column' }}>
+            <LibraryPanel />
+          </div>
         </div>
 
-        {/* PROPERTIES PANEL — slides up from bottom, 50% height */}
+        {/* PROPERTIES PANEL — slides up from bottom */}
         <div
           ref={propsPanelRef}
-          className="absolute left-0 right-0 bottom-0 z-50 transition-transform duration-200 flex flex-col rounded-t-xl overflow-hidden"
+          className="absolute left-0 right-0 bottom-0 z-50 flex flex-col rounded-t-2xl overflow-hidden"
           style={{
             height: `${propsPanelH}%`,
             transform: propsPanelOpen ? 'translateY(0)' : 'translateY(100%)',
+            transition: dragStartY.current !== null ? 'none' : 'transform 0.2s ease',
             background: '#1a1d27',
-            borderTop: '1px solid #2e3350',
+            borderTop: '2px solid #2e3350',
+            boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
           }}
         >
-          {/* Drag handle */}
+          {/* Drag handle — touch to resize or swipe down to close */}
           <div
-            className="flex flex-col items-center pt-2 pb-1 shrink-0 cursor-ns-resize"
-            style={{ background: '#1a1d27', touchAction: 'none' }}
+            className="flex flex-col items-center pt-3 pb-2 shrink-0 cursor-ns-resize"
+            style={{ touchAction: 'none' }}
             onTouchStart={handleDragHandleTouchStart}
             onTouchMove={handleDragHandleTouchMove}
-            onTouchEnd={handleDragHandleTouchEnd}
+            onTouchEnd={(e) => {
+              handleDragHandleTouchEnd();
+              // If dragged down past 30%, close
+              if (propsPanelH < 25) setPropsPanelOpen(false);
+            }}
           >
-            <div className="w-10 h-1 rounded-full bg-slate-600" />
+            <div className="w-12 h-1.5 rounded-full bg-slate-500" />
           </div>
-          {/* Close button row */}
-          <div className="flex items-center justify-end px-3 pb-1 shrink-0">
+          {/* Header row: title + close */}
+          <div className="flex items-center justify-between px-4 pb-2 shrink-0">
+            <span className="text-xs font-bold tracking-widest text-slate-500 uppercase">Properties</span>
             <button
-              className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10 text-sm"
-              onClick={() => setPropsPanelOpen(false)}
+              className="w-11 h-11 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10"
+              onClick={() => { setPropsPanelOpen(false); setPropsPanelH(55); }}
             >✕</button>
           </div>
-          {/* Panel content — scrollable, force full width on mobile */}
-          <div className="flex-1 overflow-y-auto">
-            <div style={{ width: '100%' }}>
-              <PropertiesPanel />
-            </div>
+          {/* Scrollable content */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <PropertiesPanel />
           </div>
         </div>
 

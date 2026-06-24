@@ -106,12 +106,18 @@ export default function Toolbar({ onToggleSidebar }: {
   const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
   const btnActive = `${base} bg-orange-500/15 text-orange-400`
   const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
-  const div = <div className="w-px h-4 mx-0.5 lg:mx-1.5 bg-[#2e3350] shrink-0" />
+  const div = <div className="w-px h-4 mx-0.5 lg:mx-1.5 bg-[#2e3350] shrink-0 inline-block" />
 
   return (
     <div
-      className="flex items-center gap-0.5 px-2 lg:px-3 select-none shrink-0"
-      style={{ height: '48px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
+      className="toolbar-scrollable flex items-center gap-0.5 px-2 lg:px-3 select-none shrink-0"
+      style={{
+        height: '48px',
+        background: '#0f1117',
+        borderBottom: '1px solid #2e3350',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+      }}
     >
       {/* Hamburger — mobile only */}
       <button
