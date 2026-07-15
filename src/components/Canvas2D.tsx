@@ -311,10 +311,16 @@ export default function Canvas2D() {
   const [size, setSize] = useState({ w: 800, h: 600 })
 
   const {
-    project, updateMember, deleteMembers, addConnection, deleteConnection,
+    project, fabDocument, updateMember, deleteMembers, addConnection, deleteConnection,
     addDimension, deleteDimension, groupMembers, ungroupMembers, renameGroup,
   } = useProjectStore()
-  const { members, connections, dimensions = [], groupNames = {} } = project
+  const { members: rawMembers, connections, dimensions = [], groupNames = {} } = project
+  // Render members in z-order (ascending)
+  const members = [...rawMembers].sort((a, b) => {
+    const ea = fabDocument.elements.find(e => e.kind === 'member' && e.id === a.id) as { z?: number } | undefined
+    const eb = fabDocument.elements.find(e => e.kind === 'member' && e.id === b.id) as { z?: number } | undefined
+    return (ea?.z ?? 0) - (eb?.z ?? 0)
+  })
   const {
     panX, panY, zoom, setPan, setZoom: _setZoom, setPanZoom,
     selectedIds, setSelectedIds, toggleSelectedId,
@@ -414,26 +420,26 @@ export default function Canvas2D() {
         if (selectedHole) {
           const m = members.find(mb => mb.id === selectedHole.memberId)
           if (m) {
-            push({ members, connections, dimensions, groupNames })
+            push(fabDocument)
             updateMember(m.id, { holes: m.holes.filter(h => h.id !== selectedHole.holeId) })
           }
           setSelectedHole(null)
           return
         }
         if (selectedDimensionId) {
-          push({ members, connections, dimensions, groupNames })
+          push(fabDocument)
           deleteDimension(selectedDimensionId)
           setSelectedDimensionId(null)
           return
         }
         if (selectedConnectionId) {
-          push({ members, connections, dimensions, groupNames })
+          push(fabDocument)
           deleteConnection(selectedConnectionId)
           setSelectedConnectionId(null)
           return
         }
         if (selectedIds.length > 0) {
-          push({ members, connections, dimensions, groupNames })
+          push(fabDocument)
           deleteMembers(selectedIds)
           setSelectedIds([])
           return
@@ -444,7 +450,7 @@ export default function Canvas2D() {
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyG' && !e.shiftKey) {
         if (selectedIds.length >= 2) {
           e.preventDefault()
-          push({ members, connections, dimensions, groupNames })
+          push(fabDocument)
           const groupId = crypto.randomUUID()
           groupMembers(selectedIds, groupId)
         }
@@ -461,7 +467,7 @@ export default function Canvas2D() {
             .map(m => m.groupId as string)
         )
         if (groupIds.size > 0) {
-          push({ members, connections, dimensions, groupNames })
+          push(fabDocument)
           groupIds.forEach(gid => ungroupMembers(gid))
         }
         return
@@ -544,7 +550,7 @@ export default function Canvas2D() {
         const signedDist = toMouse.x * perpDir.x + toMouse.y * perpDir.y
         const offsetDir = signedDist >= 0 ? perpDir : { x: -perpDir.x, y: -perpDir.y }
         const offsetDist = Math.max(Math.abs(signedDist), 1)
-        push({ members, connections, dimensions, groupNames })
+        push(fabDocument)
         addDimension({
           pointA: dimPointA,
           pointB: dimPointB,
@@ -783,7 +789,7 @@ export default function Canvas2D() {
     if (activeRightTab === 'holes' && selectedIds.includes(id) && holePlacePreview) {
       const m = members.find(mb => mb.id === id)
       if (m) {
-        push({ members, connections, dimensions, groupNames })
+        push(fabDocument)
         const newHole: Hole = {
           id: crypto.randomUUID(),
           type: 'circle',
@@ -853,7 +859,7 @@ export default function Canvas2D() {
     const finalX = Math.round(worldX * 4) / 4
     const finalY = Math.round(worldY * 4) / 4
 
-    push({ members, connections, dimensions, groupNames })
+    push(fabDocument)
     for (const [sid, off] of Object.entries(dragOffsets.current)) {
       const sm = members.find(m => m.id === sid)
       if (!sm) continue
@@ -881,7 +887,7 @@ export default function Canvas2D() {
     const memberA = members.find(m => m.id === connDialog.memberAId)
     const memberB = members.find(m => m.id === connDialog.memberBId)
     if (!memberA || !memberB) { setConnDialog(null); return }
-    push({ members, connections, dimensions, groupNames })
+    push(fabDocument)
     const newConn = {
       memberAId: connDialog.memberAId,
       memberBId: connDialog.memberBId,
@@ -1056,12 +1062,12 @@ export default function Canvas2D() {
                     setSelectedDimensionId(null)
                   }}
                   onDelete={() => {
-                    push({ members, connections, dimensions, groupNames })
+                    push(fabDocument)
                     updateMember(m.id, { holes: m.holes.filter(h => h.id !== hole.id) })
                     setSelectedHole(null)
                   }}
                   onDragEnd={(pos) => {
-                    push({ members, connections, dimensions, groupNames })
+                    push(fabDocument)
                     updateMember(m.id, { holes: m.holes.map(h => h.id === hole.id ? { ...h, positionAlongMember: pos } : h) })
                   }}
                 />

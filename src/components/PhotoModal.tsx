@@ -60,7 +60,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function PhotoModal() {
-  const { project, addMember } = useProjectStore()
+  const { project, fabDocument, addMember } = useProjectStore()
   const { members, connections } = project
   const { setShowPhotoModal, setPanZoom } = useUIStore()
   const { push } = useHistoryStore()
@@ -145,7 +145,7 @@ export default function PhotoModal() {
   }
 
   const handleAddToDrawing = () => {
-    push({ members, connections })
+    push(fabDocument)
     for (const m of generated) addMember(m)
 
     // Auto-fit canvas

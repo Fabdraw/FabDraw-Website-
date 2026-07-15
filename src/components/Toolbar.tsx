@@ -8,12 +8,12 @@ import {
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
-import type { Project } from '../types'
+import { loadAsFabDocument } from '../lib/migration'
 
 export default function Toolbar({ onToggleSidebar }: {
   onToggleSidebar?: () => void
 }) {
-  const { project, setProjectName, deleteMembers, addMember, setProject } = useProjectStore()
+  const { project, fabDocument, setProjectName, deleteMembers, addMember, setFabDocument } = useProjectStore()
   const { members, connections } = project
   const {
     mode, setMode, selectedIds, setSelectedIds,
@@ -29,22 +29,22 @@ export default function Toolbar({ onToggleSidebar }: {
 
   const handleUndo = () => {
     const entry = undo()
-    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections, dimensions: entry.dimensions ?? project.dimensions, groupNames: entry.groupNames ?? project.groupNames })
+    if (entry) setFabDocument(entry)
   }
   const handleRedo = () => {
     const entry = redo()
-    if (entry) setProject({ ...project, members: entry.members, connections: entry.connections, dimensions: entry.dimensions ?? project.dimensions, groupNames: entry.groupNames ?? project.groupNames })
+    if (entry) setFabDocument(entry)
   }
   const handleDelete = () => {
     if (selectedIds.length === 0) return
-    push({ members, connections })
+    push(fabDocument)
     deleteMembers(selectedIds)
     setSelectedIds([])
   }
   const handleCopy = () => setClipboard(members.filter(m => selectedIds.includes(m.id)))
   const handlePaste = () => {
     if (clipboard.length === 0) return
-    push({ members, connections })
+    push(fabDocument)
     const newMembers = clipboard.map(m => ({
       ...m, id: crypto.randomUUID(),
       position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
@@ -70,12 +70,12 @@ export default function Toolbar({ onToggleSidebar }: {
   }
 
   const handleSave = () => {
-    const data = JSON.stringify(project, null, 2)
+    const data = JSON.stringify(fabDocument, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${project.name.replace(/\s+/g, '_')}.fabdraw.json`
+    a.download = `${fabDocument.name.replace(/\s+/g, '_')}.fabdraw.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -88,11 +88,11 @@ export default function Toolbar({ onToggleSidebar }: {
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string) as Project
-        if (!data.members || !Array.isArray(data.members)) throw new Error('Invalid .fabdraw file')
+        const raw = JSON.parse(ev.target?.result as string)
+        const doc = loadAsFabDocument(raw)
         if (members.length > 0 && !window.confirm('Replace current project with loaded file?')) return
-        push({ members, connections })
-        setProject(data)
+        push(fabDocument)
+        setFabDocument(doc)
       } catch (err) {
         alert(`Failed to load: ${err instanceof Error ? err.message : String(err)}`)
       }

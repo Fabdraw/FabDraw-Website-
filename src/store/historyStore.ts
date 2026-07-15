@@ -1,21 +1,14 @@
 import { create } from 'zustand';
-import type { Member, Connection, Dimension } from '../types';
-
-interface ProjectSnapshot {
-  members: Member[];
-  connections: Connection[];
-  dimensions?: Dimension[];
-  groupNames?: Record<string, string>;
-}
+import type { FabDocument } from '../types/document';
 
 interface HistoryState {
-  past: ProjectSnapshot[];
-  future: ProjectSnapshot[];
+  past: FabDocument[];
+  future: FabDocument[];
   canUndo: boolean;
   canRedo: boolean;
-  push: (snapshot: ProjectSnapshot) => void;
-  undo: () => ProjectSnapshot | null;
-  redo: () => ProjectSnapshot | null;
+  push: (doc: FabDocument) => void;
+  undo: () => FabDocument | null;
+  redo: () => FabDocument | null;
   clear: () => void;
 }
 
@@ -25,9 +18,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   canUndo: false,
   canRedo: false,
 
-  push: (snapshot) => {
+  push: (doc) => {
     set((state) => {
-      const newPast = [...state.past, snapshot].slice(-80);
+      const newPast = [...state.past, doc].slice(-80);
       return { past: newPast, future: [], canUndo: newPast.length > 0, canRedo: false };
     });
   },

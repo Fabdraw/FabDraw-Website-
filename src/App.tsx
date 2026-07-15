@@ -17,7 +17,7 @@ import { useUIStore } from './store/uiStore';
 import { useHistoryStore } from './store/historyStore';
 
 export default function App() {
-  const { project, setProject, addMember } = useProjectStore();
+  const { project, fabDocument, setFabDocument, addMember } = useProjectStore();
   const { members, connections, dimensions, groupNames } = project;
   const {
     mode, setMode, selectedIds, setSelectedIds, activeView,
@@ -102,13 +102,13 @@ export default function App() {
       if (ctrl && e.shiftKey && e.key === 'z') {
         e.preventDefault();
         const snap = redo();
-        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections, dimensions: snap.dimensions ?? project.dimensions, groupNames: snap.groupNames ?? project.groupNames });
+        if (snap) setFabDocument(snap);
         return;
       }
       if (ctrl && e.key === 'z') {
         e.preventDefault();
         const snap = undo();
-        if (snap) setProject({ ...project, members: snap.members, connections: snap.connections, dimensions: snap.dimensions ?? project.dimensions, groupNames: snap.groupNames ?? project.groupNames });
+        if (snap) setFabDocument(snap);
         return;
       }
       if (ctrl && e.key === 'c') {
@@ -119,7 +119,7 @@ export default function App() {
       if (ctrl && e.key === 'v') {
         e.preventDefault();
         if (clipboard.length > 0) {
-          push({ members, connections, dimensions, groupNames });
+          push(fabDocument);
           const newMembers = clipboard.map((m) => ({
             ...m, id: crypto.randomUUID(),
             position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
@@ -137,7 +137,7 @@ export default function App() {
       if (ctrl && e.key === 'd') {
         e.preventDefault();
         if (selectedIds.length > 0) {
-          push({ members, connections, dimensions, groupNames });
+          push(fabDocument);
           const duped = members
             .filter((m) => selectedIds.includes(m.id))
             .map((m) => ({
@@ -163,7 +163,7 @@ export default function App() {
     };
   }, [mode, selectedIds, members, connections, clipboard, zoom,
     setMode, setSelectedIds, setZoom, setPan, setClipboard, setContextMenu,
-    undo, redo, push, addMember, setProject, project, dimensions, groupNames]);
+    undo, redo, push, addMember, setFabDocument, fabDocument, dimensions, groupNames]);
 
   return (
     <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">

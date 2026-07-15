@@ -409,7 +409,7 @@ interface CardState {
 }
 
 export default function TemplateLibrary() {
-  const { project, addMember } = useProjectStore()
+  const { project, fabDocument, addMember } = useProjectStore()
   const { members, connections } = project
   const { setShowTemplateModal, setPanZoom } = useUIStore()
   const { push } = useHistoryStore()
@@ -430,7 +430,7 @@ export default function TemplateLibrary() {
     try {
       const text = await callAPI(tpl.buildPrompt(w, d, h))
       const parsed = parseMembers(text)
-      push({ members, connections })
+      push(fabDocument)
       for (const m of parsed) addMember(m)
 
       // Auto-fit

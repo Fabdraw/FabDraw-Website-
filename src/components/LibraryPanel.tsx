@@ -37,7 +37,7 @@ const materialGroups = [
 ];
 
 export default function LibraryPanel({ collapsed }: LibProps) {
-  const { project, addMember } = useProjectStore();
+  const { project, fabDocument, addMember } = useProjectStore();
   const { members, connections } = project;
   const { setSelectedIds, panX, panY, zoom } = useUIStore();
   const historyStore = useHistoryStore();
@@ -63,7 +63,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
     const wx = (cw / 2 - panX) / (zoom * SCALE);
     const wy = (ch / 2 - panY) / (zoom * SCALE);
 
-    historyStore.push({ members, connections });
+    historyStore.push(fabDocument);
     addMember({
       type: selectedType,
       size: selectedSize,

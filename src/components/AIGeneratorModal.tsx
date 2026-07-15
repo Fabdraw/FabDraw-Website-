@@ -101,7 +101,7 @@ async function generateStructureAI(prompt: string): Promise<ParsedMember[]> {
 }
 
 export default function AIGeneratorModal() {
-  const { project, addMember } = useProjectStore();
+  const { project, fabDocument, addMember } = useProjectStore();
   const { members, connections } = project;
   const { setShowAIModal } = useUIStore();
   const historyStore = useHistoryStore();
@@ -132,7 +132,7 @@ export default function AIGeneratorModal() {
   const { setPanZoom } = useUIStore();
 
   const handleAddToDrawing = () => {
-    historyStore.push({ members, connections });
+    historyStore.push(fabDocument);
     for (const m of generated) addMember(m);
 
     // Auto-fit canvas to show generated members

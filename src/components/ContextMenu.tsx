@@ -6,7 +6,7 @@ import { useHistoryStore } from '../store/historyStore';
 
 export default function ContextMenu() {
   const { contextMenu, setContextMenu, selectedIds, setSelectedIds, setClipboard, clipboard } = useUIStore();
-  const { project, deleteMembers, addMember, groupMembers, ungroupMembers } = useProjectStore();
+  const { project, fabDocument, deleteMembers, addMember, groupMembers, ungroupMembers } = useProjectStore();
   const { members, connections, dimensions, groupNames } = project;
   const historyStore = useHistoryStore();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -32,7 +32,7 @@ export default function ContextMenu() {
   const handleDuplicate = () => {
     const ids = memberId ? [memberId] : selectedIds;
     const toDupe = members.filter(m => ids.includes(m.id));
-    historyStore.push({ members, connections, dimensions, groupNames });
+    historyStore.push(fabDocument);
     for (const m of toDupe) {
       addMember({ ...m, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } });
     }
@@ -41,7 +41,7 @@ export default function ContextMenu() {
 
   const handleDelete = () => {
     const ids = memberId ? [memberId] : selectedIds;
-    historyStore.push({ members, connections, dimensions, groupNames });
+    historyStore.push(fabDocument);
     deleteMembers(ids);
     setSelectedIds([]);
     close();
@@ -109,7 +109,7 @@ export default function ContextMenu() {
               icon={<Group size={14} />}
               label={`Group (${selectedIds.length})`}
               onClick={() => {
-                historyStore.push({ members, connections, dimensions, groupNames });
+                historyStore.push(fabDocument);
                 groupMembers(selectedIds, crypto.randomUUID());
                 close();
               }}
@@ -120,7 +120,7 @@ export default function ContextMenu() {
               icon={<Ungroup size={14} />}
               label="Ungroup"
               onClick={() => {
-                historyStore.push({ members, connections, dimensions, groupNames });
+                historyStore.push(fabDocument);
                 ungroupMembers(member.groupId!);
                 close();
               }}
@@ -138,7 +138,7 @@ export default function ContextMenu() {
             label={`Paste (${clipboard.length})`}
             onClick={() => {
               if (clipboard.length === 0) return;
-              historyStore.push({ members, connections, dimensions, groupNames });
+              historyStore.push(fabDocument);
               for (const m of clipboard) {
                 addMember({ ...m, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } });
               }
@@ -151,7 +151,7 @@ export default function ContextMenu() {
             icon={<Trash2 size={14} />}
             label="Clear All"
             onClick={() => {
-              historyStore.push({ members, connections, dimensions, groupNames });
+              historyStore.push(fabDocument);
               deleteMembers(members.map(m => m.id));
               setSelectedIds([]);
               close();

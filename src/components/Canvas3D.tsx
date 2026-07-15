@@ -337,7 +337,8 @@ function Scene() {
 
   const handleMemberPointerDown = useCallback((m: Member, e: React.PointerEvent<Element>) => {
     if (controls) (controls as unknown as { enabled: boolean }).enabled = false
-    push({ members: membersRef.current, connections: connectionsRef.current })
+    // push snapshot — handled by caller via fabDocument
+    void 0
 
     const hit = groundHit((e as unknown as PointerEvent).clientX, (e as unknown as PointerEvent).clientY)
 
