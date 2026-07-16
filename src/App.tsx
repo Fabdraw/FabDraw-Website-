@@ -120,10 +120,12 @@ export default function App() {
         e.preventDefault();
         if (clipboard.length > 0) {
           push(fabDocument);
-          const newMembers = clipboard.map((m) => ({
-            ...m, id: crypto.randomUUID(),
-            position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
-          }));
+          const gidMap: Record<string, string> = {};
+          const newMembers = clipboard.map((m) => {
+            let gid = m.groupId;
+            if (gid) { if (!gidMap[gid]) gidMap[gid] = crypto.randomUUID(); gid = gidMap[gid]; }
+            return { ...m, id: crypto.randomUUID(), groupId: gid, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } };
+          });
           newMembers.forEach((m) => addMember(m));
           setSelectedIds(newMembers.map((m) => m.id));
         }
@@ -138,12 +140,14 @@ export default function App() {
         e.preventDefault();
         if (selectedIds.length > 0) {
           push(fabDocument);
+          const gidMap: Record<string, string> = {};
           const duped = members
             .filter((m) => selectedIds.includes(m.id))
-            .map((m) => ({
-              ...m, id: crypto.randomUUID(),
-              position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 },
-            }));
+            .map((m) => {
+              let gid = m.groupId;
+              if (gid) { if (!gidMap[gid]) gidMap[gid] = crypto.randomUUID(); gid = gidMap[gid]; }
+              return { ...m, id: crypto.randomUUID(), groupId: gid, position: { ...m.position, x: m.position.x + 2, y: m.position.y + 2 } };
+            });
           duped.forEach((m) => addMember(m));
           setSelectedIds(duped.map((m) => m.id));
         }

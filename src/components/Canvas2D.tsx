@@ -371,6 +371,20 @@ export default function Canvas2D() {
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
 
+  // Move gizmo state
+  const gizmoRef = useRef<{
+    axis: 'x' | 'y' | 'free'
+    startCX: number; startCY: number
+    baseWorldX: number; baseWorldY: number
+    offsets: DragOffsets
+  } | null>(null)
+  const [gizmoAxis, setGizmoAxis] = useState<'x' | 'y' | 'free' | null>(null)
+  const [gizmoOffset, setGizmoOffset] = useState<{ dx: number; dy: number } | null>(null)
+  const [gizmoTooltip, setGizmoTooltip] = useState<{ cx: number; cy: number; text: string } | null>(null)
+
+  // Alt key — disables grid snap when held during drag
+  const altDownRef = useRef(false)
+
   // Right-drag tracking (suppress context menu when drag occurred)
   const rightDragMoved = useRef(false)
   const rightDragStart = useRef<{ x: number; y: number } | null>(null)
@@ -399,6 +413,7 @@ export default function Canvas2D() {
   // Keyboard
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') altDownRef.current = true
       if (e.code === 'Space') { e.preventDefault(); spaceDown.current = true }
 
       if (e.code === 'Escape') {
@@ -473,7 +488,10 @@ export default function Canvas2D() {
         return
       }
     }
-    const onUp = (e: KeyboardEvent) => { if (e.code === 'Space') spaceDown.current = false }
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') altDownRef.current = false
+      if (e.code === 'Space') spaceDown.current = false
+    }
     window.addEventListener('keydown', onDown)
     window.addEventListener('keyup', onUp)
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
@@ -583,6 +601,23 @@ export default function Canvas2D() {
   ])
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Gizmo axis-constrained drag
+    if (gizmoRef.current) {
+      const g = gizmoRef.current
+      const pos = e.target.getStage()?.getPointerPosition()
+      if (!pos) return
+      const rawDX = (pos.x - g.startCX) / (zoom * SCALE)
+      const rawDY = (pos.y - g.startCY) / (zoom * SCALE)
+      const dx = g.axis === 'y' ? 0 : rawDX
+      const dy = g.axis === 'x' ? 0 : rawDY
+      setGizmoOffset({ dx, dy })
+      const fmt = (v: number, invert = false) => (invert ? -v : v) >= 0
+        ? `+${Math.abs(v).toFixed(2)}"` : `-${Math.abs(v).toFixed(2)}"`
+      const text = g.axis === 'x' ? fmt(dx) : g.axis === 'y' ? fmt(dy, true) : `${fmt(dx)}, ${fmt(dy, true)}`
+      setGizmoTooltip({ cx: pos.x + 16, cy: pos.y - 30, text })
+      return
+    }
+
     if (isPanning.current && panStart.current) {
       const dx = e.evt.clientX - panStart.current.x
       const dy = e.evt.clientY - panStart.current.y
@@ -644,9 +679,29 @@ export default function Canvas2D() {
     } else if (holePlacePreview !== null) {
       setHolePlacePreview(null)
     }
-  }, [setPan, mode, dimState, zoom, panX, panY, activeRightTab, selectedIds, members, holePlacePreview])
+  }, [setPan, mode, dimState, zoom, panX, panY, activeRightTab, selectedIds, members, holePlacePreview, gizmoOffset])
 
   const handleStageMouseUp = useCallback((_e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Commit gizmo drag
+    if (gizmoRef.current) {
+      const g = gizmoRef.current
+      const off = gizmoOffset ?? { dx: 0, dy: 0 }
+      const doSnap = !altDownRef.current
+      for (const [sid, mOff] of Object.entries(g.offsets)) {
+        const sm = members.find(m => m.id === sid)
+        if (!sm) continue
+        let nx = g.baseWorldX + off.dx + mOff.dx
+        let ny = g.baseWorldY + off.dy + mOff.dy
+        if (doSnap) { nx = snapToGrid(nx); ny = snapToGrid(ny) }
+        updateMember(sid, { position: { ...sm.position, x: nx, y: ny } })
+      }
+      gizmoRef.current = null
+      setGizmoAxis(null)
+      setGizmoOffset(null)
+      setGizmoTooltip(null)
+      return
+    }
+
     if (isPanning.current) { isPanning.current = false; panStart.current = null; return }
     if (selStart.current && selRect) {
       const rx2 = selRect.x + selRect.w
@@ -676,7 +731,7 @@ export default function Canvas2D() {
       rightDragStart.current = null
       setSelRect(null)
     }
-  }, [selRect, members, zoom, panX, panY, setSelectedIds])
+  }, [selRect, members, zoom, panX, panY, setSelectedIds, gizmoOffset, updateMember])
 
   // ── Touch handlers ──────────────────────────────────────────────────────────
   const handleTouchStart = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
@@ -851,13 +906,11 @@ export default function Canvas2D() {
   const handleMemberDragMove = useCallback((_id: string, _cx: number, _cy: number) => {}, [])
 
   const handleMemberDragEnd = useCallback((id: string, nodeX: number, nodeY: number) => {
-    // nodeX and nodeY are e.target.x() and e.target.y() — the Konva node's canvas position
-    // Convert from canvas pixels to world inches
     const worldX = (nodeX - panX) / (zoom * SCALE)
     const worldY = (nodeY - panY) / (zoom * SCALE)
-
-    const finalX = Math.round(worldX * 4) / 4
-    const finalY = Math.round(worldY * 4) / 4
+    const doSnap = !altDownRef.current
+    const finalX = doSnap ? snapToGrid(worldX) : worldX
+    const finalY = doSnap ? snapToGrid(worldY) : worldY
 
     push(fabDocument)
     for (const [sid, off] of Object.entries(dragOffsets.current)) {
@@ -867,6 +920,24 @@ export default function Canvas2D() {
     }
     dragOffsets.current = {}
   }, [zoom, panX, panY, members, connections, dimensions, groupNames, push, updateMember])
+
+  const handleGizmoMouseDown = useCallback((axis: 'x' | 'y' | 'free', e: Konva.KonvaEventObject<MouseEvent>) => {
+    e.cancelBubble = true
+    const pos = stageRef.current?.getPointerPosition()
+    if (!pos || selectedIds.length === 0) return
+    const selMembers = members.filter(m => selectedIds.includes(m.id))
+    if (selMembers.length === 0) return
+    const centX = selMembers.reduce((s, m) => s + m.position.x, 0) / selMembers.length
+    const centY = selMembers.reduce((s, m) => s + m.position.y, 0) / selMembers.length
+    const offsets: DragOffsets = {}
+    for (const m of selMembers) {
+      offsets[m.id] = { dx: m.position.x - centX, dy: m.position.y - centY }
+    }
+    push(fabDocument)
+    gizmoRef.current = { axis, startCX: pos.x, startCY: pos.y, baseWorldX: centX, baseWorldY: centY, offsets }
+    setGizmoAxis(axis)
+    setGizmoOffset({ dx: 0, dy: 0 })
+  }, [selectedIds, members, push, fabDocument])
 
   const handleConnectionClick = useCallback((id: string) => {
     setSelectedConnectionId(id)
@@ -930,6 +1001,25 @@ export default function Canvas2D() {
   else if (mode === 'connect') cursor = 'cell'
   else if (activeRightTab === 'holes' && selectedIds.length === 1 && holePlacePreview) cursor = 'crosshair'
 
+  // Gizmo: show when in select mode with 1 member or a single group selected
+  const GIZMO_LEN = 65, GIZMO_HEAD = 10, GIZMO_SQ = 12
+  const gizmoSelMembers = (() => {
+    if (mode !== 'select' || selectedIds.length === 0) return null
+    const sel = members.filter(m => selectedIds.includes(m.id))
+    if (sel.length === 0) return null
+    if (sel.length === 1) return sel
+    if (sel.every(m => m.groupId && m.groupId === sel[0].groupId)) return sel
+    return null
+  })()
+  const gizmoCenterW = gizmoSelMembers
+    ? {
+        x: gizmoSelMembers.reduce((s, m) => s + m.position.x, 0) / gizmoSelMembers.length + (gizmoOffset?.dx ?? 0),
+        y: gizmoSelMembers.reduce((s, m) => s + m.position.y, 0) / gizmoSelMembers.length + (gizmoOffset?.dy ?? 0),
+      }
+    : null
+  const gCX = gizmoCenterW ? wx2cx(gizmoCenterW.x, zoom, panX) : 0
+  const gCY = gizmoCenterW ? wy2cy(gizmoCenterW.y, zoom, panY) : 0
+
   return (
     <div
       ref={containerRef}
@@ -971,24 +1061,29 @@ export default function Canvas2D() {
             )
           })}
 
-          {/* Members */}
-          {members.map(m => (
-            <MemberNode
-              key={m.id}
-              m={m}
-              mode={mode}
-              zoom={zoom}
-              panX={panX}
-              panY={panY}
-              selected={selectedIds.includes(m.id)}
-              connectHighlight={connectFirstMemberId === m.id}
-              onSelect={handleMemberSelect}
-              onContextMenu={handleMemberContextMenu}
-              onDragStart={handleMemberDragStart}
-              onDragMove={handleMemberDragMove}
-              onDragEnd={handleMemberDragEnd}
-            />
-          ))}
+          {/* Members — live position override during gizmo drag */}
+          {members.map(m => {
+            const effectiveM = (gizmoAxis && gizmoOffset && selectedIds.includes(m.id))
+              ? { ...m, position: { ...m.position, x: m.position.x + gizmoOffset.dx, y: m.position.y + gizmoOffset.dy } }
+              : m
+            return (
+              <MemberNode
+                key={m.id}
+                m={effectiveM}
+                mode={mode}
+                zoom={zoom}
+                panX={panX}
+                panY={panY}
+                selected={selectedIds.includes(m.id)}
+                connectHighlight={connectFirstMemberId === m.id}
+                onSelect={handleMemberSelect}
+                onContextMenu={handleMemberContextMenu}
+                onDragStart={handleMemberDragStart}
+                onDragMove={handleMemberDragMove}
+                onDragEnd={handleMemberDragEnd}
+              />
+            )
+          })}
 
           {/* Dimensions */}
           {dimensions.map(dim => (
@@ -1128,8 +1223,53 @@ export default function Canvas2D() {
           </Layer>
         )}
 
+        {/* Move Gizmo Layer — top of stack, constant screen-space size */}
+        {gizmoCenterW && (
+          <Layer listening>
+            {/* Axis guide lines during constrained drag */}
+            {gizmoAxis === 'x' && (
+              <Line points={[0, gCY, size.w, gCY]} stroke='#ef4444' strokeWidth={1} dash={[8, 4]} opacity={0.4} listening={false} />
+            )}
+            {gizmoAxis === 'y' && (
+              <Line points={[gCX, 0, gCX, size.h]} stroke='#22c55e' strokeWidth={1} dash={[8, 4]} opacity={0.4} listening={false} />
+            )}
+            {/* X arrow — red, pointing right */}
+            <Arrow
+              points={[gCX + GIZMO_SQ / 2, gCY, gCX + GIZMO_LEN, gCY]}
+              stroke='#ef4444' fill='#ef4444' strokeWidth={2.5}
+              pointerLength={GIZMO_HEAD} pointerWidth={7}
+              onMouseDown={(e) => handleGizmoMouseDown('x', e)}
+            />
+            {/* Y arrow — green, pointing up (negative canvas Y) */}
+            <Arrow
+              points={[gCX, gCY - GIZMO_SQ / 2, gCX, gCY - GIZMO_LEN]}
+              stroke='#22c55e' fill='#22c55e' strokeWidth={2.5}
+              pointerLength={GIZMO_HEAD} pointerWidth={7}
+              onMouseDown={(e) => handleGizmoMouseDown('y', e)}
+            />
+            {/* Center square — orange, free move */}
+            <Rect
+              x={gCX - GIZMO_SQ / 2} y={gCY - GIZMO_SQ / 2}
+              width={GIZMO_SQ} height={GIZMO_SQ}
+              fill='#f97316' stroke='#ffffff' strokeWidth={1.5}
+              onMouseDown={(e) => handleGizmoMouseDown('free', e)}
+            />
+          </Layer>
+        )}
 
       </Stage>
+
+      {/* Gizmo distance tooltip */}
+      {gizmoTooltip && (
+        <div style={{
+          position: 'absolute', left: gizmoTooltip.cx, top: gizmoTooltip.cy,
+          background: '#0f1117', border: '1px solid #f97316', borderRadius: 4,
+          color: '#f97316', fontSize: 11, fontFamily: 'monospace', padding: '2px 7px',
+          pointerEvents: 'none', zIndex: 200, whiteSpace: 'nowrap',
+        }}>
+          {gizmoTooltip.text}
+        </div>
+      )}
 
       {/* Empty state */}
       {members.length === 0 && (

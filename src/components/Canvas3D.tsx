@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react'
+import React, { useRef, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
@@ -290,6 +290,143 @@ function DimLine3D({ dim }: { dim: import('../types').Dimension }) {
   )
 }
 
+// ─── Closest point parameter on a world-axis from a camera ray ───────────────
+function axisParam(
+  camera: THREE.Camera, clientX: number, clientY: number, rect: DOMRect,
+  axisOrigin: THREE.Vector3, axisDir: THREE.Vector3,
+): number {
+  const ndc = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1,
+  )
+  const ray = new THREE.Raycaster()
+  ray.setFromCamera(ndc, camera)
+  const ro = ray.ray.origin, rd = ray.ray.direction
+  const w0 = new THREE.Vector3().subVectors(axisOrigin, ro)
+  const b = axisDir.dot(rd)
+  const d = axisDir.dot(w0)
+  const e = rd.dot(w0)
+  const denom = 1 - b * b
+  if (Math.abs(denom) < 1e-6) return 0
+  return (b * e - d) / denom
+}
+
+// ─── 3D Move Gizmo ───────────────────────────────────────────────────────────
+function Gizmo3D() {
+  const { camera, gl, controls } = useThree()
+  const { project, fabDocument, updateMember } = useProjectStore()
+  const { members } = project
+  const { selectedIds } = useUIStore()
+  const { push } = useHistoryStore()
+
+  const gDragRef = useRef<{
+    axisDir: THREE.Vector3
+    axisOrigin: THREE.Vector3
+    startParam: number
+    origPositions: Record<string, { x: number; y: number; z: number }>
+  } | null>(null)
+
+  const selMembers = members.filter(m => selectedIds.includes(m.id))
+  const showGizmo = selMembers.length >= 1 && (
+    selMembers.length === 1 ||
+    selMembers.every(m => m.groupId && m.groupId === selMembers[0].groupId)
+  )
+
+  // Gizmo center in 3D world space: member.x→x, member.z→y(height), member.y→z
+  const cx3 = selMembers.reduce((s, m) => s + m.position.x, 0) / selMembers.length
+  const cy3 = selMembers.reduce((s, m) => s + (m.position.z ?? 0), 0) / selMembers.length
+  const cz3 = selMembers.reduce((s, m) => s + m.position.y, 0) / selMembers.length
+  const gizmoPos = new THREE.Vector3(cx3, cy3, cz3)
+
+  // Scale arrows by camera distance for constant apparent size
+  const scale = camera.position.distanceTo(gizmoPos) * 0.07
+
+  const startAxisDrag = useCallback((
+    axisDir: THREE.Vector3, e: { pointerId: number; clientX: number; clientY: number; stopPropagation: () => void },
+  ) => {
+    e.stopPropagation()
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
+
+    const rect = gl.domElement.getBoundingClientRect()
+    const startParam = axisParam(camera, e.clientX, e.clientY, rect, gizmoPos, axisDir)
+    const origPositions: Record<string, { x: number; y: number; z: number }> = {}
+    for (const m of selMembers) origPositions[m.id] = { ...m.position }
+    push(fabDocument)
+    gDragRef.current = { axisDir, axisOrigin: gizmoPos.clone(), startParam, origPositions }
+
+    gl.domElement.setPointerCapture(e.pointerId)
+
+    const onMove = (ev: PointerEvent) => {
+      const d = gDragRef.current
+      if (!d) return
+      const param = axisParam(camera, ev.clientX, ev.clientY, rect, d.axisOrigin, d.axisDir)
+      const delta = param - d.startParam
+      for (const m of selMembers) {
+        const orig = d.origPositions[m.id]
+        if (!orig) continue
+        // axisDir maps: (1,0,0)→position.x, (0,1,0)→position.z(height), (0,0,1)→position.y
+        updateMember(m.id, {
+          position: {
+            x: orig.x + d.axisDir.x * delta,
+            y: orig.y + d.axisDir.z * delta,
+            z: (orig.z ?? 0) + d.axisDir.y * delta,
+          },
+        })
+      }
+    }
+    const onUp = () => {
+      if (controls) (controls as unknown as { enabled: boolean }).enabled = true
+      gDragRef.current = null
+      gl.domElement.removeEventListener('pointermove', onMove)
+      gl.domElement.removeEventListener('pointerup', onUp)
+    }
+    gl.domElement.addEventListener('pointermove', onMove)
+    gl.domElement.addEventListener('pointerup', onUp)
+  }, [camera, gl, controls, gizmoPos, selMembers, fabDocument, push, updateMember])
+
+  if (!showGizmo) return null
+
+  const arrowMesh = (dir: THREE.Vector3, color: string) => {
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
+    const shaft = scale * 0.8, cone = scale * 0.2
+    return (
+      <group
+        quaternion={q}
+        onPointerDown={(e) => startAxisDrag(dir, e)}
+      >
+        {/* shaft */}
+        <mesh position={[0, shaft / 2, 0]}>
+          <cylinderGeometry args={[scale * 0.04, scale * 0.04, shaft, 8]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+        {/* tip cone */}
+        <mesh position={[0, shaft + cone / 2, 0]}>
+          <coneGeometry args={[scale * 0.12, cone, 8]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+        {/* invisible hit area (wider) */}
+        <mesh position={[0, (shaft + cone) / 2, 0]}>
+          <cylinderGeometry args={[scale * 0.18, scale * 0.18, shaft + cone, 8]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      </group>
+    )
+  }
+
+  return (
+    <group position={[cx3, cy3, cz3]}>
+      {arrowMesh(new THREE.Vector3(1, 0, 0), '#ef4444')}
+      {arrowMesh(new THREE.Vector3(0, 1, 0), '#22c55e')}
+      {arrowMesh(new THREE.Vector3(0, 0, 1), '#3b82f6')}
+      {/* Center cube */}
+      <mesh>
+        <boxGeometry args={[scale * 0.2, scale * 0.2, scale * 0.2]} />
+        <meshBasicMaterial color='#f97316' />
+      </mesh>
+    </group>
+  )
+}
+
 function Scene() {
   const { project, updateMember } = useProjectStore()
   const { members, connections } = project
@@ -551,6 +688,9 @@ function Scene() {
 
       {/* Dimension lines */}
       {dimensions.map(d => <DimLine3D key={d.id} dim={d} />)}
+
+      {/* 3D move gizmo */}
+      <Gizmo3D />
 
       {/* Invisible backdrop — click miss deselects */}
       <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerMissed={handleMissed} visible={false}>
