@@ -388,26 +388,28 @@ function Gizmo3D() {
 
   const arrowMesh = (dir: THREE.Vector3, color: string) => {
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
+    const gap = scale * 0.25  // offset start from center so arrow clears the member mesh
     const shaft = scale * 0.8, cone = scale * 0.2
     return (
       <group
         quaternion={q}
         onPointerDown={(e) => startAxisDrag(dir, e)}
+        renderOrder={999}
       >
-        {/* shaft */}
-        <mesh position={[0, shaft / 2, 0]}>
+        {/* shaft — starts at gap, never buried in geometry */}
+        <mesh position={[0, gap + shaft / 2, 0]} renderOrder={999}>
           <cylinderGeometry args={[scale * 0.04, scale * 0.04, shaft, 8]} />
-          <meshBasicMaterial color={color} />
+          <meshBasicMaterial color={color} depthTest={false} />
         </mesh>
         {/* tip cone */}
-        <mesh position={[0, shaft + cone / 2, 0]}>
+        <mesh position={[0, gap + shaft + cone / 2, 0]} renderOrder={999}>
           <coneGeometry args={[scale * 0.12, cone, 8]} />
-          <meshBasicMaterial color={color} />
+          <meshBasicMaterial color={color} depthTest={false} />
         </mesh>
-        {/* invisible hit area (wider) */}
-        <mesh position={[0, (shaft + cone) / 2, 0]}>
+        {/* invisible hit area (wider, needs depthTest on so it doesn't eat other clicks) */}
+        <mesh position={[0, gap + (shaft + cone) / 2, 0]}>
           <cylinderGeometry args={[scale * 0.18, scale * 0.18, shaft + cone, 8]} />
-          <meshBasicMaterial transparent opacity={0} />
+          <meshBasicMaterial transparent opacity={0} depthTest={false} />
         </mesh>
       </group>
     )
@@ -418,10 +420,10 @@ function Gizmo3D() {
       {arrowMesh(new THREE.Vector3(1, 0, 0), '#ef4444')}
       {arrowMesh(new THREE.Vector3(0, 1, 0), '#22c55e')}
       {arrowMesh(new THREE.Vector3(0, 0, 1), '#3b82f6')}
-      {/* Center cube */}
-      <mesh>
+      {/* Center cube — always on top */}
+      <mesh renderOrder={999}>
         <boxGeometry args={[scale * 0.2, scale * 0.2, scale * 0.2]} />
-        <meshBasicMaterial color='#f97316' />
+        <meshBasicMaterial color='#f97316' depthTest={false} />
       </mesh>
     </group>
   )
