@@ -1,4 +1,11 @@
-import type { MemberType } from '../types';
+import type { MemberType, Grade } from '../types';
+
+// lbs per cubic inch
+export const DENSITY: Record<Grade, number> = {
+  mild: 0.2833,
+  stainless: 0.2890,
+  aluminum: 0.0975,
+}
 
 export interface MaterialDef {
   type: MemberType;

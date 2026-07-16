@@ -1,6 +1,7 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react'
-import { Stage, Layer, Group, Rect, Circle, Line, Text, Ellipse, Arrow } from 'react-konva'
+import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react'
+import { Stage, Layer, Group, Rect, Circle, Line, Text, Ellipse, Arrow, Shape } from 'react-konva'
 import Konva from 'konva'
+import { unionMembers } from '../lib/geometryKernel'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -328,7 +329,7 @@ export default function Canvas2D() {
     selectedDimensionId, setSelectedDimensionId,
     connectFirstMemberId, setConnectFirstMemberId,
     mode, setMode, setContextMenu,
-    activeRightTab,
+    activeRightTab, viewMode,
   } = useUIStore()
   const { push } = useHistoryStore()
 
@@ -994,6 +995,13 @@ export default function Canvas2D() {
   // Collect unique groups
   const groupIds = Array.from(new Set(members.filter(m => m.groupId).map(m => m.groupId as string)))
 
+  // Merged-mode union — recomputes only when member geometry changes
+  const mergedRings = useMemo(
+    () => (viewMode === 'merged' ? unionMembers(members) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewMode, JSON.stringify(members.map(m => ({ id: m.id, px: m.position.x, py: m.position.y, l: m.length, ry: m.rotation.y, t: m.type, s: m.size })))]
+  )
+
   // Cursor style
   let cursor = 'default'
   if (mode === 'pan' || spaceDown.current) cursor = 'grab'
@@ -1061,11 +1069,53 @@ export default function Canvas2D() {
             )
           })}
 
-          {/* Members — live position override during gizmo drag */}
+          {/* Members */}
+          {viewMode === 'merged' && mergedRings.length > 0 && (
+            <Shape
+              sceneFunc={(ctx, shape) => {
+                ctx.beginPath()
+                for (const ring of mergedRings) {
+                  ring.forEach(([wx, wy]: [number, number], i: number) => {
+                    const canX = wx * zoom * SCALE + panX
+                    const canY = wy * zoom * SCALE + panY
+                    if (i === 0) ctx.moveTo(canX, canY)
+                    else ctx.lineTo(canX, canY)
+                  })
+                  ctx.closePath()
+                }
+                ctx.fillStrokeShape(shape)
+              }}
+              fill="rgba(75,120,180,0.22)"
+              stroke="#4b78b4"
+              strokeWidth={1.5}
+              listening={false}
+            />
+          )}
           {members.map(m => {
             const effectiveM = (gizmoAxis && gizmoOffset && selectedIds.includes(m.id))
               ? { ...m, position: { ...m.position, x: m.position.x + gizmoOffset.dx, y: m.position.y + gizmoOffset.dy } }
               : m
+            // In merged mode render as invisible hit-test targets; only selected members show their shape
+            if (viewMode === 'merged' && !selectedIds.includes(m.id)) {
+              return (
+                <MemberNode
+                  key={m.id}
+                  m={effectiveM}
+                  mode={mode}
+                  zoom={zoom}
+                  panX={panX}
+                  panY={panY}
+                  selected={false}
+                  connectHighlight={connectFirstMemberId === m.id}
+                  onSelect={handleMemberSelect}
+                  onContextMenu={handleMemberContextMenu}
+                  onDragStart={handleMemberDragStart}
+                  onDragMove={handleMemberDragMove}
+                  onDragEnd={handleMemberDragEnd}
+                  opacity={0}
+                />
+              )
+            }
             return (
               <MemberNode
                 key={m.id}
@@ -1413,6 +1463,7 @@ function HoleNode({
 function MemberNode({
   m, mode, zoom, panX, panY, selected, connectHighlight,
   onSelect, onContextMenu, onDragStart, onDragMove, onDragEnd,
+  opacity = 1,
 }: {
   m: Member
   mode: string
@@ -1426,6 +1477,7 @@ function MemberNode({
   onDragStart: (id: string) => void
   onDragMove: (id: string, cx: number, cy: number) => void
   onDragEnd: (id: string, cx: number, cy: number) => void
+  opacity?: number
 }) {
   const cx = wx2cx(m.position.x, zoom, panX)
   const cy = wy2cy(m.position.y, zoom, panY)
@@ -1441,6 +1493,7 @@ function MemberNode({
       x={cx}
       y={cy}
       rotation={angle}
+      opacity={opacity}
       draggable={mode === 'select'}
       onClick={(e) => {
         e.cancelBubble = true

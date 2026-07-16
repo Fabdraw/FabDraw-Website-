@@ -19,6 +19,7 @@ export default function Toolbar({ onToggleSidebar }: {
     mode, setMode, selectedIds, setSelectedIds,
     clipboard, setClipboard,
     activeView, setActiveView,
+    viewMode, setViewMode,
     setShowTitleBlockModal, setShowAIModal, setShowPhotoModal, setShowTemplateModal,
     setShowHelpModal, setShowPDFExportModal,
     zoom, setZoom, setPan,
@@ -235,6 +236,29 @@ export default function Toolbar({ onToggleSidebar }: {
       >
         3D
       </button>
+
+      {/* Sketch / Merged — 2D only */}
+      {activeView === '2d' && (
+        <>
+          {div}
+          <button
+            className={viewMode === 'sketch' ? btnActive : btn}
+            onClick={() => setViewMode('sketch')}
+            style={{ fontSize: '10px', fontWeight: 700, width: '46px' }}
+            title="Sketch mode — individual member outlines"
+          >
+            Sketch
+          </button>
+          <button
+            className={viewMode === 'merged' ? btnActive : btn}
+            onClick={() => setViewMode('merged')}
+            style={{ fontSize: '10px', fontWeight: 700, width: '46px' }}
+            title="Merged mode — union member outlines"
+          >
+            Merged
+          </button>
+        </>
+      )}
 
       {div}
 

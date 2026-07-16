@@ -4,6 +4,7 @@ import type { Member } from '../types';
 export type Mode = 'select' | 'pan' | 'hole_add' | 'dimension' | 'connect';
 export type ActiveView = '2d' | '3d';
 export type ActiveRightTab = 'props' | 'holes' | 'notes';
+export type ViewMode = 'sketch' | 'merged';
 
 interface ContextMenu {
   x: number;
@@ -33,6 +34,7 @@ interface UIState {
   panX: number;
   panY: number;
   zoom: number;
+  viewMode: ViewMode;
 
   setMode: (mode: Mode) => void;
   setSelectedIds: (ids: string[]) => void;
@@ -57,6 +59,7 @@ interface UIState {
   setPanZoom: (x: number, y: number, z: number) => void;
   setZoom: (z: number) => void;
   setPan: (x: number, y: number) => void;
+  setViewMode: (v: ViewMode) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -76,6 +79,7 @@ export const useUIStore = create<UIState>((set) => ({
   showHelpModal: false,
   showPDFExportModal: false,
   contextMenu: null,
+  viewMode: 'sketch',
   holeAddMode: false,
   holeTargetMemberId: null,
   panX: 400,
@@ -108,4 +112,5 @@ export const useUIStore = create<UIState>((set) => ({
   setPanZoom: (x, y, z) => set({ panX: x, panY: y, zoom: z }),
   setZoom: (zoom) => set({ zoom }),
   setPan: (panX, panY) => set({ panX, panY }),
+  setViewMode: (viewMode) => set({ viewMode }),
 }));
