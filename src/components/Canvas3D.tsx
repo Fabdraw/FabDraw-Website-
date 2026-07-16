@@ -703,14 +703,14 @@ function Scene() {
   )
 }
 
-export interface CapturedView { name: string; dataURL: string }
-export interface Canvas3DHandle { captureViews(): Promise<CapturedView[]> }
+export type { CapturedView } from '../lib/pdfExport'
+export interface Canvas3DHandle { captureViews(): Promise<import('../lib/pdfExport').CapturedView[]> }
 
 const ViewCapturer = forwardRef<Canvas3DHandle, { members: Member[] }>(({ members }, ref) => {
   const { gl, scene, camera } = useThree()
 
   useImperativeHandle(ref, () => ({
-    captureViews: () => new Promise<CapturedView[]>((resolve) => {
+    captureViews: () => new Promise<import('../lib/pdfExport').CapturedView[]>((resolve) => {
       if (members.length === 0) { resolve([]); return }
 
       // Compute 3D bounding box (Three.js space: X=pos.x, Y=pos.z height, Z=pos.y)
@@ -756,10 +756,19 @@ const ViewCapturer = forwardRef<Canvas3DHandle, { members: Member[] }>(({ member
         })() },
       ]
 
-      const results: CapturedView[] = []
+      const captureW = 800, captureH = 800
+      const results: import('../lib/pdfExport').CapturedView[] = []
       for (const { name, cam } of views) {
         gl.render(scene, cam)
-        results.push({ name, dataURL: gl.domElement.toDataURL('image/png') })
+        cam.updateMatrixWorld()
+        results.push({
+          name,
+          dataURL: gl.domElement.toDataURL('image/png'),
+          projMatrix: Array.from(cam.projectionMatrix.elements) as number[],
+          viewMatrix: Array.from(cam.matrixWorldInverse.elements) as number[],
+          captureW,
+          captureH,
+        })
       }
 
       gl.setSize(curSize.x, curSize.y)

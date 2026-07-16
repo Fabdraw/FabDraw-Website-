@@ -10,7 +10,7 @@ import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { parseSizeString } from '../lib/materials'
 import type { Member, Dimension } from '../types'
-import { exportPDFFromImages } from '../lib/pdfExport'
+import { exportPDFFromImages, type CapturedView } from '../lib/pdfExport'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ interface BBox {
 }
 
 interface PanelHandle {
-  capture(): Promise<{ name: string; dataURL: string }>
+  capture(): Promise<{ name: string; dataURL: string; projMatrix: number[]; viewMatrix: number[]; captureW: number; captureH: number }>
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -245,35 +245,40 @@ const PanelCapture = forwardRef<PanelHandle, { name: string }>(({ name }, ref) =
   const { gl, scene, camera } = useThree()
 
   useImperativeHandle(ref, () => ({
-    capture: () => new Promise<{ name: string; dataURL: string }>(resolve => {
+    capture: () => new Promise<{ name: string; dataURL: string; projMatrix: number[]; viewMatrix: number[]; captureW: number; captureH: number }>(resolve => {
+      const captureW = 1200, captureH = 900
       const savedW = gl.domElement.width
       const savedH = gl.domElement.height
       const savedColor = new THREE.Color()
       gl.getClearColor(savedColor)
       const savedAlpha = gl.getClearAlpha()
-      // Also save/restore scene.background — it overrides gl clear color
       const savedBg = scene.background
 
       // White background for PDF
       gl.setClearColor(new THREE.Color(1, 1, 1), 1)
       scene.background = new THREE.Color(1, 1, 1)
-      gl.setSize(1200, 900, false)
+      gl.setSize(captureW, captureH, false)
 
-      // Adjust camera for new aspect
+      // Adjust camera for 1200:900 aspect
       const savedProj = camera.projectionMatrix.clone()
       if (camera instanceof THREE.PerspectiveCamera) {
-        camera.aspect = 1200 / 900
+        camera.aspect = captureW / captureH
         camera.updateProjectionMatrix()
       } else if (camera instanceof THREE.OrthographicCamera) {
-        // Expand ortho frustum to match 1200:900 aspect
         const h = (camera.top - camera.bottom)
-        const newW = h * (1200 / 900)
+        const newW = h * (captureW / captureH)
         camera.left = -newW / 2; camera.right = newW / 2
         camera.updateProjectionMatrix()
       }
 
       gl.render(scene, camera)
       const dataURL = gl.domElement.toDataURL('image/png')
+
+      // Capture projection + view matrices AFTER the 1200×900 render
+      // so they match the pixel positions in the PNG exactly.
+      camera.updateMatrixWorld()
+      const projMatrix = Array.from(camera.projectionMatrix.elements) as number[]
+      const viewMatrix = Array.from(camera.matrixWorldInverse.elements) as number[]
 
       // Restore
       scene.background = savedBg
@@ -282,7 +287,7 @@ const PanelCapture = forwardRef<PanelHandle, { name: string }>(({ name }, ref) =
       camera.projectionMatrix.copy(savedProj)
       gl.render(scene, camera)
 
-      resolve({ name, dataURL })
+      resolve({ name, dataURL, projMatrix, viewMatrix, captureW, captureH })
     }),
   }), [gl, scene, camera, name])
 
@@ -309,7 +314,7 @@ const PanelView = forwardRef<PanelHandle, PanelViewProps>(
     const isOrtho = isOrthoPreset(effectivePreset)
 
     useImperativeHandle(ref, () => ({
-      capture: () => captureRef.current?.capture() ?? Promise.resolve({ name: '', dataURL: '' }),
+      capture: () => captureRef.current?.capture() ?? Promise.resolve({ name: '', dataURL: '', projMatrix: [], viewMatrix: [], captureW: 1200, captureH: 900 }),
     }), [])
 
     // Remount Canvas when effective preset or mode changes
@@ -605,7 +610,7 @@ export default function PDFPreview() {
     }
     setLoading(true)
     try {
-      const views: { name: string; dataURL: string }[] = []
+      const views: CapturedView[] = []
       for (let i = 0; i < panelCount; i++) {
         const result = await panelRefs[i].current?.capture()
         if (result) views.push(result)

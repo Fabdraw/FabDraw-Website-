@@ -359,7 +359,138 @@ function drawViewInCell(
   }
 }
 
-export interface CapturedView { name: string; dataURL: string }
+export interface CapturedView {
+  name: string
+  dataURL: string
+  /** column-major elements of the Three.js camera.projectionMatrix at capture time */
+  projMatrix: number[]
+  /** column-major elements of the Three.js camera.matrixWorldInverse at capture time */
+  viewMatrix: number[]
+  captureW: number
+  captureH: number
+}
+
+// ─── Camera-based dimension projection ───────────────────────────────────────
+
+/**
+ * Multiply a 4×4 column-major matrix M by a homogeneous point [x, y, z, 1].
+ * Returns [rx, ry, rz, rw].
+ */
+function mulM4(m: number[], x: number, y: number, z: number): [number, number, number, number] {
+  return [
+    m[0]*x + m[4]*y + m[8]*z  + m[12],
+    m[1]*x + m[5]*y + m[9]*z  + m[13],
+    m[2]*x + m[6]*y + m[10]*z + m[14],
+    m[3]*x + m[7]*y + m[11]*z + m[15],
+  ]
+}
+
+/**
+ * Project a world-space point through the captured camera matrices to an
+ * image pixel coordinate in the captureW × captureH PNG.
+ */
+function worldToImagePx(
+  wx: number, wy: number, wz: number,
+  viewMatrix: number[], projMatrix: number[],
+): { px: number; py: number } {
+  // View transform: world → camera space (vw = 1 for rigid camera matrices)
+  const [vx, vy, vz] = mulM4(viewMatrix, wx, wy, wz)
+  // Projection transform: camera → clip space
+  const [cx, cy, , cw] = mulM4(projMatrix, vx, vy, vz)
+  const invW = cw === 0 ? 1e-9 : 1 / cw
+  return {
+    px: (cx * invW + 1) / 2,       // NDC X → 0..1 left-to-right
+    py: (1 - cy * invW) / 2,       // NDC Y → 0..1 top-to-bottom
+  }
+}
+
+/**
+ * Draw dimension annotations aligned to the captured camera, so they land
+ * exactly on the features visible in the PNG image.
+ */
+function drawDimensionsFromCamera(
+  doc: jsPDF,
+  dimensions: Dimension[],
+  view: CapturedView,
+  imgX: number, imgY: number, imgW: number, imgH: number,
+  clipX: number, clipY: number, clipW: number, clipH: number,
+  cellW: number,
+) {
+  if (!view.projMatrix.length || !view.viewMatrix.length) return
+  const fontSize = Math.min(12, Math.max(8, cellW / 55))
+
+  const project = (wx: number, wy: number, wz: number) => {
+    const { px, py } = worldToImagePx(wx, wy, wz, view.viewMatrix, view.projMatrix)
+    return { x: imgX + px * imgW, y: imgY + py * imgH }
+  }
+
+  for (const d of dimensions) {
+    if (!d.pointA || !d.pointB || !d.offsetDirection) continue
+
+    // Anchor points are in 2D plan space: (x, z) → world (x, 0, z)
+    const pA = project(d.pointA.x, 0, d.pointA.y)
+    const pB = project(d.pointB.x, 0, d.pointB.y)
+    const odx = d.offsetDirection.x, odz = d.offsetDirection.y
+    const od = d.offsetDistance
+    const offA = project(d.pointA.x + odx * od, 0, d.pointA.y + odz * od)
+    const offB = project(d.pointB.x + odx * od, 0, d.pointB.y + odz * od)
+
+    const midX = (offA.x + offB.x) / 2
+    const midY = (offA.y + offB.y) / 2
+
+    doc.setDrawColor(96, 165, 250)
+    doc.setLineWidth(0.5)
+
+    const seg1 = clipLine(pA.x, pA.y, offA.x, offA.y, clipX, clipY, clipW, clipH)
+    if (seg1) doc.line(seg1[0], seg1[1], seg1[2], seg1[3])
+    const seg2 = clipLine(pB.x, pB.y, offB.x, offB.y, clipX, clipY, clipW, clipH)
+    if (seg2) doc.line(seg2[0], seg2[1], seg2[2], seg2[3])
+    const seg3 = clipLine(offA.x, offA.y, offB.x, offB.y, clipX, clipY, clipW, clipH)
+    if (seg3) doc.line(seg3[0], seg3[1], seg3[2], seg3[3])
+
+    const mLen = Math.hypot(offB.x - offA.x, offB.y - offA.y)
+    if (mLen > 0.5 && seg3) {
+      const ux = (offB.x - offA.x) / mLen, uy = (offB.y - offA.y) / mLen
+      const tw = Math.min(fontSize * 0.5, 4)
+      const arrowA: [number, number, number, number, number, number] = [
+        offA.x, offA.y,
+        offA.x + ux * tw - uy * tw * 0.45, offA.y + uy * tw + ux * tw * 0.45,
+        offA.x + ux * tw + uy * tw * 0.45, offA.y + uy * tw - ux * tw * 0.45,
+      ]
+      const arrowB: [number, number, number, number, number, number] = [
+        offB.x, offB.y,
+        offB.x - ux * tw - uy * tw * 0.45, offB.y - uy * tw + ux * tw * 0.45,
+        offB.x - ux * tw + uy * tw * 0.45, offB.y - uy * tw - ux * tw * 0.45,
+      ]
+      const ta1 = clipLine(arrowA[0], arrowA[1], arrowA[2], arrowA[3], clipX, clipY, clipW, clipH)
+      if (ta1) doc.line(ta1[0], ta1[1], ta1[2], ta1[3])
+      const ta2 = clipLine(arrowA[0], arrowA[1], arrowA[4], arrowA[5], clipX, clipY, clipW, clipH)
+      if (ta2) doc.line(ta2[0], ta2[1], ta2[2], ta2[3])
+      const tb1 = clipLine(arrowB[0], arrowB[1], arrowB[2], arrowB[3], clipX, clipY, clipW, clipH)
+      if (tb1) doc.line(tb1[0], tb1[1], tb1[2], tb1[3])
+      const tb2 = clipLine(arrowB[0], arrowB[1], arrowB[4], arrowB[5], clipX, clipY, clipW, clipH)
+      if (tb2) doc.line(tb2[0], tb2[1], tb2[2], tb2[3])
+    }
+
+    const labelInside = midX >= clipX && midX <= clipX + clipW && midY >= clipY && midY <= clipY + clipH
+    if (labelInside) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(fontSize)
+      const labelW = doc.getTextWidth(d.label) + 4
+      const labelH = fontSize * 0.5 + 2
+      doc.setFillColor(255, 255, 255)
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.2)
+      doc.rect(midX - labelW / 2, midY - labelH / 2, labelW, labelH, 'FD')
+      doc.setTextColor(26, 58, 92)
+      doc.setFontSize(fontSize)
+      doc.text(d.label, midX, midY, { align: 'center', baseline: 'middle' })
+    }
+
+    doc.setDrawColor(96, 165, 250)
+    doc.setLineWidth(0.5)
+  }
+}
 
 export function exportPDFFromImages(
   capturedViews: CapturedView[],
@@ -517,13 +648,14 @@ export function exportPDFFromImages(
     const imgY2 = imgAreaY + (imgAreaH - imgH) / 2
     doc.addImage(dataURL, 'PNG', imgX, imgY2, imgW, imgH)
 
-    // Draw dimension annotations clipped to this cell's area
-    if (dimensions.length > 0) {
-      const viewType = viewNameToType(name)
-      if (viewType !== 'isometric') {
-        const ts = computeToScreen(members, viewType, imgX, imgY2, imgW, imgH)
-        if (ts) drawDimensionsOnView(doc, dimensions, viewType, ts.toScreen, ts.scale, w, x, y, w, h)
-      }
+    // Draw dimension annotations using the SAME camera that rendered the PNG,
+    // so they align precisely with the geometry in the image.
+    if (dimensions.length > 0 && capturedViews[i].projMatrix.length) {
+      drawDimensionsFromCamera(
+        doc, dimensions, capturedViews[i],
+        imgX, imgY2, imgW, imgH,
+        x, y, w, h, w,
+      )
     }
   }
 
