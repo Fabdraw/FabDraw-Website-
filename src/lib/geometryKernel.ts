@@ -139,7 +139,11 @@ function uprintCrossSection(
   }
 }
 
-/** Union plan-view footprints of all non-upright members. Returns array of outer rings. */
+/**
+ * Union plan-view footprints of all non-upright members.
+ * Returns ALL rings from the Clipper result — outer boundaries AND interior holes.
+ * Callers must render with even-odd fill rule so holes cut through outer shapes.
+ */
 export function unionMembers(members: Member[]): Ring[] {
   const nonUpright = members.filter(m => !isUpright(m))
   if (nonUpright.length === 0) return []
@@ -156,7 +160,10 @@ export function unionMembers(members: Member[]): Ring[] {
 
   try {
     const result = polygonClipping.union(polys[0], ...polys.slice(1))
-    return result.map(poly => poly[0].slice(0, -1) as Ring)
+    // Flatten ALL rings from all polygons (outer rings + hole rings).
+    // polygon-clipping returns MultiPolygon where each polygon is [outerRing, ...holeRings].
+    // We return them all; the renderer uses even-odd fill to punch holes correctly.
+    return result.flatMap(poly => poly.map(ring => ring.slice(0, -1) as Ring))
   } catch {
     return footprints.map(f => f.outer)
   }

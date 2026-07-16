@@ -1073,6 +1073,9 @@ export default function Canvas2D() {
           {viewMode === 'merged' && mergedRings.length > 0 && (
             <Shape
               sceneFunc={(ctx, shape) => {
+                // Build one compound path from all rings (outers + holes).
+                // Even-odd fill rule punches holes where rings overlap — interior
+                // of a closed frame becomes transparent.
                 ctx.beginPath()
                 for (const ring of mergedRings) {
                   ring.forEach(([wx, wy]: [number, number], i: number) => {
@@ -1083,7 +1086,14 @@ export default function Canvas2D() {
                   })
                   ctx.closePath()
                 }
-                ctx.fillStrokeShape(shape)
+                // Fill with even-odd so interior holes cut through
+                const fillColor = (shape as Konva.Shape).fill() as string
+                ctx.fillStyle = fillColor
+                ctx.fill('evenodd')
+                // Stroke every ring (outer edges + hole edges)
+                ctx.strokeStyle = (shape as Konva.Shape).stroke() as string
+                ctx.lineWidth = (shape as Konva.Shape).strokeWidth()
+                ctx.stroke()
               }}
               fill="rgba(75,120,180,0.22)"
               stroke="#4b78b4"
