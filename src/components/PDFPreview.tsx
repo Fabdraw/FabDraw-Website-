@@ -203,24 +203,25 @@ function PanelCameraSetup({ preset, bbox, mode }: { preset: ViewPreset; bbox: BB
   const { camera, size } = useThree()
 
   useEffect(() => {
+    // Guard: canvas not yet sized — effect will re-run once size is known
+    if (size.width === 0 || size.height === 0) return
+
     const { cx, cy, cz, radius: r } = bbox
     const effectivePreset = mode === '2d' ? 'top' : preset
     const isOrtho = isOrthoPreset(effectivePreset)
 
     if (isOrtho && camera instanceof THREE.OrthographicCamera) {
-      // Fit radius in view
       camera.zoom = Math.min(size.width, size.height) / 2 / r
       const positions: Record<string, [number, number, number]> = {
-        top:      [cx, cy + r * 6, cz],
-        front:    [cx, cy, cz + r * 6],
-        leftSide: [cx - r * 6, cy, cz],
-        rightSide:[cx + r * 6, cy, cz],
+        top:       [cx, cy + r * 6, cz],
+        front:     [cx, cy,         cz + r * 6],
+        leftSide:  [cx - r * 6, cy, cz],
+        rightSide: [cx + r * 6, cy, cz],
       }
       const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + r * 6, cz]
       camera.position.set(px, py, pz)
       camera.lookAt(cx, cy, cz)
-      if (effectivePreset === 'top') camera.up.set(0, 0, -1)
-      else camera.up.set(0, 1, 0)
+      camera.up.set(effectivePreset === 'top' ? 0 : 0, effectivePreset === 'top' ? 0 : 1, effectivePreset === 'top' ? -1 : 0)
       camera.updateProjectionMatrix()
     } else if (!isOrtho && camera instanceof THREE.PerspectiveCamera) {
       camera.fov = 20
@@ -232,7 +233,8 @@ function PanelCameraSetup({ preset, bbox, mode }: { preset: ViewPreset; bbox: BB
       camera.up.set(0, 1, 0)
       camera.updateProjectionMatrix()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-run whenever the canvas gets a real size, or bbox/preset change (new members, new view)
+  }, [bbox.cx, bbox.cy, bbox.cz, bbox.radius, preset, mode, size.width, size.height]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }

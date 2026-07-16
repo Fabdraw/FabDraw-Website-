@@ -186,15 +186,15 @@ function drawDimensionsOnView(
     if (labelInside) {
       // font/size must be set BEFORE getTextWidth so measurement is accurate
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
+      doc.setFontSize(fontSize)
       const labelW = doc.getTextWidth(d.label) + 4
-      const labelH = 5
+      const labelH = fontSize * 0.5 + 2
       doc.setFillColor(255, 255, 255)
       doc.setDrawColor(200, 200, 200)
       doc.setLineWidth(0.2)
       doc.rect(midX - labelW / 2, midY - labelH / 2, labelW, labelH, 'FD')
       doc.setTextColor(26, 58, 92)
-      doc.setFontSize(9)
+      doc.setFontSize(fontSize)
       doc.text(d.label, midX, midY, { align: 'center', baseline: 'middle' })
     }
     // Restore draw state for next iteration

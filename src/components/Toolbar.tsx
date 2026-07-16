@@ -9,6 +9,7 @@ import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { loadAsFabDocument } from '../lib/migration'
+import { exportDXF } from '../lib/dxfExport'
 
 export default function Toolbar({ onToggleSidebar }: {
   onToggleSidebar?: () => void
@@ -284,6 +285,14 @@ export default function Toolbar({ onToggleSidebar }: {
       </button>
       <button className={btn} onClick={() => setShowPDFExportModal(true)} title="Export PDF">
         <FileText size={14} />
+      </button>
+      <button
+        className={btn}
+        onClick={() => exportDXF(fabDocument)}
+        title="Export DXF — Units: 1 unit = 1 inch. Cut layer: 0"
+        style={{ fontSize: '10px', fontWeight: 700 }}
+      >
+        DXF
       </button>
 
       {div}
