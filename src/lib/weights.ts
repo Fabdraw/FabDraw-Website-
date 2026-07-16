@@ -1,61 +1,29 @@
 import type { Member } from '../types'
-import { parseSizeString, DENSITY } from './materials'
+import { GRADE_MATERIALS, resolveWallThickness } from './materials'
+import { crossSectionArea } from './geometryKernel'
 
-export function calcWeight(member: Member): number {
-  const d = DENSITY[member.grade]
-  const { type, size, wallThickness, length } = member
-  const wall = parseFloat(wallThickness) || 0.125
-  const { width, height } = parseSizeString(type, size)
-  let area = 0
+/**
+ * Weight of a member in lbs.
+ *
+ * volume = (cross-section area − drill-hole volumes) × density
+ *
+ * Hole deduction: each drill hole removes a cylinder of radius r through the
+ * wall material (π·r²·wallThickness per hole).
+ */
+export function calcWeight(m: Member): number {
+  const density = GRADE_MATERIALS[m.grade]?.density ?? 0.284
+  const csArea = crossSectionArea(m)
 
-  switch (type) {
-    case 'square_tube': {
-      const outer = width * height
-      const inner = (width - 2 * wall) * (height - 2 * wall)
-      area = outer - Math.max(0, inner)
-      break
-    }
-    case 'round_tube':
-    case 'pipe': {
-      const outerR = width / 2
-      const innerR = outerR - wall
-      area = Math.PI * (outerR * outerR - Math.max(0, innerR * innerR))
-      break
-    }
-    case 'rect_tube': {
-      const outer = width * height
-      const inner = (width - 2 * wall) * (height - 2 * wall)
-      area = outer - Math.max(0, inner)
-      break
-    }
-    case 'angle': {
-      area = 2 * width * wall - wall * wall
-      break
-    }
-    case 'channel': {
-      area = 2 * (width * wall) + (height - 2 * wall) * wall
-      break
-    }
-    case 'i_beam': {
-      // Two flanges (full width) + web (half flange thickness — typical W-section ratio)
-      const webT = wall * 0.5
-      area = 2 * (width * wall) + (height - 2 * wall) * webT
-      break
-    }
-    case 'flat_bar': {
-      area = width * height
-      break
-    }
-    case 'sheet':
-    case 'plate': {
-      area = width * wall
-      break
-    }
-    default:
-      area = width * height
+  let holeVolume = 0
+  if (m.holes?.length) {
+    const wall = resolveWallThickness(m.wallThickness, m.grade)
+    holeVolume = m.holes.reduce((sum, h) => {
+      const r = h.diameter / 2
+      return sum + Math.PI * r * r * wall
+    }, 0)
   }
 
-  return area * length * d
+  return Math.max(0, csArea * m.length - holeVolume) * density
 }
 
 export function formatWeight(lbs: number): string {

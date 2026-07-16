@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { parseSizeString } from './materials'
+import { parseSizeString, resolveWallThickness } from './materials'
 import type { Member, MemberType } from '../types'
 
 // Mirror buildCrossSection logic for validation (avoids circular import from Canvas3D)
@@ -58,7 +58,7 @@ function buildShape(type: MemberType, size: string, wall: number): THREE.Shape {
 }
 
 function buildGeo(m: Member): THREE.BufferGeometry {
-  const shape = buildShape(m.type, m.size, parseFloat(m.wallThickness) || 0.12)
+  const shape = buildShape(m.type, m.size, resolveWallThickness(m.wallThickness, m.grade))
   const g = new THREE.ExtrudeGeometry(shape, { depth: m.length, bevelEnabled: false, steps: 1 })
   g.translate(0, 0, -m.length / 2)
   g.applyMatrix4(new THREE.Matrix4().makeRotationY(Math.PI / 2))

@@ -11,6 +11,7 @@ import { useUIStore } from '../store/uiStore'
 import { parseSizeString } from '../lib/materials'
 import type { Member, Dimension } from '../types'
 import { exportPDFFromImages, type CapturedView } from '../lib/pdfExport'
+import { resolveWallThickness } from '../lib/materials'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ function calcBBox(members: Member[]): BBox {
 
 function buildShape(m: Member): THREE.Shape {
   const { width, height } = parseSizeString(m.type, m.size)
-  const wall = parseFloat(m.wallThickness) || 0.12
+  const wall = resolveWallThickness(m.wallThickness, m.grade)
   const hw = width / 2, hh = height / 2
   const shape = new THREE.Shape()
   shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh); shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath()

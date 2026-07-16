@@ -1,6 +1,6 @@
 import polygonClipping from 'polygon-clipping'
 import type { Member } from '../types'
-import { parseSizeString } from './materials'
+import { parseSizeString, resolveWallThickness } from './materials'
 
 type Pt = [number, number]
 type Ring = Pt[]
@@ -39,7 +39,7 @@ function getMemberAngleRad(m: Member): number {
 /** Outer footprint of a member in world-space inches (plan view for non-upright, cross-section for upright). */
 export function memberFootprint(m: Member): { outer: Ring; inner?: Ring } | null {
   const { width, height } = parseSizeString(m.type, m.size)
-  const wall = parseFloat(m.wallThickness) || 0.125
+  const wall = resolveWallThickness(m.wallThickness, m.grade)
   const cx = m.position.x, cy = m.position.y
 
   if (isUpright(m)) {
@@ -181,6 +181,21 @@ export function subtractHoles(outline: Ring, holes: Ring[]): Ring[] {
   } catch {
     return [outline]
   }
+}
+
+/**
+ * Cross-section area of a member in in² — used for weight calculation.
+ * Uses the upright cross-section polygon (end view) via shoelace formula
+ * so complex shapes (angle, channel, I-beam) are computed exactly.
+ */
+export function crossSectionArea(m: Member): number {
+  const { width, height } = parseSizeString(m.type, m.size)
+  const wall = resolveWallThickness(m.wallThickness, m.grade)
+  const fp = uprintCrossSection(m.type, 0, 0, width, height, wall)
+  if (!fp) return 0
+  const outer = shoelaceArea(fp.outer)
+  const inner = fp.inner ? shoelaceArea(fp.inner) : 0
+  return Math.max(0, outer - inner)
 }
 
 /** Shoelace area formula (absolute value) in world units². */

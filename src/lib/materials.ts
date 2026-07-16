@@ -1,10 +1,59 @@
 import type { MemberType, Grade } from '../types';
 
-// lbs per cubic inch
+// ─── Grade materials table — single source of truth ──────────────────────────
+// density: lbs/in³ · defaultK: K-factor (reserved for bend engine) · gaugeTable: gauge→thickness in inches (per-material — 16ga mild ≠ 16ga stainless ≠ 16ga aluminum)
+
+export const GRADE_MATERIALS: Record<Grade, {
+  density: number;
+  defaultK: number;
+  gaugeTable: Record<string, number>;
+}> = {
+  mild: {
+    density: 0.284,
+    defaultK: 0.42,
+    gaugeTable: {
+      '7ga': 0.179, '10ga': 0.134, '11ga': 0.120, '12ga': 0.105,
+      '14ga': 0.075, '16ga': 0.0598, '18ga': 0.048, '20ga': 0.036,
+    },
+  },
+  stainless: {
+    density: 0.289,
+    defaultK: 0.42,
+    gaugeTable: {
+      '7ga': 0.1875, '10ga': 0.140, '11ga': 0.125, '12ga': 0.109,
+      '14ga': 0.078, '16ga': 0.0625, '18ga': 0.050, '20ga': 0.0375,
+    },
+  },
+  aluminum: {
+    density: 0.098,
+    defaultK: 0.37,
+    gaugeTable: {
+      '10ga': 0.1019, '12ga': 0.0808, '14ga': 0.0641,
+      '16ga': 0.0508, '18ga': 0.0403, '20ga': 0.032,
+    },
+  },
+};
+
+/**
+ * Resolve a wall thickness string to inches.
+ * Gauge strings (e.g. "16ga") are looked up in the material-specific gauge table
+ * so that 16ga mild (0.0598), stainless (0.0625), and aluminum (0.0508) differ correctly.
+ * Numeric strings ("0.125") fall through to parseFloat.
+ */
+export function resolveWallThickness(wallStr: string, grade: Grade): number {
+  if (!wallStr) return 0.125;
+  const key = wallStr.toLowerCase().trim();
+  const gt = GRADE_MATERIALS[grade]?.gaugeTable;
+  if (gt?.[key] !== undefined) return gt[key];
+  const n = parseFloat(wallStr);
+  return isNaN(n) || n <= 0 ? 0.125 : n;
+}
+
+// lbs per cubic inch — kept for backward compat; derived from GRADE_MATERIALS
 export const DENSITY: Record<Grade, number> = {
-  mild: 0.2833,
-  stainless: 0.2890,
-  aluminum: 0.0975,
+  mild:      GRADE_MATERIALS.mild.density,
+  stainless: GRADE_MATERIALS.stainless.density,
+  aluminum:  GRADE_MATERIALS.aluminum.density,
 }
 
 export interface MaterialDef {

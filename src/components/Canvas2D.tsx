@@ -5,7 +5,7 @@ import { unionMembers } from '../lib/geometryKernel'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
-import { parseSizeString } from '../lib/materials'
+import { parseSizeString, resolveWallThickness } from '../lib/materials'
 import { SCALE } from '../lib/constants'
 import type { Member, Connection, Dimension, Hole } from '../types'
 import ConnectionDialog from './ConnectionDialog'
@@ -64,7 +64,7 @@ function snapToGrid(v: number): number {
 // Draw the cross-section shape for a member (centered at 0,0, along X axis)
 function MemberShape({ m, zoom, selected }: { m: Member; zoom: number; selected: boolean }) {
   const { width, height } = parseSizeString(m.type, m.size)
-  const wall = parseFloat(m.wallThickness) || 0.12
+  const wall = resolveWallThickness(m.wallThickness, m.grade)
   const S = zoom * SCALE
   const len = m.length * S
   const w = width * S
