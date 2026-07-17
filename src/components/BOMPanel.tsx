@@ -4,6 +4,7 @@ import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { MATERIALS } from '../lib/materials';
 import { calcWeight, formatWeight, totalWeight } from '../lib/weights';
+import { flatLength } from '../lib/bendEngine';
 import type { Member, MemberType } from '../types';
 
 const monoStyle = { fontFamily: "'JetBrains Mono', monospace" };
@@ -42,8 +43,9 @@ function buildCutList(members: Member[]): CutGroup[] {
     const label = `${gradeLabel} ${mat.label} · ${m.size}" · ${m.wallThickness}w`
     if (!groupMap.has(gk)) groupMap.set(gk, { label, lengthMap: new Map() })
     const { lengthMap } = groupMap.get(gk)!
-    // Round to 4 decimal places to avoid floating-point mismatches
-    const lenKey = Math.round(m.length * 10000) / 10000
+    // Use flat length for bent parts; round to 4 decimal places to avoid floating-point mismatches
+    const cutLen = flatLength(m)
+    const lenKey = Math.round(cutLen * 10000) / 10000
     const existing = lengthMap.get(lenKey)
     if (existing) { existing.qty++; existing.ids.push(m.id) }
     else lengthMap.set(lenKey, { qty: 1, ids: [m.id] })
@@ -200,7 +202,9 @@ export default function BOMPanel() {
                     <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{member.wallThickness}"</td>
                     <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{member.grade}</td>
                     <td className="px-2 py-1" style={{ color: '#f1f5f9' }}>
-                      {fmtLen(member.length)}
+                      {member.bends?.length
+                        ? <><span>{fmtLen(flatLength(member))}</span><span style={{ color: '#475569', marginLeft: 3 }}>flat</span></>
+                        : fmtLen(member.length)}
                     </td>
                     <td className="px-2 py-1 text-center">
                       <span

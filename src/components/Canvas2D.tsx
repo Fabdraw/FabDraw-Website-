@@ -7,6 +7,7 @@ import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString, resolveWallThickness } from '../lib/materials'
 import { SCALE } from '../lib/constants'
+import { flatPattern } from '../lib/bendEngine'
 import type { Member, Connection, Dimension, Hole } from '../types'
 import ConnectionDialog from './ConnectionDialog'
 
@@ -368,6 +369,9 @@ export default function Canvas2D() {
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const pinchRef = useRef<{ dist: number; midX: number; midY: number; zoom: number; panX: number; panY: number } | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Flat pattern overlay toggle
+  const [showFlatPattern, setShowFlatPattern] = useState(false)
 
   // Multi-drag state
   const dragOffsets = useRef<DragOffsets>({})
@@ -1270,6 +1274,69 @@ export default function Canvas2D() {
           })()}
         </Layer>
 
+        {/* Flat pattern overlay layer */}
+        {showFlatPattern && selectedIds.length === 1 && (() => {
+          const m = members.find(mb => mb.id === selectedIds[0])
+          if (!m || !['sheet', 'plate', 'flat_bar'].includes(m.type) || !m.bends?.length) return null
+          const fp = flatPattern(m)
+          if (!fp) return null
+          const S = zoom * SCALE
+          const t = resolveWallThickness(m.wallThickness, m.grade)
+          // Render flat pattern centered at canvas center
+          const originX = size.w / 2 - (fp.flatLength * S) / 2
+          const originY = size.h / 2 - (t * S) / 2
+          return (
+            <Layer listening={false}>
+              {/* Flat blank rectangle */}
+              <Rect
+                x={originX} y={originY}
+                width={fp.flatLength * S} height={t * S}
+                fill='rgba(74,144,217,0.15)'
+                stroke='#4a90d9'
+                strokeWidth={1.5}
+              />
+              {/* Bend lines */}
+              {fp.bendLinePositions.map((pos, i) => {
+                const bx = originX + pos * S
+                const bend = [...(m.bends ?? [])].sort((a, b) => a.positionAlongPart - b.positionAlongPart)[i]
+                return (
+                  <Group key={i} listening={false}>
+                    <Line
+                      points={[bx, originY - 8, bx, originY + t * S + 8]}
+                      stroke='#f97316'
+                      strokeWidth={1.5}
+                      dash={[5, 4]}
+                    />
+                    <Rect
+                      x={bx - 22} y={originY - 28}
+                      width={44} height={16}
+                      fill='rgba(15,17,23,0.85)'
+                      cornerRadius={2}
+                    />
+                    <Text
+                      x={bx} y={originY - 26}
+                      text={bend ? `${bend.angle}° ${bend.direction}` : ''}
+                      fontSize={Math.max(9, 9 * zoom)}
+                      fill='#f97316'
+                      align='center'
+                      offsetX={22}
+                      width={44}
+                    />
+                  </Group>
+                )
+              })}
+              {/* Flat length label */}
+              <Text
+                x={originX} y={originY + t * S + 12}
+                text={`FLAT: ${fp.flatLength.toFixed(4)}"`}
+                fontSize={Math.max(9, 10 * zoom)}
+                fill='#94a3b8'
+                fontStyle='bold'
+              />
+            </Layer>
+          )
+        })()}
+
         {/* Selection rectangle overlay */}
         {selRect && (
           <Layer listening={false}>
@@ -1351,6 +1418,32 @@ export default function Canvas2D() {
           onCancel={() => { setConnDialog(null); setConnectFirstMemberId(null) }}
         />
       )}
+
+      {/* Flat pattern toggle button — shown when a bent sheet/plate/flat_bar is selected */}
+      {selectedIds.length === 1 && (() => {
+        const m = members.find(mb => mb.id === selectedIds[0])
+        if (!m || !['sheet', 'plate', 'flat_bar'].includes(m.type) || !m.bends?.length) return null
+        return (
+          <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 50 }}>
+            <button
+              onClick={() => setShowFlatPattern(v => !v)}
+              style={{
+                background: showFlatPattern ? 'rgba(249,115,22,0.2)' : 'rgba(15,17,23,0.85)',
+                border: `1px solid ${showFlatPattern ? '#f97316' : '#2e3350'}`,
+                borderRadius: 4,
+                color: showFlatPattern ? '#f97316' : '#94a3b8',
+                fontSize: 10,
+                letterSpacing: '1.5px',
+                padding: '4px 10px',
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+              }}
+            >
+              FLAT PATTERN
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Group rename input */}
       {renamingGroupId && (() => {

@@ -9,6 +9,20 @@ export interface Hole {
   face: 'top' | 'front' | 'side'
 }
 
+/**
+ * A bend in a sheet / plate / flat_bar part.
+ * positionAlongPart = outside mold line distance from start (inches).
+ * kFactor is per-bend overridable (shops tune K per press brake setup).
+ */
+export interface Bend {
+  id: string
+  angle: number                // degrees from flat (e.g. 90 = right angle)
+  direction: 'up' | 'down'    // which way the flange folds
+  insideRadius: number         // inches
+  kFactor: number              // manually set; defaults to GRADE_MATERIALS[grade].defaultK
+  positionAlongPart: number    // inches from start (outside mold line)
+}
+
 export interface Member {
   id: string
   type: MemberType
@@ -19,6 +33,7 @@ export interface Member {
   position: { x: number; y: number; z: number }
   rotation: { x: number; y: number; z: number } // degrees
   holes: Hole[]
+  bends?: Bend[]
   groupId?: string
 }
 

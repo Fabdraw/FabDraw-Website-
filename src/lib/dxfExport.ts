@@ -3,6 +3,8 @@ import type { Member } from '../types'
 import { fabDocumentToProject } from './migration'
 import { unionMembers } from './geometryKernel'
 import { DxfWriter } from './dxfWriter'
+import { flatPattern } from './bendEngine'
+import { resolveWallThickness } from './materials'
 
 function memberHolePositions(m: Member): Array<{ x: number; y: number; r: number }> {
   if (!m.holes?.length) return []
@@ -39,6 +41,21 @@ export function exportDXF(doc: FabDocument): void {
   for (const m of members) {
     for (const { x, y, r } of memberHolePositions(m)) {
       writer.writeCircle(x, -y, r, '0')
+    }
+  }
+
+  // Flat patterns for bent sheet/plate/flat_bar members on separate layers
+  for (const m of members) {
+    if (!['sheet', 'plate', 'flat_bar'].includes(m.type) || !m.bends?.length) continue
+    const fp = flatPattern(m)
+    if (!fp) continue
+    const t = resolveWallThickness(m.wallThickness, m.grade)
+    // Flat outline on layer '0' (separate from merged outline)
+    const outline: [number, number][] = fp.outline.map(([x, y]) => [x, -y])
+    writer.writePolyline(outline, true, '0')
+    // Bend lines on layer 'BEND'
+    for (const pos of fp.bendLinePositions) {
+      writer.writeLine(pos, 0, pos, -t, 'BEND')
     }
   }
 

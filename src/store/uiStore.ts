@@ -3,7 +3,7 @@ import type { Member } from '../types';
 
 export type Mode = 'select' | 'pan' | 'hole_add' | 'dimension' | 'connect';
 export type ActiveView = '2d' | '3d';
-export type ActiveRightTab = 'props' | 'holes' | 'notes';
+export type ActiveRightTab = 'props' | 'holes' | 'bends' | 'notes';
 export type ViewMode = 'sketch' | 'merged';
 
 interface ContextMenu {
