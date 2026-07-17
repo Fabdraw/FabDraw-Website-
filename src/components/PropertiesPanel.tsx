@@ -3,10 +3,9 @@ import { Trash2, Plus, X } from 'lucide-react';
 import { useProjectStore } from '../store/projectStore';
 import { useUIStore } from '../store/uiStore';
 import { useHistoryStore } from '../store/historyStore';
-import { MATERIALS, GRADE_MATERIALS, resolveWallThickness } from '../lib/materials';
+import { MATERIALS, resolveWallThickness } from '../lib/materials';
 import { calcWeight, formatWeight } from '../lib/weights';
-import { flatPattern } from '../lib/bendEngine';
-import type { Grade, Hole, Bend } from '../types';
+import type { Grade, Hole } from '../types';
 import { inputCls, labelCls } from '../styles/tokens';
 
 const GRADE_LABELS: Record<Grade, string> = {
@@ -137,38 +136,9 @@ export default function PropertiesPanel() {
     update('holes', updated);
   };
 
-  const isBendable = ['sheet', 'plate', 'flat_bar'].includes(selectedMember.type)
-
-  const handleAddBend = () => {
-    const defaultK = GRADE_MATERIALS[selectedMember.grade]?.defaultK ?? 0.42
-    const newBend: Bend = {
-      id: crypto.randomUUID(),
-      angle: 90,
-      direction: 'up',
-      insideRadius: resolveWallThickness(selectedMember.wallThickness, selectedMember.grade),
-      kFactor: defaultK,
-      positionAlongPart: selectedMember.length / 2,
-    }
-    update('bends', [...(selectedMember.bends ?? []), newBend])
-  }
-
-  const handleUpdateBend = (bendId: string, field: keyof Bend, value: unknown) => {
-    const updated = (selectedMember.bends ?? []).map(b =>
-      b.id === bendId ? { ...b, [field]: value } : b
-    )
-    update('bends', updated)
-  }
-
-  const handleRemoveBend = (bendId: string) => {
-    update('bends', (selectedMember.bends ?? []).filter(b => b.id !== bendId))
-  }
-
-  const fp = isBendable ? flatPattern(selectedMember) : null
-
   const tabs = [
     { id: 'props', label: 'Props' },
     { id: 'holes', label: 'Holes' },
-    ...(isBendable ? [{ id: 'bends', label: 'Bends' }] : []),
     { id: 'notes', label: 'Notes' },
   ];
 
@@ -481,78 +451,6 @@ export default function PropertiesPanel() {
                       <option value="front">Front</option>
                       <option value="side">Side</option>
                     </select>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-        {activeRightTab === 'bends' && isBendable && (
-          <>
-            <button
-              onClick={handleAddBend}
-              className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md text-xs panel-item"
-              style={{ border: '1px solid rgba(249,115,22,0.4)', color: '#f97316', background: 'transparent' }}
-            >
-              <Plus size={12} /> Add Bend
-            </button>
-
-            {/* Flat length summary */}
-            {fp && (
-              <div className="flex items-center justify-between px-2 py-1.5 rounded-md" style={{ background: '#21253a' }}>
-                <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
-                  FLAT LENGTH
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', color: '#60a5fa' }}>
-                  {fp.flatLength.toFixed(4)}"
-                </span>
-              </div>
-            )}
-
-            {!(selectedMember.bends?.length) && (
-              <div className="text-center py-4" style={{ color: '#475569', fontSize: '12px' }}>No bends</div>
-            )}
-
-            {(selectedMember.bends ?? [])
-              .slice()
-              .sort((a, b) => a.positionAlongPart - b.positionAlongPart)
-              .map((bend, i) => (
-              <div key={bend.id} className="rounded-md p-2 space-y-2" style={{ background: '#21253a' }}>
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Bend {i + 1}</span>
-                  <button onClick={() => handleRemoveBend(bend.id)} style={{ color: '#475569' }} className="hover:text-red-400 transition-colors">
-                    <X size={12} />
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  <div>
-                    <label className={labelCls}>Position Along Part (in)</label>
-                    <input type="number" className={inputCls} value={bend.positionAlongPart} step={0.0625} min={0} max={selectedMember.length}
-                      onChange={e => handleUpdateBend(bend.id, 'positionAlongPart', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Angle from Flat (°)</label>
-                    <input type="number" className={inputCls} value={bend.angle} step={1} min={1} max={180}
-                      onChange={e => handleUpdateBend(bend.id, 'angle', parseFloat(e.target.value) || 90)} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Direction</label>
-                    <select className={inputCls} value={bend.direction}
-                      onChange={e => handleUpdateBend(bend.id, 'direction', e.target.value as Bend['direction'])}>
-                      <option value="up">Up</option>
-                      <option value="down">Down</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Inside Radius (in)</label>
-                    <input type="number" className={inputCls} value={bend.insideRadius} step={0.0625} min={0}
-                      onChange={e => handleUpdateBend(bend.id, 'insideRadius', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>K-Factor</label>
-                    <input type="number" className={inputCls} value={bend.kFactor} step={0.01} min={0} max={0.5}
-                      onChange={e => handleUpdateBend(bend.id, 'kFactor', parseFloat(e.target.value) || 0.42)} />
                   </div>
                 </div>
               </div>

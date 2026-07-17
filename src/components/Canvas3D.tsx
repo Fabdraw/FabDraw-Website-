@@ -6,7 +6,6 @@ import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
 import { parseSizeString, resolveWallThickness } from '../lib/materials'
-import { bendSegments } from '../lib/bendEngine'
 import type { Member } from '../types'
 
 const GRADE_COLOR: Record<string, string> = {
@@ -212,93 +211,6 @@ function MemberMesh({
           <meshPhongMaterial color='#0a0f1a' />
         </mesh>
       ))}
-    </group>
-  )
-}
-
-// Build flat plate geometry for one segment of a bent member
-function buildFlatPlateGeo(segLen: number, width: number, t: number): THREE.BufferGeometry {
-  const shape = new THREE.Shape()
-  shape.moveTo(-segLen / 2, -width / 2)
-  shape.lineTo(segLen / 2, -width / 2)
-  shape.lineTo(segLen / 2, width / 2)
-  shape.lineTo(-segLen / 2, width / 2)
-  shape.closePath()
-  const g = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false })
-  g.translate(0, 0, -t / 2)
-  return g
-}
-
-// Render a bent sheet/plate/flat_bar as articulated flat segments
-function BentMemberMesh({ m, selected, onClick, onPointerDown }: {
-  m: Member; selected: boolean
-  onClick: () => void
-  onPointerDown: (e: React.PointerEvent<Element>) => void
-}) {
-  const { width } = parseSizeString(m.type, m.size)
-  const t = resolveWallThickness(m.wallThickness, m.grade)
-  const color = memberColor(m, selected)
-  const hexColor = new THREE.Color(color)
-  const segs = bendSegments(m)
-  if (!segs) return null
-
-  const px = m.position.x
-  const pz = m.position.y
-  const py = m.position.z ?? 0
-  const angleY = -(m.rotation.y * Math.PI) / 180
-
-  // Walk segments, accumulating position + cumulative bend angle
-  let cursor = 0   // position along member axis
-  let cumAngle = 0 // cumulative bend angle in degrees (in the X-Z plane of segment)
-
-  const segMeshes = segs.map((seg, i) => {
-    if (seg.length <= 0) {
-      if (seg.direction) {
-        const dir = seg.direction === 'up' ? 1 : -1
-        cumAngle += dir * seg.bendAngle
-      }
-      return null
-    }
-    const halfLen = seg.length / 2
-    // Local offset from member center: advance halfLen along current direction
-    const radCA = (cumAngle * Math.PI) / 180
-    const fwd = new THREE.Vector3(Math.cos(radCA), 0, -Math.sin(radCA))
-    const segCenter = new THREE.Vector3(
-      cursor * Math.cos(0) + halfLen * Math.cos(radCA),
-      halfLen * Math.sin(radCA),
-      0,
-    )
-    // Build geometry
-    const geo = buildFlatPlateGeo(seg.length, width, t)
-
-    // Advance cursor for next segment
-    cursor += seg.length
-    if (seg.direction) {
-      const dir = seg.direction === 'up' ? 1 : -1
-      cumAngle += dir * seg.bendAngle
-    }
-
-    return (
-      <group key={i} position={[segCenter.x, segCenter.y, 0]} rotation={[0, 0, (radCA * Math.PI) / 180]}>
-        <mesh geometry={geo} castShadow receiveShadow>
-          <meshPhongMaterial color={hexColor} shininess={selected ? 80 : 30} />
-        </mesh>
-        <lineSegments>
-          <edgesGeometry args={[geo]} />
-          <lineBasicMaterial color={selected ? '#ff8800' : hexColor.clone().multiplyScalar(0.6)} />
-        </lineSegments>
-      </group>
-    )
-  }).filter(Boolean)
-
-  return (
-    <group
-      position={[px, py, pz]}
-      rotation={[0, angleY, 0]}
-      onClick={(e) => { e.stopPropagation(); onClick() }}
-      onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e as unknown as React.PointerEvent<Element>) }}
-    >
-      {segMeshes}
     </group>
   )
 }
@@ -727,15 +639,15 @@ function Scene() {
         position={[0, -0.01, 0]}
       />
 
-      {members.map(m => {
-        const isBent = ['sheet', 'plate', 'flat_bar'].includes(m.type) && (m.bends?.length ?? 0) > 0
-        const sel = selectedIds.includes(m.id)
-        const clickH = () => handleMemberClick(m)
-        const pdH = (e: React.PointerEvent<Element>) => handleMemberPointerDown(m, e)
-        return isBent
-          ? <BentMemberMesh key={m.id} m={m} selected={sel} onClick={clickH} onPointerDown={pdH} />
-          : <MemberMesh key={m.id} m={m} selected={sel} onClick={clickH} onPointerDown={pdH} />
-      })}
+      {members.map(m => (
+        <MemberMesh
+          key={m.id}
+          m={m}
+          selected={selectedIds.includes(m.id)}
+          onClick={() => handleMemberClick(m)}
+          onPointerDown={(e) => handleMemberPointerDown(m, e)}
+        />
+      ))}
 
       {/* Group bounding boxes */}
       {Object.entries(groupBounds).map(([gid, b]) => (
