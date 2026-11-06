@@ -41,14 +41,14 @@ const VIEW_OPTIONS: ViewPreset[] = ['top', 'front', 'leftSide', 'rightSide', 'is
 
 const DEFAULT_PANELS: Record<number, PanelState[]> = {
   1: [{ preset: 'isometric', showDimensions: false, mode: '3d' }],
-  2: [{ preset: 'top',       showDimensions: false, mode: '2d' },
+  2: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
-  3: [{ preset: 'top',       showDimensions: false, mode: '2d' },
-      { preset: 'front',     showDimensions: false, mode: '3d' },
+  3: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
+      { preset: 'front',     showDimensions: true,  mode: '3d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
-  4: [{ preset: 'top',       showDimensions: false, mode: '2d' },
-      { preset: 'front',     showDimensions: false, mode: '3d' },
-      { preset: 'leftSide',  showDimensions: false, mode: '3d' },
+  4: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
+      { preset: 'front',     showDimensions: true,  mode: '3d' },
+      { preset: 'leftSide',  showDimensions: true,  mode: '3d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
 }
 
@@ -63,18 +63,33 @@ function calcBBox(members: Member[]): BBox {
   let minX = Infinity, minY = Infinity, minZ = Infinity
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
   for (const m of members) {
+    const { width, height } = parseSizeString(m.type, m.size)
     const hw = m.length / 2
+    const hcs = Math.max(width, height) / 2  // cross-section half-size
     const isUpright = Math.abs(m.rotation.x) >= 45
     const posY = isUpright ? (m.position.z ?? 0) + m.length / 2 : (m.position.z ?? 0)
-    minX = Math.min(minX, m.position.x - hw); maxX = Math.max(maxX, m.position.x + hw)
-    minZ = Math.min(minZ, m.position.y - hw); maxZ = Math.max(maxZ, m.position.y + hw)
-    minY = Math.min(minY, posY - hw);          maxY = Math.max(maxY, posY + hw)
+    const R = (m.rotation.y * Math.PI) / 180
+    if (isUpright) {
+      // vertical member: footprint is cross-section in X/Z, length in Y
+      minX = Math.min(minX, m.position.x - hcs); maxX = Math.max(maxX, m.position.x + hcs)
+      minZ = Math.min(minZ, m.position.y - hcs); maxZ = Math.max(maxZ, m.position.y + hcs)
+      minY = Math.min(minY, (m.position.z ?? 0));            maxY = Math.max(maxY, (m.position.z ?? 0) + m.length)
+    } else {
+      // horizontal member: rotated in X/Z plane
+      const cosR = Math.abs(Math.cos(R)), sinR = Math.abs(Math.sin(R))
+      const extX = hw * cosR + hcs * sinR
+      const extZ = hw * sinR + hcs * cosR
+      minX = Math.min(minX, m.position.x - extX); maxX = Math.max(maxX, m.position.x + extX)
+      minZ = Math.min(minZ, m.position.y - extZ); maxZ = Math.max(maxZ, m.position.y + extZ)
+      minY = Math.min(minY, posY - hcs);           maxY = Math.max(maxY, posY + hcs)
+    }
   }
+  const sizeX = maxX - minX, sizeY = maxY - minY, sizeZ = maxZ - minZ
   return {
     cx: (minX + maxX) / 2,
     cy: (minY + maxY) / 2,
     cz: (minZ + maxZ) / 2,
-    radius: Math.max(maxX - minX, maxY - minY, maxZ - minZ, 10) * 0.75,
+    radius: Math.max(sizeX, sizeY, sizeZ, 10) * 0.6,
   }
 }
 
@@ -208,31 +223,56 @@ function PanelCameraSetup({ preset, bbox, mode }: { preset: ViewPreset; bbox: BB
     const isOrtho = isOrthoPreset(effectivePreset)
 
     if (isOrtho && camera instanceof THREE.OrthographicCamera) {
-      // Fit radius in view
-      camera.zoom = Math.min(size.width, size.height) / 2 / r
-      const positions: Record<string, [number, number, number]> = {
-        top:      [cx, cy + r * 6, cz],
-        front:    [cx, cy, cz + r * 6],
-        leftSide: [cx - r * 6, cy, cz],
-        rightSide:[cx + r * 6, cy, cz],
+      // Fit model with 15% padding each side
+      const pad = 1.30
+      const aspect = size.width / size.height
+      // For top view: model spans X/Z; for front: X/Y; for leftSide: Z/Y
+      let spanH: number, spanV: number
+      if (effectivePreset === 'top') {
+        spanH = r * 2; spanV = r * 2
+      } else if (effectivePreset === 'front') {
+        spanH = r * 2; spanV = r * 2
+      } else {
+        spanH = r * 2; spanV = r * 2
       }
-      const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + r * 6, cz]
+      const frustumH = spanV * pad
+      const frustumW = Math.max(spanH * pad, frustumH * aspect)
+      camera.left   = -frustumW / 2;  camera.right = frustumW / 2
+      camera.top    =  frustumH / 2;  camera.bottom = -frustumH / 2
+      camera.near   = -r * 100;       camera.far = r * 100
+      const dist = r * 10
+      const positions: Record<string, [number, number, number]> = {
+        top:      [cx, cy + dist, cz],
+        front:    [cx, cy,        cz + dist],
+        leftSide: [cx - dist, cy, cz],
+        rightSide:[cx + dist, cy, cz],
+      }
+      const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + dist, cz]
       camera.position.set(px, py, pz)
       camera.lookAt(cx, cy, cz)
       if (effectivePreset === 'top') camera.up.set(0, 0, -1)
       else camera.up.set(0, 1, 0)
+      camera.zoom = 1
       camera.updateProjectionMatrix()
     } else if (!isOrtho && camera instanceof THREE.PerspectiveCamera) {
-      camera.fov = 20
+      // Distance to fit radius in a 35° vertical fov with 20% padding
+      const fov = 35
+      camera.fov = fov
       camera.aspect = size.width / size.height
       camera.near = 0.1
-      camera.far = 50000
-      camera.position.set(cx + r, cy + r, cz + r)
+      camera.far = r * 200
+      const dist = (r * 1.2) / Math.tan((fov / 2) * (Math.PI / 180))
+      if (effectivePreset === 'isometric') {
+        const d = dist / Math.sqrt(3)
+        camera.position.set(cx + d, cy + d, cz + d)
+      } else {
+        camera.position.set(cx + dist, cy + dist * 0.6, cz + dist)
+      }
       camera.lookAt(cx, cy, cz)
       camera.up.set(0, 1, 0)
       camera.updateProjectionMatrix()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bbox.cx, bbox.cy, bbox.cz, bbox.radius, preset, mode, size.width, size.height]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
