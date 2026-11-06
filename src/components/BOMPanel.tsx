@@ -87,8 +87,8 @@ export default function BOMPanel() {
   const cutList = useMemo(() => buildCutList(members), [members])
 
   const headerStyle: React.CSSProperties = {
-    background: '#1a1d27',
-    borderTop: '1px solid #2e3350',
+    background: '#161a22',
+    borderTop: '1px solid #252d3d',
   };
 
   if (isBOMCollapsed) {
@@ -98,17 +98,17 @@ export default function BOMPanel() {
         style={{ ...headerStyle, height: '32px' }}
         onClick={toggleBOM}
       >
-        <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
-          BILL OF MATERIALS
+        <span style={{ fontSize: '11px', fontWeight: 500, color: '#8b96a8' }}>
+          Bill of Materials
         </span>
         <span
-          className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
+          className="rounded px-1.5 py-0.5"
+          style={{ background: '#1d2231', color: '#8b96a8', fontSize: '10px' }}
         >
           {members.length}
         </span>
         <div className="flex-1" />
-        <ChevronUp size={12} style={{ color: '#475569' }} />
+        <ChevronUp size={12} style={{ color: '#4c5768' }} />
       </div>
     );
   }
@@ -118,24 +118,24 @@ export default function BOMPanel() {
       {/* Header */}
       <div
         className="flex items-center gap-3 px-3 shrink-0"
-        style={{ height: '32px', borderBottom: '1px solid #2e3350' }}
+        style={{ height: '32px', borderBottom: '1px solid #252d3d' }}
       >
         <span
           className="cursor-pointer"
-          style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}
+          style={{ fontSize: '11px', fontWeight: 500, color: '#8b96a8' }}
           onClick={toggleBOM}
         >
-          BILL OF MATERIALS
+          Bill of Materials
         </span>
         <span
           className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
+          style={{ background: '#1d2231', color: '#8b96a8', fontSize: '10px' }}
         >
           {members.length}
         </span>
 
         {/* View toggle */}
-        <div style={{ display: 'flex', border: '1px solid #2e3350', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', border: '1px solid #252d3d', borderRadius: 4, overflow: 'hidden' }}>
           {(['bom', 'cutlist'] as const).map(v => (
             <button
               key={v}
@@ -165,13 +165,13 @@ export default function BOMPanel() {
       <div className="flex-1 overflow-auto">
         {view === 'bom' ? (
           <table className="w-full text-left" style={{ ...monoStyle, fontSize: '11px' }}>
-            <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
+            <thead className="sticky top-0" style={{ background: '#161a22' }}>
               <tr>
                 {['#','TYPE','SIZE','WALL','GRADE','LENGTH','QTY','WEIGHT'].map(h => (
                   <th
                     key={h}
                     className="px-2 py-1"
-                    style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
+                    style={{ fontSize: '9px', color: '#4c5768', fontWeight: 400 }}
                   >
                     {h}
                   </th>
@@ -183,7 +183,7 @@ export default function BOMPanel() {
                 const mat = MATERIALS[member.type];
                 const isSelected = ids.some(id => selectedIds.includes(id));
                 const rowBg = isSelected
-                  ? 'rgba(249,115,22,0.1)'
+                  ? 'rgba(79,128,255,0.08)'
                   : i % 2 === 0
                   ? 'rgba(255,255,255,0.02)'
                   : 'transparent';
@@ -205,7 +205,7 @@ export default function BOMPanel() {
                     <td className="px-2 py-1 text-center">
                       <span
                         className="px-1.5 py-0.5 rounded"
-                        style={{ background: '#2e3350', color: '#f1f5f9' }}
+                        style={{ background: '#252d3d', color: '#f1f5f9' }}
                       >
                         {count}
                       </span>
@@ -217,7 +217,7 @@ export default function BOMPanel() {
                 );
               })}
               {members.length > 0 && (
-                <tr style={{ background: 'rgba(249,115,22,0.08)' }}>
+                <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                   <td colSpan={7} className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
                     TOTAL
                   </td>
@@ -244,11 +244,11 @@ export default function BOMPanel() {
               </div>
             ) : (
               cutList.map(({ key, label, cuts, totalLength }) => (
-                <div key={key} style={{ borderBottom: '1px solid #2e3350' }}>
+                <div key={key} style={{ borderBottom: '1px solid #252d3d' }}>
                   {/* Group header */}
                   <div
                     className="flex items-center justify-between px-2 py-1 sticky top-0"
-                    style={{ background: '#1a1d27', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#f97316' }}
+                    style={{ background: '#161a22', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#f97316' }}
                   >
                     <span>{label}</span>
                     <span style={{ color: '#94a3b8' }}>
@@ -273,13 +273,13 @@ export default function BOMPanel() {
                           <tr
                             key={ci}
                             className="cursor-pointer"
-                            style={{ background: isSelected ? 'rgba(249,115,22,0.1)' : ci % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
+                            style={{ background: isSelected ? 'rgba(79,128,255,0.08)' : ci % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
                             onClick={() => setSelectedIds(ids)}
                           >
                             <td className="px-2 py-0.5" style={{ color: '#475569' }}>{ci + 1}</td>
                             <td className="px-2 py-0.5" style={{ color: '#f1f5f9' }}>{fmtLen(length)}</td>
                             <td className="px-2 py-0.5">
-                              <span className="px-1.5 py-0.5 rounded" style={{ background: '#2e3350', color: '#f1f5f9' }}>
+                              <span className="px-1.5 py-0.5 rounded" style={{ background: '#252d3d', color: '#f1f5f9' }}>
                                 ×{qty}
                               </span>
                             </td>
@@ -297,14 +297,14 @@ export default function BOMPanel() {
 
         {/* Connections table — shown in BOM view only */}
         {view === 'bom' && connections.length > 0 && (
-          <table className="w-full text-left border-t" style={{ ...monoStyle, fontSize: '11px', borderColor: '#2e3350' }}>
-            <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
+          <table className="w-full text-left border-t" style={{ ...monoStyle, fontSize: '11px', borderColor: '#252d3d' }}>
+            <thead className="sticky top-0" style={{ background: '#161a22' }}>
               <tr>
                 {['#', 'TYPE', 'MEMBER A', 'MEMBER B'].map(h => (
                   <th
                     key={h}
                     className="px-2 py-1"
-                    style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
+                    style={{ fontSize: '9px', color: '#4c5768', fontWeight: 400 }}
                   >
                     {h}
                   </th>

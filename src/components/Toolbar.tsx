@@ -106,17 +106,17 @@ export default function Toolbar({ onToggleSidebar }: {
   // Button variants — min 44×44px on mobile for touch, compact on desktop
   const base = 'flex items-center justify-center min-w-[44px] min-h-[44px] lg:w-7 lg:h-7 lg:min-w-0 lg:min-h-0 rounded transition-colors focus:outline-none'
   const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
-  const btnActive = `${base} bg-orange-500/15 text-orange-400`
+  const btnActive = `${base} bg-[#4f80ff]/10 text-[#4f80ff]`
   const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
-  const div = <div className="w-px h-4 mx-0.5 lg:mx-1.5 bg-[#2e3350] shrink-0 inline-block" />
+  const div = <div className="w-px h-4 mx-0.5 lg:mx-1.5 bg-[#252d3d] shrink-0 inline-block" />
 
   return (
     <div
       className="toolbar-scrollable flex items-center gap-0.5 px-2 lg:px-3 select-none shrink-0"
       style={{
         height: '48px',
-        background: '#0f1117',
-        borderBottom: '1px solid #2e3350',
+        background: '#111318',
+        borderBottom: '1px solid #252d3d',
         overflowX: 'auto',
         overflowY: 'hidden',
       }}
@@ -133,12 +133,12 @@ export default function Toolbar({ onToggleSidebar }: {
       {/* Logo */}
       <div className="flex items-center gap-2 mr-2 lg:mr-3 shrink-0">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect width="8" height="8" rx="1.5" fill="#f97316" />
-          <rect x="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
-          <rect y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
-          <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".25" />
+          <rect width="8" height="8" rx="1.5" fill="#4f80ff" />
+          <rect x="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".5" />
+          <rect y="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".5" />
+          <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".25" />
         </svg>
-        <span className="text-sm font-bold tracking-widest text-slate-100 hidden lg:inline">FABDRAW</span>
+        <span className="text-[13px] font-semibold tracking-wide text-slate-100 hidden lg:inline">FabDraw</span>
       </div>
 
       {/* Project name — hidden on mobile */}
@@ -146,7 +146,7 @@ export default function Toolbar({ onToggleSidebar }: {
         className="hidden lg:block bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
         style={{
           border: 'none',
-          borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent',
+          borderBottom: editingName ? '1px solid #4f80ff' : '1px solid transparent',
           transition: 'border-color 150ms',
         }}
         value={project.name}
@@ -299,8 +299,8 @@ export default function Toolbar({ onToggleSidebar }: {
 
       {/* AI */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 justify-center"
-        style={{ border: '1px solid #f97316', color: '#f97316' }}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-[#4f80ff]/10 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 justify-center"
+        style={{ border: '1px solid #4f80ff', color: '#4f80ff' }}
         onClick={() => setShowAIModal(true)}
       >
         <Sparkles size={12} />

@@ -170,7 +170,7 @@ export default function App() {
     undo, redo, push, addMember, setFabDocument, fabDocument, dimensions, groupNames]);
 
   return (
-    <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#0d1017] text-slate-200 overflow-hidden">
       <Toolbar onToggleSidebar={() => setSidebarOpen(o => !o)} />
 
       {/* ── DESKTOP layout (lg+): flex row, sidebars inline ── */}
@@ -179,10 +179,10 @@ export default function App() {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative min-h-0">
             {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
-            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
+            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(17,19,24,0.88)', border: '1px solid #252d3d' }}>
               <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
               <span>{members.length} members</span>
-              {selectedIds.length > 0 && <span className="text-orange-400">{selectedIds.length} selected</span>}
+              {selectedIds.length > 0 && <span className="text-[#4f80ff]">{selectedIds.length} selected</span>}
             </div>
           </div>
           <BOMPanel />
@@ -196,10 +196,10 @@ export default function App() {
         {/* Canvas fills everything */}
         <div className="absolute inset-0">
           {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
-          <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
+          <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(17,19,24,0.88)', border: '1px solid #252d3d' }}>
             <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
             <span>{members.length} members</span>
-            {selectedIds.length > 0 && <span className="text-orange-400">{selectedIds.length} selected</span>}
+            {selectedIds.length > 0 && <span className="text-[#4f80ff]">{selectedIds.length} selected</span>}
           </div>
         </div>
 
@@ -218,11 +218,11 @@ export default function App() {
             transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
             width: '280px',
             maxWidth: '85vw',
-            background: '#1a1d27',
+            background: '#161a22',
           }}
         >
           {/* Close button header */}
-          <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ background: '#0f1117', borderBottom: '1px solid #2e3350' }}>
+          <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ background: '#111318', borderBottom: '1px solid #252d3d' }}>
             <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">Library</span>
             <button
               className="w-11 h-11 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-white/10"
@@ -243,8 +243,8 @@ export default function App() {
             height: `${propsPanelH}%`,
             transform: propsPanelOpen ? 'translateY(0)' : 'translateY(100%)',
             transition: dragStartY.current !== null ? 'none' : 'transform 0.2s ease',
-            background: '#1a1d27',
-            borderTop: '2px solid #2e3350',
+            background: '#161a22',
+            borderTop: '2px solid #252d3d',
             boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
           }}
         >

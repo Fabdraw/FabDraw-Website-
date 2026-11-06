@@ -46,8 +46,8 @@ export default function PropertiesPanel() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
   const panelStyle = {
     width: isMobile ? '100%' : '240px',
-    background: '#1a1d27',
-    borderLeft: isMobile ? 'none' : '1px solid #2e3350',
+    background: '#161a22',
+    borderLeft: isMobile ? 'none' : '1px solid #252d3d',
   };
 
   if (selectedIds.length === 0 && !selectedConn) {
@@ -64,7 +64,7 @@ export default function PropertiesPanel() {
   if (selectedIds.length > 1) {
     return (
       <div className="shrink-0 p-3" style={panelStyle}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', marginBottom: '12px' }}>
+        <div style={{ fontSize: '9px', color: '#4c5768', marginBottom: '12px' }}>
           {selectedIds.length} members selected
         </div>
         <button
@@ -88,12 +88,12 @@ export default function PropertiesPanel() {
     const mB = members.find(m => m.id === selectedConn.memberBId);
     return (
       <div className="shrink-0 p-3 space-y-2" style={panelStyle}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>Connection</div>
-        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
+        <div style={{ fontSize: '9px', color: '#4c5768' }}>Connection</div>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#1d2231', color: '#94a3b8' }}>
           <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER A</div>
           <div>{mA ? MATERIALS[mA.type].label : '—'}</div>
         </div>
-        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#1d2231', color: '#94a3b8' }}>
           <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER B</div>
           <div>{mB ? MATERIALS[mB.type].label : '—'}</div>
         </div>
@@ -145,8 +145,8 @@ export default function PropertiesPanel() {
   return (
     <div className="shrink-0 flex flex-col" style={panelStyle}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #2e3350' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
+      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #252d3d' }}>
+        <div style={{ fontSize: '9px', color: '#4c5768' }}>
           {mat.label}
         </div>
         <div
@@ -162,14 +162,14 @@ export default function PropertiesPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #2e3350' }}>
+      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #252d3d' }}>
         {tabs.map(t => (
           <button
             key={t.id}
             className="panel-item py-2 text-[13px]"
             style={{
-              color: activeRightTab === t.id ? '#f97316' : '#475569',
-              borderBottom: activeRightTab === t.id ? '2px solid #f97316' : '2px solid transparent',
+              color: activeRightTab === t.id ? '#4f80ff' : '#4c5768',
+              borderBottom: activeRightTab === t.id ? '2px solid #4f80ff' : '2px solid transparent',
               background: 'transparent',
               marginBottom: '-1px',
             }}
@@ -278,9 +278,9 @@ export default function PropertiesPanel() {
                       key={preset.label}
                       className="flex-1 py-1 rounded-md text-[11px] panel-item"
                       style={{
-                        background: active ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                        color: active ? '#f97316' : '#64748b',
-                        border: active ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                        background: active ? 'rgba(79,128,255,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: active ? '#4f80ff' : '#4c5768',
+                        border: active ? '1px solid rgba(79,128,255,0.3)' : '1px solid #252d3d',
                       }}
                       onClick={() => update('rotation', { x: preset.rx, y: preset.ry, z: preset.rz })}
                     >
@@ -332,9 +332,9 @@ export default function PropertiesPanel() {
                     key={a}
                     className="flex-1 py-1 rounded-md text-[11px] panel-item"
                     style={{
-                      background: selectedMember.rotation.y === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                      color: selectedMember.rotation.y === a ? '#f97316' : '#64748b',
-                      border: selectedMember.rotation.y === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                      background: selectedMember.rotation.y === a ? 'rgba(79,128,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      color: selectedMember.rotation.y === a ? '#4f80ff' : '#4c5768',
+                      border: selectedMember.rotation.y === a ? '1px solid rgba(79,128,255,0.3)' : '1px solid #252d3d',
                     }}
                     onClick={() => update('rotation', { ...selectedMember.rotation, y: a })}
                   >
@@ -347,9 +347,9 @@ export default function PropertiesPanel() {
             {/* Weight */}
             <div
               className="flex items-center justify-between px-2 py-2 rounded-md"
-              style={{ background: '#21253a' }}
+              style={{ background: '#1d2231' }}
             >
-              <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
+              <span style={{ fontSize: '9px', color: '#4c5768' }}>
                 WEIGHT
               </span>
               <span
@@ -384,7 +384,7 @@ export default function PropertiesPanel() {
             <button
               onClick={handleAddHole}
               className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md text-xs panel-item"
-              style={{ border: '1px solid rgba(249,115,22,0.4)', color: '#f97316', background: 'transparent' }}
+              style={{ border: '1px solid rgba(79,128,255,0.35)', color: '#4f80ff', background: 'transparent' }}
             >
               <Plus size={12} /> Add Hole
             </button>
@@ -394,7 +394,7 @@ export default function PropertiesPanel() {
             )}
 
             {(selectedMember.holes || []).map((hole, i) => (
-              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#21253a' }}>
+              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#1d2231' }}>
                 <div className="flex items-center justify-between">
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hole {i + 1}</span>
                   <button

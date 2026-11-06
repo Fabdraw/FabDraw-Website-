@@ -99,7 +99,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
         style={{
           width: '100%',
           height: '100%',
-          background: '#1a1d27',
+          background: '#161a22',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -112,7 +112,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             overflowY: 'hidden',
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
-            borderBottom: '1px solid #2e3350',
+            borderBottom: '1px solid #252d3d',
             padding: '10px 12px',
             display: 'flex',
             gap: '8px',
@@ -134,9 +134,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                   fontSize: '12px',
                   fontWeight: 500,
                   whiteSpace: 'nowrap',
-                  background: isSelected ? 'rgba(249,115,22,0.15)' : '#21253a',
-                  color: isSelected ? '#f97316' : '#94a3b8',
-                  border: isSelected ? '1px solid rgba(249,115,22,0.5)' : '1px solid #2e3350',
+                  background: isSelected ? 'rgba(79,128,255,0.07)' : '#1d2231',
+                  color: isSelected ? '#4f80ff' : '#8b96a8',
+                  border: isSelected ? '1px solid rgba(79,128,255,0.4)' : '1px solid #252d3d',
                   minHeight: '36px',
                 }}
               >
@@ -163,9 +163,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
               alignItems: 'center',
               justifyContent: 'center',
               height: '44px',
-              background: '#21253a',
+              background: '#1d2231',
               borderRadius: '6px',
-              border: '1px solid #2e3350',
+              border: '1px solid #252d3d',
               marginBottom: '14px',
             }}
             dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
@@ -221,9 +221,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                     borderRadius: '6px',
                     fontSize: '11px',
                     fontWeight: 500,
-                    background: selectedGrade === key ? 'rgba(249,115,22,0.15)' : 'transparent',
-                    color: selectedGrade === key ? '#f97316' : '#64748b',
-                    border: selectedGrade === key ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2e3350',
+                    background: selectedGrade === key ? 'rgba(79,128,255,0.12)' : 'transparent',
+                    color: selectedGrade === key ? '#4f80ff' : '#4c5768',
+                    border: selectedGrade === key ? '1px solid rgba(79,128,255,0.35)' : '1px solid #252d3d',
                   }}
                 >
                   {label}
@@ -239,8 +239,8 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             position: 'sticky',
             bottom: 0,
             padding: '10px 12px',
-            background: '#1a1d27',
-            borderTop: '1px solid #2e3350',
+            background: '#161a22',
+            borderTop: '1px solid #252d3d',
             flexShrink: 0,
           }}
         >
@@ -267,8 +267,8 @@ export default function LibraryPanel({ collapsed }: LibProps) {
       className="flex flex-col h-full shrink-0 overflow-hidden"
       style={{
         width: '220px',
-        background: '#1a1d27',
-        borderRight: '1px solid #2e3350',
+        background: '#161a22',
+        borderRight: '1px solid #252d3d',
       }}
     >
       {/* Material list */}
@@ -278,9 +278,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             <div
               style={{
                 fontSize: '9px',
-                letterSpacing: '2px',
-                textTransform: 'uppercase',
-                color: '#475569',
+                letterSpacing: '0.5px',
+                
+                color: '#4c5768',
                 padding: '16px 12px 8px',
               }}
             >
@@ -296,9 +296,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                   className="panel-item w-full flex items-center gap-2 px-3"
                   style={{
                     height: '40px',
-                    background: isSelected ? 'rgba(249,115,22,0.06)' : 'transparent',
-                    borderLeft: isSelected ? '2px solid #f97316' : '2px solid transparent',
-                    color: isSelected ? '#f97316' : '#94a3b8',
+                    background: isSelected ? 'rgba(79,128,255,0.07)' : 'transparent',
+                    borderLeft: isSelected ? '2px solid #4f80ff' : '2px solid transparent',
+                    color: isSelected ? '#4f80ff' : '#8b96a8',
                     fontSize: '12px',
                     textAlign: 'left',
                   }}
@@ -319,10 +319,10 @@ export default function LibraryPanel({ collapsed }: LibProps) {
       </div>
 
       {/* Configuration card */}
-      <div className="shrink-0 space-y-2.5" style={{ padding: '12px', borderTop: '1px solid #2e3350' }}>
+      <div className="shrink-0 space-y-2.5" style={{ padding: '12px', borderTop: '1px solid #252d3d' }}>
         <div
           className="flex items-center justify-center"
-          style={{ height: '40px', background: '#21253a', borderRadius: '6px', border: '1px solid #2e3350' }}
+          style={{ height: '40px', background: '#1d2231', borderRadius: '6px', border: '1px solid #252d3d' }}
           dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
         />
         <div>
@@ -364,9 +364,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                 onClick={() => setSelectedGrade(key)}
                 className="flex-1 py-1 rounded-md text-[11px] font-medium panel-item"
                 style={{
-                  background: selectedGrade === key ? 'rgba(249,115,22,0.15)' : 'transparent',
-                  color: selectedGrade === key ? '#f97316' : '#64748b',
-                  border: selectedGrade === key ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2e3350',
+                  background: selectedGrade === key ? 'rgba(79,128,255,0.12)' : 'transparent',
+                  color: selectedGrade === key ? '#4f80ff' : '#4c5768',
+                  border: selectedGrade === key ? '1px solid rgba(79,128,255,0.35)' : '1px solid #252d3d',
                 }}
               >
                 {label}
