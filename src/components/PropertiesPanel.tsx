@@ -45,16 +45,16 @@ export default function PropertiesPanel() {
 
   const panelStyle = {
     width: '240px',
-    background: '#1a1d27',
-    borderLeft: '1px solid #2e3350',
+    background: '#161a22',
+    borderLeft: '1px solid #252d3d',
   };
 
   if (selectedIds.length === 0 && !selectedConn) {
     return (
       <div className="shrink-0 flex items-center justify-center" style={panelStyle}>
         <div className="text-center p-4">
-          <div className="text-3xl mb-2" style={{ color: '#2d3748' }}>◻</div>
-          <div style={{ color: '#475569', fontSize: '12px' }}>Select a member</div>
+          <div className="text-3xl mb-2" style={{ color: '#252d3d' }}>◻</div>
+          <div style={{ color: '#4c5768', fontSize: '12px' }}>Select a member</div>
         </div>
       </div>
     );
@@ -63,12 +63,12 @@ export default function PropertiesPanel() {
   if (selectedIds.length > 1) {
     return (
       <div className="shrink-0 p-3" style={panelStyle}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', marginBottom: '12px' }}>
+        <div style={{ fontSize: '11px', color: '#8b96a8', marginBottom: '12px' }}>
           {selectedIds.length} members selected
         </div>
         <button
           className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item"
-          style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
+          style={{ border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', background: 'transparent' }}
           onClick={() => {
             historyStore.push({ members, connections, dimensions, groupNames });
             deleteMembers(selectedIds);
@@ -76,7 +76,7 @@ export default function PropertiesPanel() {
           }}
         >
           <Trash2 size={13} />
-          Delete {selectedIds.length} Members
+          Delete {selectedIds.length} members
         </button>
       </div>
     );
@@ -87,22 +87,22 @@ export default function PropertiesPanel() {
     const mB = members.find(m => m.id === selectedConn.memberBId);
     return (
       <div className="shrink-0 p-3 space-y-2" style={panelStyle}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>Connection</div>
-        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
-          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER A</div>
+        <div style={{ fontSize: '11px', fontWeight: 500, color: '#8b96a8' }}>Connection</div>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#1d2231', color: '#8b96a8' }}>
+          <div style={{ color: '#4c5768', fontSize: '10px', marginBottom: '2px' }}>Member A</div>
           <div>{mA ? MATERIALS[mA.type].label : '—'}</div>
         </div>
-        <div className="rounded-md p-2 text-xs" style={{ background: '#21253a', color: '#94a3b8' }}>
-          <div style={{ color: '#475569', fontSize: '9px', marginBottom: '2px' }}>MEMBER B</div>
+        <div className="rounded-md p-2 text-xs" style={{ background: '#1d2231', color: '#8b96a8' }}>
+          <div style={{ color: '#4c5768', fontSize: '10px', marginBottom: '2px' }}>Member B</div>
           <div>{mB ? MATERIALS[mB.type].label : '—'}</div>
         </div>
-        <div style={{ color: '#94a3b8', fontSize: '12px' }}>Type: {selectedConn.type}</div>
+        <div style={{ color: '#8b96a8', fontSize: '12px' }}>Type: {selectedConn.type}</div>
         <button
           className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md text-xs panel-item"
-          style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
+          style={{ border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', background: 'transparent' }}
           onClick={() => deleteConnection(selectedConn.id)}
         >
-          <Trash2 size={12} /> Remove Connection
+          <Trash2 size={12} /> Remove connection
         </button>
       </div>
     );
@@ -144,16 +144,16 @@ export default function PropertiesPanel() {
   return (
     <div className="shrink-0 flex flex-col" style={panelStyle}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid #2e3350' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
+      <div className="px-3 pt-3 pb-2.5" style={{ borderBottom: '1px solid #252d3d' }}>
+        <div style={{ fontSize: '10px', color: '#4c5768', fontWeight: 500 }}>
           {mat.label}
         </div>
         <div
           className="mt-0.5"
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '15px',
-            color: '#f1f5f9',
+            fontSize: '14px',
+            color: '#e2e8f0',
           }}
         >
           {selectedMember.size} × {selectedMember.wallThickness}"
@@ -161,14 +161,14 @@ export default function PropertiesPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #2e3350' }}>
+      <div className="flex px-3 gap-4" style={{ borderBottom: '1px solid #252d3d' }}>
         {tabs.map(t => (
           <button
             key={t.id}
-            className="panel-item py-2 text-[13px]"
+            className="panel-item py-2 text-[12px]"
             style={{
-              color: activeRightTab === t.id ? '#f97316' : '#475569',
-              borderBottom: activeRightTab === t.id ? '2px solid #f97316' : '2px solid transparent',
+              color: activeRightTab === t.id ? '#4f80ff' : '#4c5768',
+              borderBottom: activeRightTab === t.id ? '2px solid #4f80ff' : '2px solid transparent',
               background: 'transparent',
               marginBottom: '-1px',
             }}
@@ -188,7 +188,7 @@ export default function PropertiesPanel() {
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: '10px',
-                color: '#475569',
+                color: '#4c5768',
               }}
             >
               {Math.floor(selectedMember.length / 12)}' {(selectedMember.length % 12).toFixed(4).replace(/\.?0+$/, '')}"
@@ -205,7 +205,7 @@ export default function PropertiesPanel() {
             </div>
 
             <div>
-              <label className={labelCls}>Wall Thickness</label>
+              <label className={labelCls}>Wall thickness</label>
               <input
                 type="text"
                 className={inputCls}
@@ -248,7 +248,7 @@ export default function PropertiesPanel() {
               />
             </div>
             <div>
-              <label className={labelCls}>Position Z — height (in)</label>
+              <label className={labelCls}>Height — Z (in)</label>
               <input
                 type="number"
                 className={inputCls}
@@ -277,9 +277,9 @@ export default function PropertiesPanel() {
                       key={preset.label}
                       className="flex-1 py-1 rounded-md text-[11px] panel-item"
                       style={{
-                        background: active ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                        color: active ? '#f97316' : '#64748b',
-                        border: active ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                        background: active ? 'rgba(79,128,255,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: active ? '#4f80ff' : '#4c5768',
+                        border: active ? '1px solid rgba(79,128,255,0.3)' : '1px solid #252d3d',
                       }}
                       onClick={() => update('rotation', { x: preset.rx, y: preset.ry, z: preset.rz })}
                     >
@@ -292,7 +292,7 @@ export default function PropertiesPanel() {
 
             {/* Rotation axes */}
             <div>
-              <label className={labelCls}>Rotation X (°) — tilt / upright</label>
+              <label className={labelCls}>Rot X (°) — tilt</label>
               <input
                 type="number"
                 className={inputCls}
@@ -302,7 +302,7 @@ export default function PropertiesPanel() {
               />
             </div>
             <div>
-              <label className={labelCls}>Rotation Y (°) — in-plane angle</label>
+              <label className={labelCls}>Rot Y (°) — in-plane angle</label>
               <input
                 type="number"
                 className={inputCls}
@@ -312,7 +312,7 @@ export default function PropertiesPanel() {
               />
             </div>
             <div>
-              <label className={labelCls}>Rotation Z (°) — roll</label>
+              <label className={labelCls}>Rot Z (°) — roll</label>
               <input
                 type="number"
                 className={inputCls}
@@ -331,9 +331,9 @@ export default function PropertiesPanel() {
                     key={a}
                     className="flex-1 py-1 rounded-md text-[11px] panel-item"
                     style={{
-                      background: selectedMember.rotation.y === a ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
-                      color: selectedMember.rotation.y === a ? '#f97316' : '#64748b',
-                      border: selectedMember.rotation.y === a ? '1px solid rgba(249,115,22,0.3)' : '1px solid #2e3350',
+                      background: selectedMember.rotation.y === a ? 'rgba(79,128,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      color: selectedMember.rotation.y === a ? '#4f80ff' : '#4c5768',
+                      border: selectedMember.rotation.y === a ? '1px solid rgba(79,128,255,0.3)' : '1px solid #252d3d',
                     }}
                     onClick={() => update('rotation', { ...selectedMember.rotation, y: a })}
                   >
@@ -345,16 +345,16 @@ export default function PropertiesPanel() {
 
             {/* Weight */}
             <div
-              className="flex items-center justify-between px-2 py-2 rounded-md"
-              style={{ background: '#21253a' }}
+              className="flex items-center justify-between px-2.5 py-2 rounded-md"
+              style={{ background: '#1d2231' }}
             >
-              <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569' }}>
-                WEIGHT
+              <span style={{ fontSize: '10px', color: '#4c5768', fontWeight: 500 }}>
+                Weight
               </span>
               <span
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '18px',
+                  fontSize: '16px',
                   color: '#f97316',
                   lineHeight: 1,
                 }}
@@ -366,14 +366,14 @@ export default function PropertiesPanel() {
             {/* Delete */}
             <button
               className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs panel-item mt-1"
-              style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', background: 'transparent' }}
+              style={{ border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', background: 'transparent' }}
               onClick={() => {
                 historyStore.push({ members, connections, dimensions, groupNames });
                 deleteMembers([selectedMember.id]);
                 setSelectedIds([]);
               }}
             >
-              <Trash2 size={12} /> Delete Member
+              <Trash2 size={12} /> Delete member
             </button>
           </>
         )}
@@ -383,22 +383,22 @@ export default function PropertiesPanel() {
             <button
               onClick={handleAddHole}
               className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md text-xs panel-item"
-              style={{ border: '1px solid rgba(249,115,22,0.4)', color: '#f97316', background: 'transparent' }}
+              style={{ border: '1px solid rgba(79,128,255,0.35)', color: '#4f80ff', background: 'transparent' }}
             >
-              <Plus size={12} /> Add Hole
+              <Plus size={12} /> Add hole
             </button>
 
             {(selectedMember.holes || []).length === 0 && (
-              <div className="text-center py-4" style={{ color: '#475569', fontSize: '12px' }}>No holes</div>
+              <div className="text-center py-4" style={{ color: '#4c5768', fontSize: '12px' }}>No holes</div>
             )}
 
             {(selectedMember.holes || []).map((hole, i) => (
-              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#21253a' }}>
+              <div key={hole.id} className="rounded-md p-2 space-y-2" style={{ background: '#1d2231' }}>
                 <div className="flex items-center justify-between">
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hole {i + 1}</span>
+                  <span style={{ fontSize: '11px', color: '#8b96a8' }}>Hole {i + 1}</span>
                   <button
                     onClick={() => handleRemoveHole(hole.id)}
-                    style={{ color: '#475569' }}
+                    style={{ color: '#4c5768' }}
                     className="hover:text-red-400 transition-colors"
                   >
                     <X size={12} />
@@ -406,7 +406,7 @@ export default function PropertiesPanel() {
                 </div>
                 <div className="space-y-1.5">
                   <div>
-                    <label className={labelCls}>Position Along Member</label>
+                    <label className={labelCls}>Position along member</label>
                     <input
                       type="number"
                       className={inputCls}
@@ -458,7 +458,7 @@ export default function PropertiesPanel() {
         )}
 
         {activeRightTab === 'notes' && (
-          <div style={{ color: '#475569', fontSize: '12px', padding: '8px 0' }}>
+          <div style={{ color: '#4c5768', fontSize: '12px', padding: '8px 0' }}>
             Notes not available in this version.
           </div>
         )}

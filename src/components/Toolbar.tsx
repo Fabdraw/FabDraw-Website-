@@ -99,34 +99,36 @@ export default function Toolbar() {
   }
 
   // Button variants
-  const base = 'flex items-center justify-center w-7 h-7 rounded transition-colors focus:outline-none'
-  const btn = `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
-  const btnActive = `${base} bg-orange-500/15 text-orange-400`
-  const btnDisabled = `${base} text-slate-700 cursor-not-allowed`
-  const div = <div className="w-px h-4 mx-1.5 bg-[#2e3350] shrink-0" />
+  const base = 'flex items-center justify-center rounded transition-colors focus:outline-none'
+  const sz = 'w-7 h-7'
+  const btn = `${base} ${sz} text-[#8b96a8] hover:bg-white/[0.05] hover:text-[#e2e8f0]`
+  const btnActive = `${base} ${sz} bg-[#4f80ff]/10 text-[#4f80ff]`
+  const btnDisabled = `${base} ${sz} text-[#2e3a50] cursor-not-allowed`
+  const sep = <div className="w-px h-5 mx-1.5 bg-[#252d3d] shrink-0" />
 
   return (
     <div
       className="flex items-center gap-0.5 px-3 select-none shrink-0"
-      style={{ height: '44px', background: '#0f1117', borderBottom: '1px solid #2e3350' }}
+      style={{ height: '48px', background: '#111318', borderBottom: '1px solid #252d3d' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 mr-3 shrink-0">
+      <div className="flex items-center gap-2 mr-4 shrink-0">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect width="8" height="8" rx="1.5" fill="#f97316" />
-          <rect x="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
-          <rect y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".5" />
-          <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#f97316" opacity=".25" />
+          <rect width="8" height="8" rx="1.5" fill="#4f80ff" />
+          <rect x="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".5" />
+          <rect y="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".5" />
+          <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#4f80ff" opacity=".25" />
         </svg>
-        <span className="text-sm font-bold tracking-widest text-slate-100">FABDRAW</span>
+        <span className="text-[13px] font-semibold tracking-wide" style={{ color: '#e2e8f0' }}>FabDraw</span>
       </div>
 
       {/* Project name */}
       <input
-        className="bg-transparent text-slate-200 text-sm focus:outline-none w-36 px-1 rounded"
+        className="bg-transparent text-sm focus:outline-none w-36 px-1 rounded"
         style={{
+          color: '#c0cad8',
           border: 'none',
-          borderBottom: editingName ? '1px solid #f97316' : '1px solid transparent',
+          borderBottom: editingName ? '1px solid #4f80ff' : '1px solid transparent',
           transition: 'border-color 150ms',
         }}
         value={project.name}
@@ -135,7 +137,7 @@ export default function Toolbar() {
         onBlur={() => setEditingName(false)}
       />
 
-      {div}
+      {sep}
 
       {/* Undo / Redo */}
       <button className={canUndo ? btn : btnDisabled} onClick={handleUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
@@ -145,7 +147,7 @@ export default function Toolbar() {
         <Redo2 size={14} />
       </button>
 
-      {div}
+      {sep}
 
       {/* Edit */}
       <button className={selectedIds.length > 0 ? btn : btnDisabled} onClick={handleCopy} disabled={!selectedIds.length} title="Copy (Ctrl+C)">
@@ -156,7 +158,7 @@ export default function Toolbar() {
       </button>
       <button
         className={selectedIds.length > 0
-          ? `${base} text-red-400 hover:bg-red-500/10`
+          ? `${base} ${sz} text-[#f87171] hover:bg-red-500/10`
           : btnDisabled}
         onClick={handleDelete}
         disabled={!selectedIds.length}
@@ -165,7 +167,7 @@ export default function Toolbar() {
         <Trash2 size={14} />
       </button>
 
-      {div}
+      {sep}
 
       {/* Mode */}
       <button className={mode === 'select' ? btnActive : btn} onClick={() => setMode('select')} title="Select (V)">
@@ -181,15 +183,15 @@ export default function Toolbar() {
         <Link2 size={14} />
       </button>
 
-      {div}
+      {sep}
 
       {/* Zoom */}
       <button className={btn} onClick={() => setZoom(Math.max(0.05, zoom * 0.8))} title="Zoom Out (-)">
         <ZoomOut size={14} />
       </button>
       <span
-        className="text-slate-500 text-xs tabular-nums w-10 text-center"
-        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}
+        className="tabular-nums w-10 text-center"
+        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#4c5768' }}
       >
         {(zoom * 100).toFixed(0)}%
       </span>
@@ -200,32 +202,30 @@ export default function Toolbar() {
         <Maximize2 size={14} />
       </button>
 
-      {div}
+      {sep}
 
       {/* View */}
       <button
         className={activeView === '2d' ? btnActive : btn}
         onClick={() => setActiveView('2d')}
-        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+        style={{ fontSize: '11px', fontWeight: 600 }}
       >
         2D
       </button>
       <button
         className={activeView === '3d' ? btnActive : btn}
         onClick={() => setActiveView('3d')}
-        style={{ fontSize: '11px', fontWeight: 700, width: '32px' }}
+        style={{ fontSize: '11px', fontWeight: 600 }}
       >
         3D
       </button>
 
-      {div}
+      {sep}
 
-      {/* Title block */}
+      {/* Title block + Templates */}
       <button className={btn} onClick={() => setShowTitleBlockModal(true)} title="Title Block">
         <LayoutGrid size={14} />
       </button>
-
-      {/* Templates */}
       <button className={btn} onClick={() => setShowTemplateModal(true)} title="Template Library">
         <LayoutTemplate size={14} />
       </button>
@@ -244,12 +244,12 @@ export default function Toolbar() {
         <FileText size={14} />
       </button>
 
-      {div}
+      {sep}
 
       {/* AI */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-colors hover:bg-orange-500/10"
-        style={{ border: '1px solid #f97316', color: '#f97316' }}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors hover:bg-[#4f80ff]/10"
+        style={{ border: '1px solid #4f80ff', color: '#4f80ff' }}
         onClick={() => setShowAIModal(true)}
       >
         <Sparkles size={12} />
@@ -258,8 +258,8 @@ export default function Toolbar() {
 
       {/* Photo */}
       <button
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ml-1 transition-colors hover:bg-teal-500/10"
-        style={{ border: '1px solid #14b8a6', color: '#14b8a6' }}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium ml-1.5 transition-colors hover:bg-teal-500/10"
+        style={{ border: '1px solid #2dd4bf', color: '#2dd4bf' }}
         onClick={() => setShowPhotoModal(true)}
       >
         <Camera size={12} />

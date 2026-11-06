@@ -143,7 +143,7 @@ export default function App() {
     undo, redo, push, addMember, setProject, project, dimensions, groupNames]);
 
   return (
-    <div className="flex flex-col h-screen bg-[#12151e] text-slate-200 overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#0d1017', color: '#e2e8f0' }}>
       <Toolbar />
 
       <div className="flex flex-1 min-h-0">
@@ -153,11 +153,19 @@ export default function App() {
           <div className="flex-1 relative min-h-0">
             {activeView === '2d' ? <Canvas2D /> : <Canvas3D />}
 
-            <div className="absolute bottom-2 right-2 rounded px-2 py-1 text-xs font-mono text-slate-500 flex gap-3" style={{ background: 'rgba(26,29,39,0.9)', border: '1px solid #2e3350' }}>
-              <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
+            <div
+              className="absolute bottom-2 right-2 rounded px-2.5 py-1 text-xs flex gap-3"
+              style={{
+                background: 'rgba(17,19,24,0.88)',
+                border: '1px solid #252d3d',
+                fontFamily: "'JetBrains Mono', monospace",
+                color: '#4c5768',
+              }}
+            >
+              <span>{(zoom * 100).toFixed(0)}%</span>
               <span>{members.length} members</span>
               {selectedIds.length > 0 && (
-                <span className="text-orange-400">{selectedIds.length} selected</span>
+                <span style={{ color: '#4f80ff' }}>{selectedIds.length} selected</span>
               )}
             </div>
           </div>

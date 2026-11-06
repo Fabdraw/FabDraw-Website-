@@ -37,8 +37,8 @@ export default function BOMPanel() {
   }, [members]);
 
   const headerStyle: React.CSSProperties = {
-    background: '#1a1d27',
-    borderTop: '1px solid #2e3350',
+    background: '#161a22',
+    borderTop: '1px solid #252d3d',
   };
 
   if (isBOMCollapsed) {
@@ -48,17 +48,17 @@ export default function BOMPanel() {
         style={{ ...headerStyle, height: '32px' }}
         onClick={toggleBOM}
       >
-        <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
-          BILL OF MATERIALS
+        <span style={{ fontSize: '11px', fontWeight: 500, color: '#8b96a8' }}>
+          Bill of Materials
         </span>
         <span
-          className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
+          className="rounded px-1.5 py-0.5"
+          style={{ background: '#1d2231', color: '#8b96a8', fontSize: '10px' }}
         >
           {members.length}
         </span>
         <div className="flex-1" />
-        <ChevronUp size={12} style={{ color: '#475569' }} />
+        <ChevronUp size={12} style={{ color: '#4c5768' }} />
       </div>
     );
   }
@@ -68,15 +68,15 @@ export default function BOMPanel() {
       {/* Header */}
       <div
         className="flex items-center gap-3 px-3 shrink-0 cursor-pointer"
-        style={{ height: '32px', borderBottom: '1px solid #2e3350' }}
+        style={{ height: '32px', borderBottom: '1px solid #252d3d' }}
         onClick={toggleBOM}
       >
-        <span style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#f97316' }}>
-          BILL OF MATERIALS
+        <span style={{ fontSize: '11px', fontWeight: 500, color: '#8b96a8' }}>
+          Bill of Materials
         </span>
         <span
-          className="rounded-full px-2"
-          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: '11px' }}
+          className="rounded px-1.5 py-0.5"
+          style={{ background: '#1d2231', color: '#8b96a8', fontSize: '10px' }}
         >
           {members.length}
         </span>
@@ -84,19 +84,19 @@ export default function BOMPanel() {
         <span style={{ ...monoStyle, fontSize: '11px', color: '#f97316' }}>
           {formatWeight(tw)}
         </span>
-        <ChevronDown size={12} style={{ color: '#475569' }} />
+        <ChevronDown size={12} style={{ color: '#4c5768' }} />
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left" style={{ ...monoStyle, fontSize: '11px' }}>
-          <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
+          <thead className="sticky top-0" style={{ background: '#161a22' }}>
             <tr>
-              {['#','TYPE','SIZE','WALL','GRADE','LENGTH','QTY','WEIGHT'].map(h => (
+              {['#','Type','Size','Wall','Grade','Length','Qty','Weight'].map(h => (
                 <th
                   key={h}
                   className="px-2 py-1"
-                  style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
+                  style={{ fontSize: '10px', color: '#4c5768', fontWeight: 500, fontFamily: 'inherit' }}
                 >
                   {h}
                 </th>
@@ -108,7 +108,7 @@ export default function BOMPanel() {
               const mat = MATERIALS[member.type];
               const isSelected = ids.some(id => selectedIds.includes(id));
               const rowBg = isSelected
-                ? 'rgba(249,115,22,0.1)'
+                ? 'rgba(79,128,255,0.08)'
                 : i % 2 === 0
                 ? 'rgba(255,255,255,0.02)'
                 : 'transparent';
@@ -119,18 +119,18 @@ export default function BOMPanel() {
                   style={{ background: rowBg }}
                   onClick={() => setSelectedIds(ids)}
                 >
-                  <td className="px-2 py-1" style={{ color: '#475569' }}>{i + 1}</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mat.label}</td>
-                  <td className="px-2 py-1" style={{ color: '#f1f5f9' }}>{member.size}"</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{member.wallThickness}"</td>
-                  <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{member.grade}</td>
-                  <td className="px-2 py-1" style={{ color: '#f1f5f9' }}>
+                  <td className="px-2 py-1" style={{ color: '#4c5768' }}>{i + 1}</td>
+                  <td className="px-2 py-1" style={{ color: '#8b96a8' }}>{mat.label}</td>
+                  <td className="px-2 py-1" style={{ color: '#e2e8f0' }}>{member.size}"</td>
+                  <td className="px-2 py-1" style={{ color: '#8b96a8' }}>{member.wallThickness}"</td>
+                  <td className="px-2 py-1" style={{ color: '#8b96a8' }}>{member.grade}</td>
+                  <td className="px-2 py-1" style={{ color: '#e2e8f0' }}>
                     {Math.floor(member.length / 12)}' {(member.length % 12).toFixed(2).replace(/\.?0+$/, '')}"
                   </td>
                   <td className="px-2 py-1 text-center">
                     <span
                       className="px-1.5 py-0.5 rounded"
-                      style={{ background: '#2e3350', color: '#f1f5f9' }}
+                      style={{ background: '#252d3d', color: '#e2e8f0' }}
                     >
                       {count}
                     </span>
@@ -142,9 +142,9 @@ export default function BOMPanel() {
               );
             })}
             {members.length > 0 && (
-              <tr style={{ background: 'rgba(249,115,22,0.08)' }}>
-                <td colSpan={7} className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
-                  TOTAL
+              <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                <td colSpan={7} className="px-2 py-1 font-medium" style={{ color: '#8b96a8' }}>
+                  Total
                 </td>
                 <td className="px-2 py-1 font-medium" style={{ color: '#f97316' }}>
                   {formatWeight(tw)}
@@ -153,22 +153,22 @@ export default function BOMPanel() {
             )}
             {members.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-4 text-center" style={{ color: '#475569' }}>
-                  Add members from the Library to start your BOM
+                <td colSpan={8} className="px-3 py-4 text-center" style={{ color: '#4c5768' }}>
+                  Add members from the library to start your BOM
                 </td>
               </tr>
             )}
           </tbody>
         </table>
         {connections.length > 0 && (
-          <table className="w-full text-left border-t" style={{ ...monoStyle, fontSize: '11px', borderColor: '#2e3350' }}>
-            <thead className="sticky top-0" style={{ background: '#1a1d27' }}>
+          <table className="w-full text-left border-t" style={{ ...monoStyle, fontSize: '11px', borderColor: '#252d3d' }}>
+            <thead className="sticky top-0" style={{ background: '#161a22' }}>
               <tr>
-                {['#', 'TYPE', 'MEMBER A', 'MEMBER B'].map(h => (
+                {['#', 'Type', 'Member A', 'Member B'].map(h => (
                   <th
                     key={h}
                     className="px-2 py-1"
-                    style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: '#475569', fontWeight: 400 }}
+                    style={{ fontSize: '10px', color: '#4c5768', fontWeight: 500, fontFamily: 'inherit' }}
                   >
                     {h}
                   </th>
@@ -181,15 +181,15 @@ export default function BOMPanel() {
                 const mB = members.find(m => m.id === c.memberBId)
                 return (
                   <tr key={c.id} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                    <td className="px-2 py-1" style={{ color: '#475569' }}>{i + 1}</td>
+                    <td className="px-2 py-1" style={{ color: '#4c5768' }}>{i + 1}</td>
                     <td className="px-2 py-1">
                       <span className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full inline-block" style={{ background: CONNECTION_COLOR[c.type] }} />
                         <span style={{ color: CONNECTION_COLOR[c.type] }}>{c.type}</span>
                       </span>
                     </td>
-                    <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mA ? `${mA.type.replace(/_/g, ' ')} ${mA.size}"` : '—'}</td>
-                    <td className="px-2 py-1" style={{ color: '#94a3b8' }}>{mB ? `${mB.type.replace(/_/g, ' ')} ${mB.size}"` : '—'}</td>
+                    <td className="px-2 py-1" style={{ color: '#8b96a8' }}>{mA ? `${mA.type.replace(/_/g, ' ')} ${mA.size}"` : '—'}</td>
+                    <td className="px-2 py-1" style={{ color: '#8b96a8' }}>{mB ? `${mB.type.replace(/_/g, ' ')} ${mB.size}"` : '—'}</td>
                   </tr>
                 )
               })}

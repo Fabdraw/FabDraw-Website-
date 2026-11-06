@@ -93,8 +93,8 @@ export default function LibraryPanel({ collapsed }: LibProps) {
       className="flex flex-col h-full shrink-0 overflow-hidden"
       style={{
         width: '220px',
-        background: '#1a1d27',
-        borderRight: '1px solid #2e3350',
+        background: '#161a22',
+        borderRight: '1px solid #252d3d',
       }}
     >
       {/* Material list */}
@@ -103,14 +103,14 @@ export default function LibraryPanel({ collapsed }: LibProps) {
           <div key={group.id}>
             <div
               style={{
-                fontSize: '9px',
-                letterSpacing: '2px',
-                textTransform: 'uppercase',
-                color: '#475569',
-                padding: '16px 12px 8px',
+                fontSize: '10px',
+                letterSpacing: '0.5px',
+                color: '#4c5768',
+                padding: '14px 12px 6px',
+                fontWeight: 500,
               }}
             >
-              {group.label}
+              {group.label.toLowerCase()}
             </div>
             {group.types.map(type => {
               const m = MATERIALS[type];
@@ -121,15 +121,15 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                   onClick={() => handleTypeSelect(type)}
                   className="panel-item w-full flex items-center gap-2 px-3"
                   style={{
-                    height: '40px',
-                    background: isSelected ? 'rgba(249,115,22,0.06)' : 'transparent',
-                    borderLeft: isSelected ? '2px solid #f97316' : '2px solid transparent',
-                    color: isSelected ? '#f97316' : '#94a3b8',
+                    height: '38px',
+                    background: isSelected ? 'rgba(79,128,255,0.07)' : 'transparent',
+                    borderLeft: isSelected ? '2px solid #4f80ff' : '2px solid transparent',
+                    color: isSelected ? '#4f80ff' : '#8b96a8',
                     fontSize: '12px',
                     textAlign: 'left',
                   }}
                   onMouseEnter={e => {
-                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)';
                   }}
                   onMouseLeave={e => {
                     if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -152,17 +152,17 @@ export default function LibraryPanel({ collapsed }: LibProps) {
         className="shrink-0 space-y-2.5"
         style={{
           padding: '12px',
-          borderTop: '1px solid #2e3350',
+          borderTop: '1px solid #252d3d',
         }}
       >
         {/* SVG preview */}
         <div
           className="flex items-center justify-center"
           style={{
-            height: '40px',
-            background: '#21253a',
+            height: '38px',
+            background: '#1d2231',
             borderRadius: '6px',
-            border: '1px solid #2e3350',
+            border: '1px solid #252d3d',
           }}
           dangerouslySetInnerHTML={{ __html: mat.svgIcon }}
         />
@@ -183,7 +183,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
 
         {/* Wall */}
         <div>
-          <label className={labelCls}>Wall Thickness</label>
+          <label className={labelCls}>Wall thickness</label>
           <select
             className={inputCls}
             value={selectedWall}
@@ -211,7 +211,7 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             style={{
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: '10px',
-              color: '#475569',
+              color: '#4c5768',
             }}
           >
             {feetInches(length)}
@@ -232,9 +232,9 @@ export default function LibraryPanel({ collapsed }: LibProps) {
                 onClick={() => setSelectedGrade(key)}
                 className="flex-1 py-1 rounded-md text-[11px] font-medium panel-item"
                 style={{
-                  background: selectedGrade === key ? 'rgba(249,115,22,0.15)' : 'transparent',
-                  color: selectedGrade === key ? '#f97316' : '#64748b',
-                  border: selectedGrade === key ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2e3350',
+                  background: selectedGrade === key ? 'rgba(79,128,255,0.12)' : 'transparent',
+                  color: selectedGrade === key ? '#4f80ff' : '#4c5768',
+                  border: selectedGrade === key ? '1px solid rgba(79,128,255,0.35)' : '1px solid #252d3d',
                 }}
               >
                 {label}
@@ -251,10 +251,10 @@ export default function LibraryPanel({ collapsed }: LibProps) {
             background: 'linear-gradient(135deg, #f97316, #ea580c)',
           }}
           onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
+            (e.currentTarget as HTMLButtonElement).style.opacity = '0.9';
           }}
           onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+            (e.currentTarget as HTMLButtonElement).style.opacity = '1';
           }}
         >
           <Plus size={14} />

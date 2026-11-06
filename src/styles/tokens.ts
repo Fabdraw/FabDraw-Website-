@@ -1,18 +1,20 @@
 export const tokens = {
-  bg: '#0f1117',
-  surface: '#1a1d27',
-  surfaceRaised: '#21253a',
-  border: '#2e3350',
-  accent: '#f97316',
-  accentHover: '#ea6c0a',
-  textPrimary: '#f1f5f9',
-  textSecondary: '#94a3b8',
-  textMuted: '#475569',
+  bg: '#0d1017',
+  toolbar: '#111318',
+  surface: '#161a22',
+  surfaceRaised: '#1d2231',
+  border: '#252d3d',
+  accent: '#4f80ff',
+  accentHover: '#3d6fe8',
+  textPrimary: '#e2e8f0',
+  textSecondary: '#8b96a8',
+  textMuted: '#4c5768',
+  orange: '#f97316',
   success: '#22c55e',
   error: '#ef4444',
 } as const;
 
 export const inputCls = 'w-full text-sm rounded-md px-2.5 py-1.5 focus:outline-none transition-colors'
-  + ' bg-[#21253a] border border-[#2e3350] text-[#f1f5f9] focus:border-[#f97316]';
+  + ' bg-[#1d2231] border border-[#252d3d] text-[#e2e8f0] focus:border-[#4f80ff]';
 
-export const labelCls = 'block text-[10px] uppercase tracking-widest text-[#475569] font-medium mb-1';
+export const labelCls = 'block text-[10px] text-[#4c5768] font-medium mb-1';
