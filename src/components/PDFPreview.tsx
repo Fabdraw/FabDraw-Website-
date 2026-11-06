@@ -42,14 +42,14 @@ const VIEW_OPTIONS: ViewPreset[] = ['top', 'front', 'leftSide', 'rightSide', 'is
 
 const DEFAULT_PANELS: Record<number, PanelState[]> = {
   1: [{ preset: 'isometric', showDimensions: false, mode: '3d' }],
-  2: [{ preset: 'top',       showDimensions: false, mode: '2d' },
+  2: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
-  3: [{ preset: 'top',       showDimensions: false, mode: '2d' },
-      { preset: 'front',     showDimensions: false, mode: '3d' },
+  3: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
+      { preset: 'front',     showDimensions: true,  mode: '3d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
-  4: [{ preset: 'top',       showDimensions: false, mode: '2d' },
-      { preset: 'front',     showDimensions: false, mode: '3d' },
-      { preset: 'leftSide',  showDimensions: false, mode: '3d' },
+  4: [{ preset: 'top',       showDimensions: true,  mode: '2d' },
+      { preset: 'front',     showDimensions: true,  mode: '3d' },
+      { preset: 'leftSide',  showDimensions: true,  mode: '3d' },
       { preset: 'isometric', showDimensions: false, mode: '3d' }],
 }
 
@@ -64,18 +64,32 @@ function calcBBox(members: Member[]): BBox {
   let minX = Infinity, minY = Infinity, minZ = Infinity
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
   for (const m of members) {
+    const { width: sizeX, height: sizeY } = parseSizeString(m.type, m.size)
     const hw = m.length / 2
+    const hcX = sizeX / 2
+    const hcY = sizeY / 2
     const isUpright = Math.abs(m.rotation.x) >= 45
-    const posY = isUpright ? (m.position.z ?? 0) + m.length / 2 : (m.position.z ?? 0)
-    minX = Math.min(minX, m.position.x - hw); maxX = Math.max(maxX, m.position.x + hw)
-    minZ = Math.min(minZ, m.position.y - hw); maxZ = Math.max(maxZ, m.position.y + hw)
-    minY = Math.min(minY, posY - hw);          maxY = Math.max(maxY, posY + hw)
+    const cosR = Math.abs(Math.cos((m.rotation.y * Math.PI) / 180))
+    const sinR = Math.abs(Math.sin((m.rotation.y * Math.PI) / 180))
+    const posZ = m.position.z ?? 0
+    if (isUpright) {
+      minX = Math.min(minX, m.position.x - hcX); maxX = Math.max(maxX, m.position.x + hcX)
+      minZ = Math.min(minZ, m.position.y - hcY); maxZ = Math.max(maxZ, m.position.y + hcY)
+      minY = Math.min(minY, posZ);                 maxY = Math.max(maxY, posZ + m.length)
+    } else {
+      const extX = cosR * hw + sinR * hcY
+      const extZ = sinR * hw + cosR * hcY
+      minX = Math.min(minX, m.position.x - extX); maxX = Math.max(maxX, m.position.x + extX)
+      minZ = Math.min(minZ, m.position.y - extZ); maxZ = Math.max(maxZ, m.position.y + extZ)
+      minY = Math.min(minY, posZ);                  maxY = Math.max(maxY, posZ + sizeY)
+    }
   }
+  const sX = maxX - minX, sY = maxY - minY, sZ = maxZ - minZ
   return {
     cx: (minX + maxX) / 2,
     cy: (minY + maxY) / 2,
     cz: (minZ + maxZ) / 2,
-    radius: Math.max(maxX - minX, maxY - minY, maxZ - minZ, 10) * 0.75,
+    radius: Math.max(sX, sY, sZ, 10) * 0.6,
   }
 }
 
@@ -212,24 +226,38 @@ function PanelCameraSetup({ preset, bbox, mode }: { preset: ViewPreset; bbox: BB
     const isOrtho = isOrthoPreset(effectivePreset)
 
     if (isOrtho && camera instanceof THREE.OrthographicCamera) {
-      camera.zoom = Math.min(size.width, size.height) / 2 / r
-      const positions: Record<string, [number, number, number]> = {
-        top:       [cx, cy + r * 6, cz],
-        front:     [cx, cy,         cz + r * 6],
-        leftSide:  [cx - r * 6, cy, cz],
-        rightSide: [cx + r * 6, cy, cz],
+      const pad = r * 1.3
+      const aspect = size.width / size.height
+      if (aspect >= 1) {
+        camera.left = -pad * aspect; camera.right = pad * aspect
+        camera.top = pad;            camera.bottom = -pad
+      } else {
+        camera.left = -pad;          camera.right = pad
+        camera.top = pad / aspect;   camera.bottom = -pad / aspect
       }
-      const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + r * 6, cz]
+      camera.zoom = 1
+      camera.near = 0.1
+      camera.far = r * 100
+      const positions: Record<string, [number, number, number]> = {
+        top:       [cx, cy + r * 10, cz],
+        front:     [cx, cy,          cz + r * 10],
+        leftSide:  [cx - r * 10, cy, cz],
+        rightSide: [cx + r * 10, cy, cz],
+      }
+      const [px, py, pz] = positions[effectivePreset] ?? [cx, cy + r * 10, cz]
       camera.position.set(px, py, pz)
       camera.lookAt(cx, cy, cz)
       camera.up.set(effectivePreset === 'top' ? 0 : 0, effectivePreset === 'top' ? 0 : 1, effectivePreset === 'top' ? -1 : 0)
       camera.updateProjectionMatrix()
     } else if (!isOrtho && camera instanceof THREE.PerspectiveCamera) {
-      camera.fov = 20
+      const fov = 35
+      camera.fov = fov
       camera.aspect = size.width / size.height
-      camera.near = 0.1
-      camera.far = 50000
-      camera.position.set(cx + r, cy + r, cz + r)
+      const dist = (r * 1.2) / Math.tan((fov / 2) * (Math.PI / 180))
+      camera.near = dist * 0.01
+      camera.far = dist * 20
+      const d = dist / Math.sqrt(3)
+      camera.position.set(cx + d, cy + d, cz + d)
       camera.lookAt(cx, cy, cz)
       camera.up.set(0, 1, 0)
       camera.updateProjectionMatrix()
